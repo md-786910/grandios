@@ -139,7 +139,7 @@ const Sidebar = () => {
       <nav className="flex-1 px-4">
         <ul className="space-y-1">
           {menuItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + "/");
             return (
               <li key={item.id}>
                 <button
