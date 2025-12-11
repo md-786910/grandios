@@ -1,5 +1,6 @@
 const Order = require('../models/Order');
 const Customer = require('../models/Customer');
+const { addOrderToQueue } = require('./queueController');
 
 // @desc    Get all orders
 // @route   GET /api/orders
@@ -71,9 +72,21 @@ exports.createOrder = async (req, res, next) => {
   try {
     const order = await Order.create(req.body);
 
+    // Add order to customer queue for automatic discount processing
+    let queueResult = null;
+    if (order.customerId) {
+      try {
+        queueResult = await addOrderToQueue(order._id, order.customerId);
+      } catch (queueErr) {
+        console.error('Error adding order to queue:', queueErr);
+        // Don't fail the order creation if queue fails
+      }
+    }
+
     res.status(201).json({
       success: true,
-      data: order
+      data: order,
+      queue: queueResult
     });
   } catch (err) {
     next(err);

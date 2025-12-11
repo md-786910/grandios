@@ -8,11 +8,14 @@ const Kunden = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const response = await customersAPI.getAll();
+        // Fetch all customers for client-side pagination
+        const response = await customersAPI.getAll(1, 1000);
         if (response.data.success) {
           setCustomers(response.data.data);
         }
@@ -25,15 +28,28 @@ const Kunden = () => {
     fetchCustomers();
   }, []);
 
+  // Reset to page 1 when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const formatCurrency = (value) => {
     return value?.toFixed(2).replace('.', ',') || '0,00';
   };
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.ref?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCustomers = customers
+    .filter(customer =>
+      customer.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.ref?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedCustomers = filteredCustomers.slice(startIndex, endIndex);
 
   return (
     <Layout>
@@ -86,13 +102,22 @@ const Kunden = () => {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
                   Stadt
                 </th>
+                <th className="text-right px-6 py-4 text-sm font-semibold text-gray-900">
+                  Wallet
+                </th>
+                <th className="text-right px-6 py-4 text-sm font-semibold text-gray-900">
+                  Rabatt Gewährt
+                </th>
+                <th className="text-right px-6 py-4 text-sm font-semibold text-gray-900">
+                  Rabatt Eingelöst
+                </th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
                   Aktion
                 </th>
               </tr>
             </thead>
             <tbody>
-              {filteredCustomers.map((customer) => (
+              {paginatedCustomers.map((customer) => (
                 <tr
                   key={customer._id}
                   className="border-b border-gray-50 hover:bg-gray-50"
@@ -121,6 +146,15 @@ const Kunden = () => {
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">
                     {customer.address?.city || "-"}
                   </td>
+                  <td className="px-6 py-4 text-sm text-right font-medium text-green-600">
+                    € {formatCurrency(customer.wallet || 0)}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-right text-gray-600">
+                    € {formatCurrency(customer.totalDiscountGranted || 0)}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-right text-gray-600">
+                    € {formatCurrency(customer.totalDiscountRedeemed || 0)}
+                  </td>
                   <td className="px-6 py-4">
                     <button
                       onClick={() => navigate(`/rabatt/${customer._id}`)}
@@ -133,6 +167,66 @@ const Kunden = () => {
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between mt-4 px-2">
+        <div className="text-sm text-gray-500">
+          Zeige {filteredCustomers.length > 0 ? startIndex + 1 : 0}-{Math.min(endIndex, filteredCustomers.length)} von {filteredCustomers.length} Kunden
+        </div>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                currentPage === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Zurück
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                      currentPage === pageNum
+                        ? 'bg-gray-900 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                currentPage === totalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Weiter
+            </button>
+          </div>
         )}
       </div>
     </Layout>

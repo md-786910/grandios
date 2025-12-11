@@ -3,6 +3,7 @@ const {
   getDiscounts,
   getCustomerDiscount,
   createDiscountGroup,
+  updateDiscountGroup,
   redeemDiscountGroup,
   updateNotes,
   deleteDiscountGroup
@@ -25,6 +26,7 @@ router.route('/:customerId/groups/:groupId/redeem')
   .put(redeemDiscountGroup);
 
 router.route('/:customerId/groups/:groupId')
+  .put(updateDiscountGroup)
   .delete(deleteDiscountGroup);
 
 router.route('/:customerId/notes')

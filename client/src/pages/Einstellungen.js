@@ -11,6 +11,11 @@ const Einstellungen = () => {
     notifications: {
       emailOnNewOrders: true,
       dailySummary: false
+    },
+    discount: {
+      discountRate: 10,
+      ordersRequiredForDiscount: 3,
+      autoCreateDiscount: true
     }
   });
   const [loading, setLoading] = useState(true);
@@ -22,7 +27,14 @@ const Einstellungen = () => {
       try {
         const response = await settingsAPI.get();
         if (response.data.success) {
-          setSettings(response.data.data);
+          setSettings({
+            ...response.data.data,
+            discount: response.data.data.discount || {
+              discountRate: 10,
+              ordersRequiredForDiscount: 3,
+              autoCreateDiscount: true
+            }
+          });
         }
       } catch (error) {
         console.error("Failed to fetch settings:", error);
@@ -111,6 +123,83 @@ const Einstellungen = () => {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Discount Settings */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Rabatt Einstellungen
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Rabattsatz (%)
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={settings.discount?.discountRate || 10}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  discount: {
+                    ...settings.discount,
+                    discountRate: parseFloat(e.target.value) || 0
+                  }
+                })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Prozentsatz des Rabatts, der auf qualifizierende Bestellungen angewendet wird
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Bestellungen für Rabatt
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={settings.discount?.ordersRequiredForDiscount || 3}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  discount: {
+                    ...settings.discount,
+                    ordersRequiredForDiscount: parseInt(e.target.value) || 3
+                  }
+                })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Anzahl der Bestellungen, die erforderlich sind, um einen Rabatt zu erhalten
+              </p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <label className="flex items-center justify-between cursor-pointer">
+              <div>
+                <span className="text-sm font-medium text-gray-700">
+                  Automatische Rabatterstellung
+                </span>
+                <p className="text-xs text-gray-500 mt-1">
+                  Rabatt automatisch erstellen, wenn die erforderliche Anzahl von Bestellungen erreicht ist
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.discount?.autoCreateDiscount || false}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  discount: {
+                    ...settings.discount,
+                    autoCreateDiscount: e.target.checked
+                  }
+                })}
+                className="w-5 h-5 text-gray-900 border-gray-300 rounded focus:ring-gray-900"
+              />
+            </label>
           </div>
         </div>
 

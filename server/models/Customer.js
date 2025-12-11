@@ -32,6 +32,14 @@ const CustomerSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  totalDiscountRedeemed: {
+    type: Number,
+    default: 0
+  },
+  totalDiscountGranted: {
+    type: Number,
+    default: 0
+  },
   companyType: String,
   syncedAt: Date
 }, {

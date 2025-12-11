@@ -1,7 +1,9 @@
 const express = require('express');
 const {
   getSettings,
-  updateSettings
+  updateSettings,
+  getDiscountSettings,
+  updateDiscountSettings
 } = require('../controllers/settingsController');
 const { protect } = require('../middleware/auth');
 
@@ -12,5 +14,9 @@ router.use(protect);
 router.route('/')
   .get(getSettings)
   .put(updateSettings);
+
+router.route('/discount')
+  .get(getDiscountSettings)
+  .put(updateDiscountSettings);
 
 module.exports = router;

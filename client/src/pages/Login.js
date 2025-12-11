@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import loginBg from "../assets/login-bg.png";
 
@@ -150,12 +150,12 @@ const Login = () => {
                   Erinnere dich an mich
                 </span>
               </label>
-              <button
-                type="button"
+              <Link
+                to="/forgot-password"
                 className="text-sm text-gray-600 hover:text-gray-900 underline"
               >
                 Passwort vergessen?
-              </button>
+              </Link>
             </div>
 
             {/* Submit Button */}

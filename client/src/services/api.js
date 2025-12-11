@@ -57,6 +57,12 @@ export const authAPI = {
       method: "POST",
       body: JSON.stringify({ email }),
     }),
+
+  resetPassword: (token, password) =>
+    apiCall(`/auth/resetpassword/${token}`, {
+      method: "PUT",
+      body: JSON.stringify({ password }),
+    }),
 };
 
 // Dashboard API
@@ -148,6 +154,12 @@ export const discountsAPI = {
       method: "DELETE",
     }),
 
+  updateGroup: (customerId, groupId, orderIds, discountRate = 10) =>
+    apiCall(`/discounts/${customerId}/groups/${groupId}`, {
+      method: "PUT",
+      body: JSON.stringify({ orderIds, discountRate }),
+    }),
+
   updateNotes: (customerId, notes) =>
     apiCall(`/discounts/${customerId}/notes`, {
       method: "PUT",
@@ -164,6 +176,57 @@ export const settingsAPI = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+
+  getDiscountSettings: () => apiCall("/settings/discount"),
+
+  updateDiscountSettings: (data) =>
+    apiCall("/settings/discount", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+};
+
+// Queue API (Order Customer Queue)
+export const queueAPI = {
+  getAll: () => apiCall("/queue"),
+
+  getCustomerQueue: (customerId) => apiCall(`/queue/${customerId}`),
+
+  processQueue: (customerId) =>
+    apiCall(`/queue/${customerId}/process`, {
+      method: "POST",
+    }),
+
+  removeOrder: (customerId, orderId) =>
+    apiCall(`/queue/${customerId}/orders/${orderId}`, {
+      method: "DELETE",
+    }),
+
+  clearQueue: (customerId) =>
+    apiCall(`/queue/${customerId}`, {
+      method: "DELETE",
+    }),
+};
+
+// Test Data API (for development/testing)
+export const testAPI = {
+  generateCustomer: () =>
+    apiCall("/test/customer", { method: "POST" }),
+
+  generateOrders: (customerId, count = 3) =>
+    apiCall(`/test/orders/${customerId}`, {
+      method: "POST",
+      body: JSON.stringify({ count }),
+    }),
+
+  generateCompleteData: (customerCount = 3, ordersPerCustomer = 4) =>
+    apiCall("/test/generate", {
+      method: "POST",
+      body: JSON.stringify({ customerCount, ordersPerCustomer }),
+    }),
+
+  clearTestData: () =>
+    apiCall("/test/clear", { method: "DELETE" }),
 };
 
 export default {
@@ -173,4 +236,6 @@ export default {
   orders: ordersAPI,
   discounts: discountsAPI,
   settings: settingsAPI,
+  queue: queueAPI,
+  test: testAPI,
 };

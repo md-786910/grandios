@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import ConfirmModal from "../components/ConfirmModal";
-import { ordersAPI } from "../services/api";
+import { ordersAPI, testAPI, customersAPI } from "../services/api";
 
 const Bestellungen = () => {
   const { id } = useParams();
@@ -15,6 +15,36 @@ const Bestellungen = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [generatingData, setGeneratingData] = useState(false);
+  const [testMessage, setTestMessage] = useState({ type: "", text: "" });
+  const [showTestMenu, setShowTestMenu] = useState(false);
+  const [customers, setCustomers] = useState([]);
+  const [selectedCustomer, setSelectedCustomer] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  const fetchOrders = async () => {
+    try {
+      // Fetch all orders (high limit to get everything for client-side pagination)
+      const response = await ordersAPI.getAll(1, 1000);
+      if (response.data.success) {
+        setOrders(response.data.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch orders:", error);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      const response = await customersAPI.getAll(1, 100);
+      if (response.data.success) {
+        setCustomers(response.data.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch customers:", error);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -26,11 +56,8 @@ const Bestellungen = () => {
             setSelectedOrder(response.data.data);
           }
         } else {
-          // Fetch all orders
-          const response = await ordersAPI.getAll();
-          if (response.data.success) {
-            setOrders(response.data.data);
-          }
+          // Fetch all orders and customers
+          await Promise.all([fetchOrders(), fetchCustomers()]);
         }
       } catch (error) {
         console.error("Failed to fetch data:", error);
@@ -40,6 +67,65 @@ const Bestellungen = () => {
     };
     fetchData();
   }, [id]);
+
+  // Generate test orders for selected customer
+  const handleGenerateOrdersForCustomer = async () => {
+    if (!selectedCustomer) {
+      setTestMessage({ type: "error", text: "Bitte wählen Sie einen Kunden aus" });
+      return;
+    }
+    setGeneratingData(true);
+    setTestMessage({ type: "", text: "" });
+    try {
+      const response = await testAPI.generateOrders(selectedCustomer, 3);
+      if (response.data.success) {
+        setTestMessage({ type: "success", text: response.data.message });
+        await fetchOrders();
+        setSelectedCustomer("");
+      }
+    } catch (error) {
+      setTestMessage({ type: "error", text: error.message || "Fehler beim Erstellen der Testdaten" });
+    } finally {
+      setGeneratingData(false);
+      setShowTestMenu(false);
+    }
+  };
+
+  // Generate complete test data (customers + orders)
+  const handleGenerateCompleteData = async () => {
+    setGeneratingData(true);
+    setTestMessage({ type: "", text: "" });
+    try {
+      const response = await testAPI.generateCompleteData(3, 4);
+      if (response.data.success) {
+        setTestMessage({ type: "success", text: response.data.message });
+        await Promise.all([fetchOrders(), fetchCustomers()]);
+      }
+    } catch (error) {
+      setTestMessage({ type: "error", text: error.message || "Fehler beim Erstellen der Testdaten" });
+    } finally {
+      setGeneratingData(false);
+      setShowTestMenu(false);
+    }
+  };
+
+  // Clear all test data
+  const handleClearTestData = async () => {
+    setGeneratingData(true);
+    setTestMessage({ type: "", text: "" });
+    try {
+      const response = await testAPI.clearTestData();
+      if (response.data.success) {
+        setTestMessage({ type: "success", text: response.data.message });
+        await Promise.all([fetchOrders(), fetchCustomers()]);
+      }
+    } catch (error) {
+      setTestMessage({ type: "error", text: error.message || "Fehler beim Löschen der Testdaten" });
+    } finally {
+      setGeneratingData(false);
+      setShowTestMenu(false);
+    }
+  };
 
   const formatCurrency = (value) => {
     return value?.toFixed(2).replace('.', ',') || '0,00';
@@ -57,12 +143,33 @@ const Bestellungen = () => {
     return { status: order.state, color: "text-gray-500 bg-gray-50 border-gray-200" };
   };
 
-  // Filter orders by search term
-  const filteredOrders = orders.filter(order =>
-    order.posReference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.customerId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.customerId?.ref?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter orders by search term and sort by date (recent first)
+  const filteredOrders = orders
+    .filter(order =>
+      order.posReference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.customerId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.customerId?.ref?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const handlePrevPage = () => {
+    setCurrentPage(prev => Math.max(prev - 1, 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  };
 
   // Open delete confirmation modal
   const handleOpenDeleteModal = (itemId) => {
@@ -152,6 +259,17 @@ const Bestellungen = () => {
   if (!id) {
     return (
       <Layout>
+        {/* Test Message */}
+        {testMessage.text && (
+          <div className={`mb-4 p-4 rounded-lg ${
+            testMessage.type === "success"
+              ? "bg-green-50 border border-green-200 text-green-700"
+              : "bg-red-50 border border-red-200 text-red-700"
+          }`}>
+            {testMessage.text}
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Bestellungen</h1>
@@ -170,6 +288,75 @@ const Bestellungen = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
+
+            {/* Test Data Button with Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowTestMenu(!showTestMenu)}
+                disabled={generatingData}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm disabled:opacity-50 flex items-center gap-2"
+              >
+                {generatingData ? (
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                  </svg>
+                )}
+                Testdaten
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {showTestMenu && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                  <div className="p-4 border-b border-gray-100">
+                    <h4 className="font-semibold text-gray-900 mb-2">Testbestellungen erstellen</h4>
+                    <div className="space-y-2">
+                      <select
+                        value={selectedCustomer}
+                        onChange={(e) => setSelectedCustomer(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
+                      >
+                        <option value="">Kunde auswählen...</option>
+                        {customers.map((customer) => (
+                          <option key={customer._id} value={customer._id}>
+                            {customer.name} ({customer.ref || customer._id.slice(-6)})
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleGenerateOrdersForCustomer}
+                        disabled={!selectedCustomer || generatingData}
+                        className="w-full px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm disabled:opacity-50"
+                      >
+                        3 Bestellungen erstellen
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-2">
+                    <button
+                      onClick={handleGenerateCompleteData}
+                      disabled={generatingData}
+                      className="w-full px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm disabled:opacity-50"
+                    >
+                      Komplette Testdaten erstellen (3 Kunden + Bestellungen)
+                    </button>
+                    <button
+                      onClick={handleClearTestData}
+                      disabled={generatingData}
+                      className="w-full px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm disabled:opacity-50"
+                    >
+                      Alle Testdaten löschen
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -179,76 +366,124 @@ const Bestellungen = () => {
               Keine Bestellungen gefunden
             </div>
           ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                    Bestellnummer
-                  </th>
-                  <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                    Kunde
-                  </th>
-                  <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                    Datum
-                  </th>
-                  <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                    Betrag
-                  </th>
-                  <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                    Status
-                  </th>
-                  <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                    Aktion
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOrders.map((order) => {
-                  const statusInfo = getStatusInfo(order);
-                  return (
-                    <tr
-                      key={order._id}
-                      className="border-b border-gray-50 hover:bg-gray-50"
+            <>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                      Bestellnummer
+                    </th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                      Kunde
+                    </th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                      Datum
+                    </th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                      Betrag
+                    </th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                      Status
+                    </th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                      Aktion
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedOrders.map((order) => {
+                    const statusInfo = getStatusInfo(order);
+                    return (
+                      <tr
+                        key={order._id}
+                        className="border-b border-gray-50 hover:bg-gray-50"
+                      >
+                        <td className="px-6 py-4">
+                          <span className="font-medium text-gray-900">
+                            {order.posReference}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {order.customerId?.name || "Unbekannt"}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {order.customerId?.ref || "-"}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">
+                          {formatDate(order.orderDate)}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                          € {formatCurrency(order.amountTotal)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-3 py-1 text-xs font-medium rounded-full border ${statusInfo.color}`}>
+                            {statusInfo.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => navigate(`/bestellungen/${order._id}`)}
+                            className="text-sm text-gray-500 hover:text-gray-900 hover:underline"
+                          >
+                            Details
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* Pagination Controls - Always show */}
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
+                <div className="text-sm text-gray-600">
+                  Zeige {startIndex + 1}-{Math.min(endIndex, filteredOrders.length)} von {filteredOrders.length} Bestellungen
+                </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handlePrevPage}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                      <td className="px-6 py-4">
-                        <span className="font-medium text-gray-900">
-                          {order.posReference}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {order.customerId?.name || "Unbekannt"}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {order.customerId?.ref || "-"}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {formatDate(order.orderDate)}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                        € {formatCurrency(order.amountTotal)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1 text-xs font-medium rounded-full border ${statusInfo.color}`}>
-                          {statusInfo.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      Zurück
+                    </button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                         <button
-                          onClick={() => navigate(`/bestellungen/${order._id}`)}
-                          className="text-sm text-gray-500 hover:text-gray-900 hover:underline"
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`w-10 h-10 text-sm font-medium rounded-lg transition-colors ${
+                            currentPage === page
+                              ? "bg-gray-900 text-white"
+                              : "text-gray-700 hover:bg-gray-100"
+                          }`}
                         >
-                          Details
+                          {page}
                         </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      ))}
+                    </div>
+                    <button
+                      onClick={handleNextPage}
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Weiter
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       </Layout>
