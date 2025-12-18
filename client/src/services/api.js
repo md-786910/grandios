@@ -229,6 +229,71 @@ export const testAPI = {
     apiCall("/test/clear", { method: "DELETE" }),
 };
 
+// Sync API (WAWI Integration)
+export const syncAPI = {
+  // Get sync status
+  getStatus: () => apiCall("/sync/status"),
+
+  // Trigger sync operations
+  syncCustomers: () => apiCall("/sync/customers", { method: "POST" }),
+  syncOrders: () => apiCall("/sync/orders", { method: "POST" }),
+  syncProducts: () => apiCall("/sync/products", { method: "POST" }),
+  syncAll: () => apiCall("/sync/full", { method: "POST" }),
+
+  // Get synced data with pagination
+  getCustomers: (page = 1, limit = 20, search = "") => {
+    let url = `/sync/data/customers?page=${page}&limit=${limit}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    return apiCall(url);
+  },
+
+  getOrders: (page = 1, limit = 20, customerId = null) => {
+    let url = `/sync/data/orders?page=${page}&limit=${limit}`;
+    if (customerId) url += `&customerId=${customerId}`;
+    return apiCall(url);
+  },
+
+  getProducts: (page = 1, limit = 20, search = "") => {
+    let url = `/sync/data/products?page=${page}&limit=${limit}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    return apiCall(url);
+  },
+};
+
+// WAWI External API (Direct API calls)
+export const wawiAPI = {
+  testConnection: () => apiCall("/wawi/test"),
+  getStatus: () => apiCall("/wawi/status"),
+  refreshToken: () => apiCall("/wawi/refresh-token", { method: "POST" }),
+
+  getCustomers: (limit = 100, offset = 0, search = "") => {
+    let url = `/wawi/customers?limit=${limit}&offset=${offset}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    return apiCall(url);
+  },
+
+  getOrders: (limit = 100, offset = 0, partnerId = null) => {
+    let url = `/wawi/orders?limit=${limit}&offset=${offset}`;
+    if (partnerId) url += `&partner_id=${partnerId}`;
+    return apiCall(url);
+  },
+
+  getProducts: (limit = 100, offset = 0, search = "") => {
+    let url = `/wawi/products?limit=${limit}&offset=${offset}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    return apiCall(url);
+  },
+
+  searchModel: (model, options = {}) => {
+    const { limit = 100, offset = 0, fields, domain, order } = options;
+    let url = `/wawi/search/${model}?limit=${limit}&offset=${offset}`;
+    if (fields) url += `&fields=${encodeURIComponent(JSON.stringify(fields))}`;
+    if (domain) url += `&domain=${encodeURIComponent(JSON.stringify(domain))}`;
+    if (order) url += `&order=${encodeURIComponent(order)}`;
+    return apiCall(url);
+  },
+};
+
 export default {
   auth: authAPI,
   dashboard: dashboardAPI,
@@ -238,4 +303,6 @@ export default {
   settings: settingsAPI,
   queue: queueAPI,
   test: testAPI,
+  sync: syncAPI,
+  wawi: wawiAPI,
 };

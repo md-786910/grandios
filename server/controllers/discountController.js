@@ -2,22 +2,50 @@ const DiscountOrder = require('../models/DiscountOrder');
 const Discount = require('../models/Discount');
 const Customer = require('../models/Customer');
 const Order = require('../models/Order');
+const OrderLine = require('../models/OrderLine');
+const Product = require('../models/Product');
 const OrderCustomerQueue = require('../models/OrderCustomerQueue');
 const AppSettings = require('../models/AppSettings');
+
+// Helper to get order items from either orderLines (WAWI) or items (legacy)
+function getOrderItems(order) {
+  // If order has populated orderLines, use them
+  if (order.orderLines && order.orderLines.length > 0) {
+    return order.orderLines.map(line => ({
+      orderLineId: line.orderLineId || line._id,
+      productId: line.productId,
+      productName: line.fullProductName || line.productName,
+      priceUnit: line.priceUnit || 0,
+      priceSubtotalIncl: line.priceSubtotalIncl || (line.priceUnit * (line.quantity || 1)),
+      quantity: line.quantity || 1,
+      discount: line.discount || 0,
+      discountEligible: line.discountEligible !== false,
+      image: line.productRef?.image || null,
+    }));
+  }
+  // Fallback to legacy items
+  return order.items || [];
+}
 
 // @desc    Get all customer discounts (for Rabatt list page)
 // @route   GET /api/discounts
 // @access  Private
+// Only shows customers who have discount groups created (3+ orders)
 exports.getDiscounts = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const startIndex = (page - 1) * limit;
-
-    const total = await Customer.countDocuments();
     const settings = await AppSettings.getSettings();
 
-    const customers = await Customer.find()
+    // Get unique customer IDs that have at least one discount group
+    const customersWithDiscountGroups = await DiscountOrder.distinct('customerId');
+
+    // Total count of customers with discount groups
+    const total = customersWithDiscountGroups.length;
+
+    // Get customers who have discount groups, with pagination
+    const customers = await Customer.find({ _id: { $in: customersWithDiscountGroups } })
       .skip(startIndex)
       .limit(limit)
       .sort({ createdAt: -1 });
@@ -43,6 +71,7 @@ exports.getDiscounts = async (req, res, next) => {
           totalDiscountGranted: discount ? discount.totalGranted : 0,
           discountBalance: discount ? discount.balance : 0,
           redeemable: availableGroups.length > 0,
+          discountGroupCount: discountOrders.length,
           // Queue information
           queueCount: queue ? queue.orderCount : 0,
           queueStatus: queue ? queue.status : 'pending',
@@ -52,15 +81,17 @@ exports.getDiscounts = async (req, res, next) => {
       })
     );
 
-    // Calculate overall stats
-    const allDiscounts = await Discount.find();
-    const allOrders = await Order.find();
-    const allQueues = await OrderCustomerQueue.find();
+    // Calculate overall stats (only for customers with discount groups)
+    const allDiscounts = await Discount.find({ customerId: { $in: customersWithDiscountGroups } });
+    const allOrders = await Order.find({ customerId: { $in: customersWithDiscountGroups } });
+    const allQueues = await OrderCustomerQueue.find({ customerId: { $in: customersWithDiscountGroups } });
+    const allDiscountOrders = await DiscountOrder.find();
 
     const stats = {
       totalCustomers: total,
       totalOrderValue: allOrders.reduce((sum, order) => sum + order.amountTotal, 0),
       totalDiscountGranted: allDiscounts.reduce((sum, d) => sum + d.totalGranted, 0),
+      totalDiscountGroups: allDiscountOrders.length,
       // Queue stats
       totalInQueue: allQueues.reduce((sum, q) => sum + q.orderCount, 0),
       customersReadyForDiscount: allQueues.filter(q => q.orderCount >= settings.ordersRequiredForDiscount).length,
@@ -101,8 +132,24 @@ exports.getCustomerDiscount = async (req, res, next) => {
 
     const settings = await AppSettings.getSettings();
 
-    // Get customer orders
-    const orders = await Order.find({ customerId: customer._id }).sort({ orderDate: -1 });
+    // Get customer orders with orderLines populated
+    const orders = await Order.find({ customerId: customer._id })
+      .populate({
+        path: 'orderLines',
+        populate: {
+          path: 'productRef',
+          select: 'name image listPrice defaultCode',
+        },
+      })
+      .sort({ orderDate: -1 });
+
+    // Transform orders to include items from orderLines
+    const ordersWithItems = orders.map(order => {
+      const orderObj = order.toObject();
+      // Add items array from orderLines for frontend compatibility
+      orderObj.items = getOrderItems(order);
+      return orderObj;
+    });
 
     // Get discount wallet
     const discount = await Discount.findOne({ customerId: customer._id });
@@ -118,7 +165,7 @@ exports.getCustomerDiscount = async (req, res, next) => {
 
     // Calculate stats
     const totalOrderValue = orders.reduce((sum, order) => sum + order.amountTotal, 0);
-    const totalItems = orders.reduce((sum, order) => sum + order.items.length, 0);
+    const totalItems = ordersWithItems.reduce((sum, order) => sum + (order.items?.length || 0), 0);
 
     res.status(200).json({
       success: true,
@@ -138,7 +185,7 @@ exports.getCustomerDiscount = async (req, res, next) => {
           orderCount: orders.length,
           itemCount: totalItems
         },
-        orders,
+        orders: ordersWithItems,
         discountGroups: discountOrders,
         notes: discountOrders.length > 0 ? discountOrders[0].notes : '',
         // Queue information
@@ -207,8 +254,15 @@ exports.createDiscountGroup = async (req, res, next) => {
       });
     }
 
-    // Get orders
-    const orders = await Order.find({ _id: { $in: orderIds } });
+    // Get orders with orderLines populated
+    const orders = await Order.find({ _id: { $in: orderIds } })
+      .populate({
+        path: 'orderLines',
+        populate: {
+          path: 'productRef',
+          select: 'name image listPrice',
+        },
+      });
 
     if (orders.length === 0) {
       return res.status(400).json({
@@ -219,7 +273,8 @@ exports.createDiscountGroup = async (req, res, next) => {
 
     // Calculate discount for each order
     const orderItems = orders.map(order => {
-      const eligibleAmount = order.items
+      const items = getOrderItems(order);
+      const eligibleAmount = items
         .filter(item => item.discountEligible)
         .reduce((sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0);
 
@@ -336,8 +391,15 @@ exports.updateDiscountGroup = async (req, res, next) => {
     // Store old discount amount for wallet adjustment
     const oldTotalDiscount = discountOrder.totalDiscount;
 
-    // Get new orders
-    const orders = await Order.find({ _id: { $in: orderIds } });
+    // Get new orders with orderLines populated
+    const orders = await Order.find({ _id: { $in: orderIds } })
+      .populate({
+        path: 'orderLines',
+        populate: {
+          path: 'productRef',
+          select: 'name image listPrice',
+        },
+      });
 
     if (orders.length === 0) {
       return res.status(400).json({
@@ -348,7 +410,8 @@ exports.updateDiscountGroup = async (req, res, next) => {
 
     // Calculate discount for each order
     const orderItems = orders.map(order => {
-      const eligibleAmount = order.items
+      const items = getOrderItems(order);
+      const eligibleAmount = items
         .filter(item => item.discountEligible)
         .reduce((sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0);
 

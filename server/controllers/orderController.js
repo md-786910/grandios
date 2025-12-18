@@ -1,5 +1,7 @@
 const Order = require('../models/Order');
 const Customer = require('../models/Customer');
+const OrderLine = require('../models/OrderLine');
+const Product = require('../models/Product');
 const { addOrderToQueue } = require('./queueController');
 
 // @desc    Get all orders
@@ -47,7 +49,14 @@ exports.getOrders = async (req, res, next) => {
 exports.getOrder = async (req, res, next) => {
   try {
     const order = await Order.findById(req.params.id)
-      .populate('customerId', 'name email ref phone address');
+      .populate('customerId', 'name email ref contactId phone mobile address')
+      .populate({
+        path: 'orderLines',
+        populate: {
+          path: 'productRef',
+          select: 'name image listPrice defaultCode barcode categoryName attributeValues',
+        },
+      });
 
     if (!order) {
       return res.status(404).json({

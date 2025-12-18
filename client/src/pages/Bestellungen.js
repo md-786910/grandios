@@ -508,10 +508,27 @@ const Bestellungen = () => {
   }
 
   // Calculate values from order data
+  // Use orderLines (from WAWI sync) or items (legacy) - merge both sources
   const customer = selectedOrder.customerId || {};
-  const discountEligibleItems = selectedOrder.items?.filter(item => item.discountEligible) || [];
+  const orderItems = selectedOrder.orderLines?.length > 0
+    ? selectedOrder.orderLines.map(line => ({
+        orderLineId: line.orderLineId || line._id,
+        productId: line.productId,
+        productName: line.fullProductName || line.productName,
+        priceUnit: line.priceUnit,
+        priceSubtotalIncl: line.priceSubtotalIncl || line.priceUnit * line.quantity,
+        quantity: line.quantity || 1,
+        discount: line.discount || 0,
+        discountEligible: line.discountEligible !== false,
+        image: line.productRef?.image || null,
+        color: line.productRef?.attributeValues?.find(a => a.attributeName === 'Farbe')?.valueName || null,
+        material: line.productRef?.attributeValues?.find(a => a.attributeName === 'Material')?.valueName || null,
+      }))
+    : (selectedOrder.items || []);
+
+  const discountEligibleItems = orderItems.filter(item => item.discountEligible);
   const discountEligibleAmount = discountEligibleItems.reduce(
-    (sum, item) => sum + (item.priceSubtotalIncl * item.quantity), 0
+    (sum, item) => sum + ((item.priceSubtotalIncl || item.priceUnit) * (item.quantity || 1)), 0
   );
   const discountValue = discountEligibleAmount * 0.1;
 
@@ -636,7 +653,7 @@ const Bestellungen = () => {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          {(selectedOrder.items || []).map((item) => (
+          {orderItems.map((item) => (
             <div key={item.orderLineId} className="flex gap-4 p-4 border border-gray-200 rounded-xl">
               <img
                 src={item.image || "https://via.placeholder.com/150"}

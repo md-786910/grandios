@@ -1,62 +1,67 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
-import { customersAPI } from "../services/api";
+import { syncAPI } from "../services/api";
 
 const Kunden = () => {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(20);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    pages: 0,
+  });
 
+  // Debounce search term
   useEffect(() => {
-    const fetchCustomers = async () => {
-      try {
-        // Fetch all customers for client-side pagination
-        const response = await customersAPI.getAll(1, 1000);
-        if (response.data.success) {
-          setCustomers(response.data.data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch customers:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCustomers();
-  }, []);
-
-  // Reset to page 1 when search term changes
-  useEffect(() => {
-    setCurrentPage(1);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  const fetchCustomers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await syncAPI.getCustomers(currentPage, itemsPerPage, debouncedSearch);
+      if (response.data.success) {
+        setCustomers(response.data.data);
+        setPagination(response.data.pagination);
+      }
+    } catch (error) {
+      console.error("Failed to fetch customers:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPage, itemsPerPage, debouncedSearch]);
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [fetchCustomers]);
 
   const formatCurrency = (value) => {
     return value?.toFixed(2).replace('.', ',') || '0,00';
   };
 
-  const filteredCustomers = customers
-    .filter(customer =>
-      customer.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.ref?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.email?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+  const totalPages = pagination.pages;
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedCustomers = filteredCustomers.slice(startIndex, endIndex);
+  const endIndex = Math.min(startIndex + itemsPerPage, pagination.total);
 
   return (
     <Layout>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Kunden</h1>
-          <p className="text-gray-500 mt-1">Kundenverwaltung</p>
+          <p className="text-gray-500 mt-1">
+            {pagination.total > 0
+              ? `${pagination.total.toLocaleString('de-DE')} Kunden insgesamt`
+              : 'Kundenverwaltung'}
+          </p>
         </div>
         <div className="flex items-center gap-4">
           <div className="relative">
@@ -82,7 +87,7 @@ const Kunden = () => {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
           </div>
-        ) : filteredCustomers.length === 0 ? (
+        ) : customers.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             Keine Kunden gefunden
           </div>
@@ -117,7 +122,7 @@ const Kunden = () => {
               </tr>
             </thead>
             <tbody>
-              {paginatedCustomers.map((customer) => (
+              {customers.map((customer) => (
                 <tr
                   key={customer._id}
                   className="border-b border-gray-50 hover:bg-gray-50"
@@ -138,7 +143,7 @@ const Kunden = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
-                    {customer.ref || `KUNDE-${customer.contactId}`}
+                    {customer.contactId || "-"}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900">
                     {customer.phone || customer.mobile || "-"}
@@ -173,7 +178,7 @@ const Kunden = () => {
       {/* Pagination */}
       <div className="flex items-center justify-between mt-4 px-2">
         <div className="text-sm text-gray-500">
-          Zeige {filteredCustomers.length > 0 ? startIndex + 1 : 0}-{Math.min(endIndex, filteredCustomers.length)} von {filteredCustomers.length} Kunden
+          Zeige {pagination.total > 0 ? startIndex + 1 : 0}-{endIndex} von {pagination.total.toLocaleString('de-DE')} Kunden
         </div>
         {totalPages > 1 && (
           <div className="flex items-center gap-2">
