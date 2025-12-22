@@ -22,6 +22,7 @@ const Bestellungen = () => {
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [statusFilter, setStatusFilter] = useState("");
 
   const fetchOrders = async () => {
     try {
@@ -137,19 +138,31 @@ const Bestellungen = () => {
   };
 
   const getStatusInfo = (order) => {
-    if (order.state === "pending") return { status: "Ausstehend", color: "text-red-500 bg-red-50 border-red-200" };
-    if (order.state === "paid") return { status: "Bezahlt", color: "text-green-500 bg-green-50 border-green-200" };
-    if (order.state === "completed") return { status: "Abgeschlossen", color: "text-blue-500 bg-blue-50 border-blue-200" };
-    return { status: order.state, color: "text-gray-500 bg-gray-50 border-gray-200" };
+    // Show discount group status if order is in a discount group
+    if (order.discountStatus === "available") {
+      return { status: "Ausstehend", color: "text-yellow-600 bg-yellow-50 border-yellow-200" };
+    }
+    if (order.discountStatus === "redeemed") {
+      return { status: "Eingelöst", color: "text-green-600 bg-green-50 border-green-200" };
+    }
+    // No discount group - show dash
+    return { status: "-", color: "text-gray-400 bg-gray-50 border-gray-200" };
   };
 
-  // Filter orders by search term and sort by date (recent first)
+  // Filter orders by search term, status and sort by date (recent first)
   const filteredOrders = orders
-    .filter(order =>
-      order.posReference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customerId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customerId?.ref?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    .filter(order => {
+      // Search filter (order number, customer name, customer ref)
+      const matchesSearch = !searchTerm ||
+        order.posReference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customerId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customerId?.ref?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      // Status filter - use discountStatus instead of payment state
+      const matchesStatus = !statusFilter || order.discountStatus === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    })
     .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
 
   // Pagination calculations
@@ -158,10 +171,10 @@ const Bestellungen = () => {
   const endIndex = startIndex + itemsPerPage;
   const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
 
-  // Reset to page 1 when search changes
+  // Reset to page 1 when search or filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, statusFilter]);
 
   const handlePrevPage = () => {
     setCurrentPage(prev => Math.max(prev - 1, 1));
@@ -273,13 +286,17 @@ const Bestellungen = () => {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Bestellungen</h1>
-            <p className="text-gray-500 mt-1">Alle Bestellungen verwalten</p>
+            <p className="text-gray-500 mt-1">
+              {orders.length} Bestellungen insgesamt
+              {(searchTerm || statusFilter) && ` • ${filteredOrders.length} gefiltert`}
+            </p>
           </div>
           <div className="flex items-center gap-4">
+            {/* Search Input */}
             <div className="relative">
               <input
                 type="text"
-                placeholder="Suchen..."
+                placeholder="Bestellnr., Kunde suchen..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-64 pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm"
@@ -288,6 +305,17 @@ const Bestellungen = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm bg-white"
+            >
+              <option value="">Alle Status</option>
+              <option value="available">Ausstehend</option>
+              <option value="redeemed">Eingelöst</option>
+            </select>
 
             {/* Test Data Button with Dropdown */}
             <div className="relative">
@@ -441,7 +469,7 @@ const Bestellungen = () => {
               {/* Pagination Controls - Always show */}
               <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
                 <div className="text-sm text-gray-600">
-                  Zeige {startIndex + 1}-{Math.min(endIndex, filteredOrders.length)} von {filteredOrders.length} Bestellungen
+                  Zeige {filteredOrders.length > 0 ? startIndex + 1 : 0}-{Math.min(endIndex, filteredOrders.length)} von {filteredOrders.length} Bestellungen
                 </div>
                 {totalPages > 1 && (
                   <div className="flex items-center gap-2">
@@ -456,19 +484,69 @@ const Bestellungen = () => {
                       Zurück
                     </button>
                     <div className="flex items-center gap-1">
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          className={`w-10 h-10 text-sm font-medium rounded-lg transition-colors ${
-                            currentPage === page
-                              ? "bg-gray-900 text-white"
-                              : "text-gray-700 hover:bg-gray-100"
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      ))}
+                      {(() => {
+                        const pages = [];
+                        const maxVisiblePages = 5;
+
+                        if (totalPages <= maxVisiblePages + 2) {
+                          // Show all pages if total is small
+                          for (let i = 1; i <= totalPages; i++) {
+                            pages.push(i);
+                          }
+                        } else {
+                          // Always show first page
+                          pages.push(1);
+
+                          // Calculate start and end of visible range
+                          let start = Math.max(2, currentPage - 1);
+                          let end = Math.min(totalPages - 1, currentPage + 1);
+
+                          // Adjust range to always show 3 middle pages
+                          if (currentPage <= 3) {
+                            end = 4;
+                          } else if (currentPage >= totalPages - 2) {
+                            start = totalPages - 3;
+                          }
+
+                          // Add ellipsis before middle pages if needed
+                          if (start > 2) {
+                            pages.push('...');
+                          }
+
+                          // Add middle pages
+                          for (let i = start; i <= end; i++) {
+                            pages.push(i);
+                          }
+
+                          // Add ellipsis after middle pages if needed
+                          if (end < totalPages - 1) {
+                            pages.push('...');
+                          }
+
+                          // Always show last page
+                          pages.push(totalPages);
+                        }
+
+                        return pages.map((page, index) => (
+                          page === '...' ? (
+                            <span key={`ellipsis-${index}`} className="w-10 h-10 flex items-center justify-center text-gray-400">
+                              ...
+                            </span>
+                          ) : (
+                            <button
+                              key={page}
+                              onClick={() => setCurrentPage(page)}
+                              className={`w-10 h-10 text-sm font-medium rounded-lg transition-colors ${
+                                currentPage === page
+                                  ? "bg-gray-900 text-white"
+                                  : "text-gray-700 hover:bg-gray-100"
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          )
+                        ));
+                      })()}
                     </div>
                     <button
                       onClick={handleNextPage}
@@ -623,32 +701,35 @@ const Bestellungen = () => {
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="font-semibold text-gray-900 text-lg">Kaufhistorie</h3>
-          {isEditMode ? (
-            <div className="flex gap-2">
+          {/* Hide edit button if order is redeemed */}
+          {selectedOrder.discountStatus !== 'redeemed' && (
+            isEditMode ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm disabled:opacity-50"
+                >
+                  {saving ? "Speichern..." : "Speichern"}
+                </button>
+                <button
+                  onClick={handleCancel}
+                  disabled={saving}
+                  className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm disabled:opacity-50"
+                >
+                  Stornieren
+                </button>
+              </div>
+            ) : (
               <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm disabled:opacity-50"
+                onClick={handleEnterEditMode}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                {saving ? "Speichern..." : "Speichern"}
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
               </button>
-              <button
-                onClick={handleCancel}
-                disabled={saving}
-                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm disabled:opacity-50"
-              >
-                Stornieren
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={handleEnterEditMode}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </button>
+            )
           )}
         </div>
 
@@ -675,7 +756,12 @@ const Bestellungen = () => {
                       )}
                     </div>
                   </div>
-                  {isEditMode ? (
+                  {selectedOrder.discountStatus === 'redeemed' ? (
+                    // Show "Rabatt angewendet" in gray for redeemed orders
+                    item.discountEligible && (
+                      <span className="text-gray-400 text-sm font-medium">Rabatt angewendet</span>
+                    )
+                  ) : isEditMode ? (
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input

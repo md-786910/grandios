@@ -1,6 +1,6 @@
-const Customer = require('../models/Customer');
-const Order = require('../models/Order');
-const Discount = require('../models/Discount');
+const Customer = require("../models/Customer");
+const Order = require("../models/Order");
+const Discount = require("../models/Discount");
 
 // @desc    Get all customers
 // @route   GET /api/customers
@@ -23,7 +23,10 @@ exports.getCustomers = async (req, res, next) => {
       customers.map(async (customer) => {
         const orders = await Order.find({ customerId: customer._id });
         const orderCount = orders.length;
-        const totalSpent = orders.reduce((sum, order) => sum + order.amountTotal, 0);
+        const totalSpent = orders.reduce(
+          (sum, order) => sum + order.amountTotal,
+          0
+        );
 
         // Get discount info
         const discount = await Discount.findOne({ customerId: customer._id });
@@ -33,7 +36,7 @@ exports.getCustomers = async (req, res, next) => {
           orderCount,
           totalSpent,
           discountBalance: discount ? discount.balance : 0,
-          totalDiscountGranted: discount ? discount.totalGranted : 0
+          totalDiscountGranted: discount ? discount.totalGranted : 0,
         };
       })
     );
@@ -45,9 +48,9 @@ exports.getCustomers = async (req, res, next) => {
       pagination: {
         page,
         limit,
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(total / limit),
       },
-      data: customersWithStats
+      data: customersWithStats,
     });
   } catch (err) {
     next(err);
@@ -64,12 +67,14 @@ exports.getCustomer = async (req, res, next) => {
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: 'Customer not found'
+        message: "Customer not found",
       });
     }
 
     // Get orders for this customer
-    const orders = await Order.find({ customerId: customer._id }).sort({ orderDate: -1 });
+    const orders = await Order.find({ customerId: customer._id }).sort({
+      orderDate: -1,
+    });
 
     // Get discount info
     const discount = await Discount.findOne({ customerId: customer._id });
@@ -82,8 +87,8 @@ exports.getCustomer = async (req, res, next) => {
         orderCount: orders.length,
         totalSpent: orders.reduce((sum, order) => sum + order.amountTotal, 0),
         discountBalance: discount ? discount.balance : 0,
-        totalDiscountGranted: discount ? discount.totalGranted : 0
-      }
+        totalDiscountGranted: discount ? discount.totalGranted : 0,
+      },
     });
   } catch (err) {
     next(err);
@@ -100,12 +105,12 @@ exports.createCustomer = async (req, res, next) => {
     // Create discount wallet for customer
     await Discount.create({
       customerId: customer._id,
-      partnerId: customer.contactId
+      partnerId: customer.contactId,
     });
 
     res.status(201).json({
       success: true,
-      data: customer
+      data: customer,
     });
   } catch (err) {
     next(err);
@@ -119,19 +124,19 @@ exports.updateCustomer = async (req, res, next) => {
   try {
     const customer = await Customer.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
-      runValidators: true
+      runValidators: true,
     });
 
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: 'Customer not found'
+        message: "Customer not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: customer
+      data: customer,
     });
   } catch (err) {
     next(err);
@@ -148,7 +153,7 @@ exports.deleteCustomer = async (req, res, next) => {
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: 'Customer not found'
+        message: "Customer not found",
       });
     }
 
@@ -156,7 +161,7 @@ exports.deleteCustomer = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: {}
+      data: {},
     });
   } catch (err) {
     next(err);
@@ -173,22 +178,22 @@ exports.searchCustomers = async (req, res, next) => {
     if (!q) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide a search query'
+        message: "Please provide a search query",
       });
     }
 
     const customers = await Customer.find({
       $or: [
-        { name: { $regex: q, $options: 'i' } },
-        { email: { $regex: q, $options: 'i' } },
-        { ref: { $regex: q, $options: 'i' } }
-      ]
+        { name: { $regex: q, $options: "i" } },
+        { email: { $regex: q, $options: "i" } },
+        { ref: { $regex: q, $options: "i" } },
+      ],
     }).limit(20);
 
     res.status(200).json({
       success: true,
       count: customers.length,
-      data: customers
+      data: customers,
     });
   } catch (err) {
     next(err);

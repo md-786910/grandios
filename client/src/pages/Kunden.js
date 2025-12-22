@@ -67,7 +67,7 @@ const Kunden = () => {
           <div className="relative">
             <input
               type="text"
-              placeholder="Suchen..."
+              placeholder="Name, E-Mail, Kundennr. suchen..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-64 pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm"
