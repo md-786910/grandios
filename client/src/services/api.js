@@ -165,6 +165,17 @@ export const discountsAPI = {
       method: "PUT",
       body: JSON.stringify({ notes }),
     }),
+
+  saveDraftItems: (customerId, draftItems) =>
+    apiCall(`/discounts/${customerId}/draft`, {
+      method: "PUT",
+      body: JSON.stringify({ draftItems }),
+    }),
+
+  clearDraftItems: (customerId) =>
+    apiCall(`/discounts/${customerId}/draft`, {
+      method: "DELETE",
+    }),
 };
 
 // Settings API

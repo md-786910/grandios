@@ -14,9 +14,10 @@ exports.getCustomers = async (req, res, next) => {
     const total = await Customer.countDocuments();
 
     const customers = await Customer.find()
+      .collation({ locale: 'de', strength: 2 })
+      .sort({ name: 1 })
       .skip(startIndex)
-      .limit(limit)
-      .sort({ createdAt: -1 });
+      .limit(limit);
 
     // Get order counts and totals for each customer
     const customersWithStats = await Promise.all(
@@ -188,7 +189,7 @@ exports.searchCustomers = async (req, res, next) => {
         { email: { $regex: q, $options: "i" } },
         { ref: { $regex: q, $options: "i" } },
       ],
-    }).limit(20);
+    }).collation({ locale: 'de', strength: 2 }).sort({ name: 1 }).limit(20);
 
     res.status(200).json({
       success: true,

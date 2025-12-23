@@ -191,7 +191,8 @@ exports.getCustomers = async (req, res, next) => {
 
     const [customers, total] = await Promise.all([
       Customer.find(query)
-        .sort({ syncedAt: -1 })
+        .collation({ locale: 'de', strength: 2 })
+        .sort({ name: 1 })
         .skip(skip)
         .limit(limit)
         .lean(),

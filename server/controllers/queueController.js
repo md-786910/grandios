@@ -30,10 +30,10 @@ exports.addOrderToQueue = async (orderId, customerId) => {
     queue.orders.push({ orderId, addedAt: new Date() });
     await queue.save();
 
-    // Check if we should auto-create discount
+    // Check if we should auto-create discount (always enabled)
     const settings = await AppSettings.getSettings();
 
-    if (settings.autoCreateDiscount && queue.orderCount >= settings.ordersRequiredForDiscount) {
+    if (queue.orderCount >= settings.ordersRequiredForDiscount) {
       // Auto-create discount group
       const result = await exports.processQueue(customerId);
       return {
@@ -89,8 +89,9 @@ exports.processQueue = async (customerId) => {
     }
 
     // Calculate discount for each order
+    // Each order gets a unique bundleIndex (single orders, not bundles) for automatic creation
     const discountRate = settings.discountRate;
-    const orderItems = orders.map(order => {
+    const orderItems = orders.map((order, index) => {
       const eligibleAmount = order.items
         .filter(item => item.discountEligible)
         .reduce((sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0);
@@ -102,7 +103,8 @@ exports.processQueue = async (customerId) => {
         orderLineId: order.orderId,
         amount: eligibleAmount,
         discountRate,
-        discountAmount
+        discountAmount,
+        bundleIndex: index  // Each order is a separate item (single order, not bundle)
       };
     });
 

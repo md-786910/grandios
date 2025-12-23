@@ -203,7 +203,8 @@ exports.getCustomerDiscount = async (req, res, next) => {
         settings: {
           discountRate: settings.discountRate,
           ordersRequiredForDiscount: settings.ordersRequiredForDiscount
-        }
+        },
+        draftDiscountItems: customer.draftDiscountItems || []
       }
     });
   } catch (err) {
@@ -229,13 +230,26 @@ exports.createDiscountGroup = async (req, res, next) => {
       });
     }
 
-    // Validate exact order count for group
-    if (orderIds.length !== settings.ordersRequiredForDiscount) {
+    // Handle both old format (array of IDs) and new format (array of {orderId, bundleIndex})
+    let ordersWithBundles;
+    if (orderIds.length > 0 && typeof orderIds[0] === 'object') {
+      // New format: [{orderId, bundleIndex}, ...]
+      ordersWithBundles = orderIds;
+    } else {
+      // Old format: [id1, id2, id3] - each order is its own bundle
+      ordersWithBundles = orderIds.map((id, index) => ({ orderId: id, bundleIndex: index }));
+    }
+
+    // Validate at least one order is provided (manual creation allows any number)
+    if (ordersWithBundles.length === 0) {
       return res.status(400).json({
         success: false,
-        message: `Exactly ${settings.ordersRequiredForDiscount} orders required per discount group`
+        message: 'At least one order is required'
       });
     }
+
+    // Get all order IDs
+    const allOrderIds = ordersWithBundles.map(o => o.orderId);
 
     // Check if any orders are already in a discount group
     const existingGroups = await DiscountOrder.find({ customerId: customer._id });
@@ -246,7 +260,7 @@ exports.createDiscountGroup = async (req, res, next) => {
       });
     });
 
-    const alreadyUsedOrders = orderIds.filter(id => usedOrderIds.has(id.toString()));
+    const alreadyUsedOrders = allOrderIds.filter(id => usedOrderIds.has(id.toString()));
     if (alreadyUsedOrders.length > 0) {
       return res.status(400).json({
         success: false,
@@ -255,7 +269,7 @@ exports.createDiscountGroup = async (req, res, next) => {
     }
 
     // Get orders with orderLines populated
-    const orders = await Order.find({ _id: { $in: orderIds } })
+    const orders = await Order.find({ _id: { $in: allOrderIds } })
       .populate({
         path: 'orderLines',
         populate: {
@@ -271,6 +285,12 @@ exports.createDiscountGroup = async (req, res, next) => {
       });
     }
 
+    // Create a map of orderId -> bundleIndex
+    const bundleMap = {};
+    ordersWithBundles.forEach(o => {
+      bundleMap[o.orderId.toString()] = o.bundleIndex;
+    });
+
     // Calculate discount for each order
     const orderItems = orders.map(order => {
       const items = getOrderItems(order);
@@ -285,7 +305,8 @@ exports.createDiscountGroup = async (req, res, next) => {
         orderLineId: order.orderId,
         amount: eligibleAmount,
         discountRate: effectiveDiscountRate,
-        discountAmount
+        discountAmount,
+        bundleIndex: bundleMap[order._id.toString()] || 0
       };
     });
 
@@ -309,8 +330,9 @@ exports.createDiscountGroup = async (req, res, next) => {
 
     await discount.addDiscount(discountOrder.totalDiscount);
 
-    // Update customer's total discount granted
+    // Update customer's total discount granted and clear draft items
     customer.totalDiscountGranted = (customer.totalDiscountGranted || 0) + discountOrder.totalDiscount;
+    customer.draftDiscountItems = []; // Clear draft items after creating group
     await customer.save();
 
     res.status(201).json({
@@ -357,13 +379,26 @@ exports.updateDiscountGroup = async (req, res, next) => {
       });
     }
 
-    // Validate exact order count
-    if (orderIds.length !== settings.ordersRequiredForDiscount) {
+    // Handle both old format (array of IDs) and new format (array of {orderId, bundleIndex})
+    let ordersWithBundles;
+    if (orderIds.length > 0 && typeof orderIds[0] === 'object') {
+      // New format: [{orderId, bundleIndex}, ...]
+      ordersWithBundles = orderIds;
+    } else {
+      // Old format: [id1, id2, id3] - each order is its own bundle
+      ordersWithBundles = orderIds.map((id, index) => ({ orderId: id, bundleIndex: index }));
+    }
+
+    // Validate at least one order is provided (manual editing allows any number)
+    if (ordersWithBundles.length === 0) {
       return res.status(400).json({
         success: false,
-        message: `Exactly ${settings.ordersRequiredForDiscount} orders required per discount group`
+        message: 'At least one order is required'
       });
     }
+
+    // Get all order IDs
+    const allOrderIds = ordersWithBundles.map(o => o.orderId);
 
     // Get current orders in this group
     const currentOrderIds = discountOrder.orders.map(o => o.orderId.toString());
@@ -380,7 +415,7 @@ exports.updateDiscountGroup = async (req, res, next) => {
       });
     });
 
-    const alreadyUsedOrders = orderIds.filter(id => usedOrderIds.has(id.toString()));
+    const alreadyUsedOrders = allOrderIds.filter(id => usedOrderIds.has(id.toString()));
     if (alreadyUsedOrders.length > 0) {
       return res.status(400).json({
         success: false,
@@ -392,7 +427,7 @@ exports.updateDiscountGroup = async (req, res, next) => {
     const oldTotalDiscount = discountOrder.totalDiscount;
 
     // Get new orders with orderLines populated
-    const orders = await Order.find({ _id: { $in: orderIds } })
+    const orders = await Order.find({ _id: { $in: allOrderIds } })
       .populate({
         path: 'orderLines',
         populate: {
@@ -408,6 +443,12 @@ exports.updateDiscountGroup = async (req, res, next) => {
       });
     }
 
+    // Create a map of orderId -> bundleIndex
+    const bundleMap = {};
+    ordersWithBundles.forEach(o => {
+      bundleMap[o.orderId.toString()] = o.bundleIndex;
+    });
+
     // Calculate discount for each order
     const orderItems = orders.map(order => {
       const items = getOrderItems(order);
@@ -422,7 +463,8 @@ exports.updateDiscountGroup = async (req, res, next) => {
         orderLineId: order.orderId,
         amount: eligibleAmount,
         discountRate: effectiveDiscountRate,
-        discountAmount
+        discountAmount,
+        bundleIndex: bundleMap[order._id.toString()] || 0
       };
     });
 
@@ -565,6 +607,61 @@ exports.deleteDiscountGroup = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {}
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Save draft discount items for a customer
+// @route   PUT /api/discounts/:customerId/draft
+// @access  Private
+exports.saveDraftItems = async (req, res, next) => {
+  try {
+    const customer = await Customer.findById(req.params.customerId);
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    const { draftItems } = req.body;
+
+    // Save draft items to customer
+    customer.draftDiscountItems = draftItems || [];
+    await customer.save();
+
+    res.status(200).json({
+      success: true,
+      data: customer.draftDiscountItems
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Clear draft discount items for a customer
+// @route   DELETE /api/discounts/:customerId/draft
+// @access  Private
+exports.clearDraftItems = async (req, res, next) => {
+  try {
+    const customer = await Customer.findById(req.params.customerId);
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    customer.draftDiscountItems = [];
+    await customer.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Draft items cleared'
     });
   } catch (err) {
     next(err);

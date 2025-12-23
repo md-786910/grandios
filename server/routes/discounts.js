@@ -6,7 +6,9 @@ const {
   updateDiscountGroup,
   redeemDiscountGroup,
   updateNotes,
-  deleteDiscountGroup
+  deleteDiscountGroup,
+  saveDraftItems,
+  clearDraftItems
 } = require('../controllers/discountController');
 const { protect } = require('../middleware/auth');
 
@@ -31,5 +33,9 @@ router.route('/:customerId/groups/:groupId')
 
 router.route('/:customerId/notes')
   .put(updateNotes);
+
+router.route('/:customerId/draft')
+  .put(saveDraftItems)
+  .delete(clearDraftItems);
 
 module.exports = router;
