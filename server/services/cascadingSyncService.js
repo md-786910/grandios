@@ -38,6 +38,7 @@ const PRODUCT_FIELDS = [
   "standard_price", "categ_id", "active", "available_in_pos",
   "type", "description_sale", "product_tmpl_id",
   "product_template_attribute_value_ids", "combination_indices",
+  "image_512",
 ];
 
 const ATTRIBUTE_FIELDS = [
@@ -655,11 +656,11 @@ async function upsertProduct(wawiProduct) {
     ? wawiProduct.product_tmpl_id[0]
     : wawiProduct.product_tmpl_id;
 
-  // Generate image URL from WAWI base URL
-  const baseUrl = process.env.WAWI_BASE_URL?.replace('/api/v2', '') || '';
-  const imageUrl = templateId
-    ? `${baseUrl}/web/image/product.template/${templateId}/image_256`
-    : undefined;
+  // Get image from base64 field (image_512 from product.product)
+  let image = undefined;
+  if (wawiProduct.image_512 && wawiProduct.image_512 !== false) {
+    image = `data:image/png;base64,${wawiProduct.image_512}`;
+  }
 
   const productData = {
     productId: wawiProduct.id,
@@ -679,7 +680,7 @@ async function upsertProduct(wawiProduct) {
     availableInPos: wawiProduct.available_in_pos !== false,
     type: wawiProduct.type || "product",
     description: wawiProduct.description_sale || undefined,
-    image: imageUrl,
+    image: image,
     combinationIndices: wawiProduct.combination_indices || undefined,
     syncedAt: new Date(),
   };

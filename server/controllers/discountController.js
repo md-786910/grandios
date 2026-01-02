@@ -35,17 +35,36 @@ exports.getDiscounts = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
+    const search = req.query.search || '';
     const startIndex = (page - 1) * limit;
     const settings = await AppSettings.getSettings();
 
     // Get unique customer IDs that have at least one discount group
     const customersWithDiscountGroups = await DiscountOrder.distinct('customerId');
 
-    // Total count of customers with discount groups
-    const total = customersWithDiscountGroups.length;
+    // Build query filter
+    const query = { _id: { $in: customersWithDiscountGroups } };
+
+    // Add search filter if provided
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      query.$or = [
+        { name: searchRegex },
+        { email: searchRegex },
+        { ref: searchRegex },
+      ];
+      // Also search by contactId (numeric)
+      const numericSearch = parseInt(search, 10);
+      if (!isNaN(numericSearch)) {
+        query.$or.push({ contactId: numericSearch });
+      }
+    }
+
+    // Total count of customers matching the filter
+    const total = await Customer.countDocuments(query);
 
     // Get customers who have discount groups, with pagination
-    const customers = await Customer.find({ _id: { $in: customersWithDiscountGroups } })
+    const customers = await Customer.find(query)
       .skip(startIndex)
       .limit(limit)
       .sort({ createdAt: -1 });
@@ -64,7 +83,8 @@ exports.getDiscounts = async (req, res, next) => {
         return {
           id: customer._id,
           customerId: customer._id,
-          customerNumber: customer.ref,
+          customerNumber: customer.contactId,
+          customerRef: customer.ref,
           customerName: customer.name,
           email: customer.email,
           totalOrderValue,
@@ -172,7 +192,8 @@ exports.getCustomerDiscount = async (req, res, next) => {
       data: {
         customer: {
           id: customer._id,
-          customerNumber: customer.ref,
+          customerNumber: customer.contactId,
+          customerRef: customer.ref,
           customerName: customer.name,
           email: customer.email,
           phone: customer.phone || customer.mobile,
@@ -187,7 +208,7 @@ exports.getCustomerDiscount = async (req, res, next) => {
         },
         orders: ordersWithItems,
         discountGroups: discountOrders,
-        notes: discountOrders.length > 0 ? discountOrders[0].notes : '',
+        notes: customer.notes || '',
         // Queue information
         queue: queue ? {
           orderCount: queue.orderCount,
@@ -217,7 +238,7 @@ exports.getCustomerDiscount = async (req, res, next) => {
 // @access  Private
 exports.createDiscountGroup = async (req, res, next) => {
   try {
-    const { orderIds, discountRate } = req.body;
+    const { orderIds, discountRate, manualOverride } = req.body;
     const settings = await AppSettings.getSettings();
     const effectiveDiscountRate = discountRate || settings.discountRate;
 
@@ -254,18 +275,56 @@ exports.createDiscountGroup = async (req, res, next) => {
     // Check if any orders are already in a discount group
     const existingGroups = await DiscountOrder.find({ customerId: customer._id });
     const usedOrderIds = new Set();
+    const orderToGroupMap = new Map(); // Map orderId to group for removal
     existingGroups.forEach(group => {
       group.orders.forEach(o => {
-        usedOrderIds.add(o.orderId.toString());
+        const orderIdStr = o.orderId.toString();
+        usedOrderIds.add(orderIdStr);
+        orderToGroupMap.set(orderIdStr, group);
       });
     });
 
     const alreadyUsedOrders = allOrderIds.filter(id => usedOrderIds.has(id.toString()));
+
     if (alreadyUsedOrders.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Some orders are already in a discount group'
-      });
+      // If manual override is enabled, remove orders from existing groups
+      if (manualOverride) {
+        // Group orders by their existing discount group
+        const groupsToUpdate = new Map();
+        for (const orderId of alreadyUsedOrders) {
+          const group = orderToGroupMap.get(orderId.toString());
+          if (group && group.status !== 'redeemed') {
+            if (!groupsToUpdate.has(group._id.toString())) {
+              groupsToUpdate.set(group._id.toString(), { group, orderIdsToRemove: [] });
+            }
+            groupsToUpdate.get(group._id.toString()).orderIdsToRemove.push(orderId.toString());
+          }
+        }
+
+        // Update or delete existing groups
+        for (const [, { group, orderIdsToRemove }] of groupsToUpdate) {
+          const remainingOrders = group.orders.filter(
+            o => !orderIdsToRemove.includes(o.orderId.toString())
+          );
+
+          if (remainingOrders.length === 0) {
+            // Delete group if no orders remain
+            await DiscountOrder.findByIdAndDelete(group._id);
+          } else {
+            // Update group with remaining orders and recalculate discount
+            const newTotalDiscount = remainingOrders.reduce((sum, o) => sum + (o.discountAmount || 0), 0);
+            await DiscountOrder.findByIdAndUpdate(group._id, {
+              orders: remainingOrders,
+              totalDiscount: newTotalDiscount
+            });
+          }
+        }
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Some orders are already in a discount group'
+        });
+      }
     }
 
     // Get orders with orderLines populated
@@ -559,18 +618,23 @@ exports.updateNotes = async (req, res, next) => {
   try {
     const { notes } = req.body;
 
-    // Update notes on the latest discount order or create one
-    let discountOrder = await DiscountOrder.findOne({ customerId: req.params.customerId })
-      .sort({ createdAt: -1 });
+    // Update notes on the customer
+    const customer = await Customer.findByIdAndUpdate(
+      req.params.customerId,
+      { notes },
+      { new: true }
+    );
 
-    if (discountOrder) {
-      discountOrder.notes = notes;
-      await discountOrder.save();
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
     }
 
     res.status(200).json({
       success: true,
-      data: { notes }
+      data: { notes: customer.notes }
     });
   } catch (err) {
     next(err);

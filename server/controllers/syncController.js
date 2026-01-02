@@ -170,6 +170,8 @@ exports.getCustomers = async (req, res, next) => {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
     const search = req.query.search || '';
+    const sortBy = req.query.sortBy || 'name';
+    const sortOrder = req.query.sortOrder === 'desc' ? -1 : 1;
     const skip = (page - 1) * limit;
 
     const query = {};
@@ -189,10 +191,21 @@ exports.getCustomers = async (req, res, next) => {
       query.$or = searchConditions;
     }
 
+    // Build sort object based on sortBy parameter
+    const sortFields = {
+      name: 'name',
+      customerNumber: 'contactId',
+      discountRedeemed: 'totalDiscountRedeemed',
+      discountGranted: 'totalDiscountGranted',
+      wallet: 'wallet',
+    };
+    const sortField = sortFields[sortBy] || 'name';
+    const sortObj = { [sortField]: sortOrder };
+
     const [customers, total] = await Promise.all([
       Customer.find(query)
         .collation({ locale: 'de', strength: 2 })
-        .sort({ name: 1 })
+        .sort(sortObj)
         .skip(skip)
         .limit(limit)
         .lean(),

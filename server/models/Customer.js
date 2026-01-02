@@ -42,6 +42,10 @@ const CustomerSchema = new mongoose.Schema({
   },
   companyType: String,
   syncedAt: Date,
+  notes: {
+    type: String,
+    default: ''
+  },
   draftDiscountItems: [{
     orders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order' }],
     isBundle: { type: Boolean, default: false }

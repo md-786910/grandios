@@ -11,6 +11,8 @@ const Kunden = () => {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(20);
+  const [sortBy, setSortBy] = useState("name");
+  const [sortOrder, setSortOrder] = useState("asc");
   const [pagination, setPagination] = useState({
     total: 0,
     pages: 0,
@@ -28,7 +30,7 @@ const Kunden = () => {
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await syncAPI.getCustomers(currentPage, itemsPerPage, debouncedSearch);
+      const response = await syncAPI.getCustomers(currentPage, itemsPerPage, debouncedSearch, sortBy, sortOrder);
       if (response.data.success) {
         setCustomers(response.data.data);
         setPagination(response.data.pagination);
@@ -38,7 +40,38 @@ const Kunden = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, itemsPerPage, debouncedSearch]);
+  }, [currentPage, itemsPerPage, debouncedSearch, sortBy, sortOrder]);
+
+  // Handle sort change
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortOrder("asc");
+    }
+    setCurrentPage(1);
+  };
+
+  // Sort indicator component
+  const SortIcon = ({ field }) => {
+    if (sortBy !== field) {
+      return (
+        <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      );
+    }
+    return sortOrder === "asc" ? (
+      <svg className="w-4 h-4 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+      </svg>
+    ) : (
+      <svg className="w-4 h-4 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    );
+  };
 
   useEffect(() => {
     fetchCustomers();
@@ -95,11 +128,23 @@ const Kunden = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                  Kunde
+                <th
+                  className="text-left px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
+                  onClick={() => handleSort("name")}
+                >
+                  <div className="flex items-center gap-2">
+                    Kunde
+                    <SortIcon field="name" />
+                  </div>
                 </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                  Kundennummer
+                <th
+                  className="text-left px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
+                  onClick={() => handleSort("customerNumber")}
+                >
+                  <div className="flex items-center gap-2">
+                    Kundennummer
+                    <SortIcon field="customerNumber" />
+                  </div>
                 </th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
                   Telefon
@@ -107,14 +152,32 @@ const Kunden = () => {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
                   Stadt
                 </th>
-                <th className="text-right px-6 py-4 text-sm font-semibold text-gray-900">
-                  Wallet
+                <th
+                  className="text-right px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
+                  onClick={() => handleSort("wallet")}
+                >
+                  <div className="flex items-center justify-end gap-2">
+                    Wallet
+                    <SortIcon field="wallet" />
+                  </div>
                 </th>
-                <th className="text-right px-6 py-4 text-sm font-semibold text-gray-900">
-                  Rabatt Gewährt
+                <th
+                  className="text-right px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
+                  onClick={() => handleSort("discountGranted")}
+                >
+                  <div className="flex items-center justify-end gap-2">
+                    Rabatt Gewährt
+                    <SortIcon field="discountGranted" />
+                  </div>
                 </th>
-                <th className="text-right px-6 py-4 text-sm font-semibold text-gray-900">
-                  Rabatt Eingelöst
+                <th
+                  className="text-right px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
+                  onClick={() => handleSort("discountRedeemed")}
+                >
+                  <div className="flex items-center justify-end gap-2">
+                    Rabatt Eingelöst
+                    <SortIcon field="discountRedeemed" />
+                  </div>
                 </th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
                   Aktion

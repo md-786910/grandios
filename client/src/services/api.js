@@ -133,15 +133,18 @@ export const ordersAPI = {
 
 // Discounts API (Rabatt)
 export const discountsAPI = {
-  getAll: (page = 1, limit = 10) =>
-    apiCall(`/discounts?page=${page}&limit=${limit}`),
+  getAll: (page = 1, limit = 10, search = "") => {
+    let url = `/discounts?page=${page}&limit=${limit}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    return apiCall(url);
+  },
 
   getCustomerDiscount: (customerId) => apiCall(`/discounts/${customerId}`),
 
-  createGroup: (customerId, orderIds, discountRate = 10) =>
+  createGroup: (customerId, orderIds, discountRate = 10, manualOverride = true) =>
     apiCall(`/discounts/${customerId}/groups`, {
       method: "POST",
-      body: JSON.stringify({ orderIds, discountRate }),
+      body: JSON.stringify({ orderIds, discountRate, manualOverride }),
     }),
 
   redeemGroup: (customerId, groupId) =>
@@ -252,8 +255,8 @@ export const syncAPI = {
   syncAll: () => apiCall("/sync/full", { method: "POST" }),
 
   // Get synced data with pagination
-  getCustomers: (page = 1, limit = 20, search = "") => {
-    let url = `/sync/data/customers?page=${page}&limit=${limit}`;
+  getCustomers: (page = 1, limit = 20, search = "", sortBy = "name", sortOrder = "asc") => {
+    let url = `/sync/data/customers?page=${page}&limit=${limit}&sortBy=${sortBy}&sortOrder=${sortOrder}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     return apiCall(url);
   },

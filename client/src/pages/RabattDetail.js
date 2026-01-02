@@ -109,9 +109,9 @@ const RabattDetail = () => {
     const orderStatus = getOrderStatus(orderId);
     const ordersInItems = getOrdersInItems();
 
-    // When editing, allow selecting orders that are in the editing group
-    if (orderStatus.inGroup && (!editingGroup || orderStatus.groupId !== editingGroup._id)) {
-      return; // Can't select orders in other groups
+    // Can't select redeemed orders
+    if (orderStatus.status === 'redeemed') {
+      return;
     }
 
     // Can't select orders already added to discount items
@@ -764,14 +764,15 @@ const RabattDetail = () => {
       {/* Action Bar - Selection and Creation */}
       {(() => {
         // Calculate total items: selected orders + added bundles
+        const MANUAL_MIN_ORDERS = 2; // Manual creation requires 2+ orders
         const totalItems = selectedOrders.length + discountItems.length;
-        const isReadyForDiscount = totalItems >= settings.ordersRequiredForDiscount;
-        const remainingItems = settings.ordersRequiredForDiscount - totalItems;
+        const isReadyForManual = totalItems >= MANUAL_MIN_ORDERS;
+        const isReadyForAuto = totalItems >= settings.ordersRequiredForDiscount;
 
         return (
           <div
             className={`rounded-xl border p-4 mb-6 transition-colors ${
-              isReadyForDiscount
+              isReadyForManual
                 ? "bg-green-50 border-green-200"
                 : totalItems > 0
                   ? "bg-blue-50 border-blue-200"
@@ -780,14 +781,14 @@ const RabattDetail = () => {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                {/* Progress indicator */}
+                {/* Progress indicator - shows 2 dots for manual creation */}
                 <div className="flex items-center gap-1">
-                  {[...Array(settings.ordersRequiredForDiscount)].map((_, i) => (
+                  {[...Array(MANUAL_MIN_ORDERS)].map((_, i) => (
                     <div
                       key={i}
                       className={`w-3 h-3 rounded-full transition-colors ${
                         i < totalItems
-                          ? isReadyForDiscount ? "bg-green-500" : "bg-blue-500"
+                          ? isReadyForManual ? "bg-green-500" : "bg-blue-500"
                           : "bg-gray-200"
                       }`}
                     />
@@ -798,12 +799,12 @@ const RabattDetail = () => {
                 <div className="flex items-center gap-3">
                   {totalItems === 0 ? (
                     <span className="text-sm text-gray-500">
-                      Wählen Sie {settings.ordersRequiredForDiscount} Bestellungen für automatischen Rabatt
+                      Wählen Sie mindestens {MANUAL_MIN_ORDERS} Bestellungen
                     </span>
                   ) : (
                     <>
-                      <span className={`text-sm font-medium ${isReadyForDiscount ? "text-green-700" : "text-blue-700"}`}>
-                        {totalItems} / {settings.ordersRequiredForDiscount} Artikel
+                      <span className={`text-sm font-medium ${isReadyForManual ? "text-green-700" : "text-blue-700"}`}>
+                        {totalItems} Bestellung{totalItems > 1 ? 'en' : ''} ausgewählt
                       </span>
                       {hasSelectedOrders && (
                         <span className="text-xs text-gray-500">
@@ -815,14 +816,14 @@ const RabattDetail = () => {
                           ({discountItems.length} Gruppe{discountItems.length > 1 ? 'n' : ''})
                         </span>
                       )}
-                      {isReadyForDiscount && (
+                      {isReadyForManual && (
                         <span className="text-sm text-green-600 font-medium">
                           • Rabatt: € {formatCurrency(itemsDiscount + selectedDiscount)}
                         </span>
                       )}
-                      {!isReadyForDiscount && remainingItems > 0 && (
+                      {!isReadyForManual && (
                         <span className="text-xs text-gray-400">
-                          (noch {remainingItems} benötigt)
+                          (noch {MANUAL_MIN_ORDERS - totalItems} benötigt)
                         </span>
                       )}
                     </>
@@ -845,11 +846,11 @@ const RabattDetail = () => {
                     )}
                     <button
                       onClick={handleCreateDirectDiscountGroup}
-                      disabled={creatingGroup}
+                      disabled={creatingGroup || !isReadyForManual}
                       className={`px-4 py-1.5 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
-                        isReadyForDiscount
+                        isReadyForManual
                           ? "bg-green-600 hover:bg-green-700"
-                          : "bg-gray-500 hover:bg-gray-600"
+                          : "bg-gray-400 cursor-not-allowed"
                       }`}
                     >
                       {creatingGroup ? "..." : "Rabattgruppe erstellen"}
@@ -866,11 +867,11 @@ const RabattDetail = () => {
                   <>
                     <button
                       onClick={handleCreateDiscountGroup}
-                      disabled={creatingGroup}
+                      disabled={creatingGroup || !isReadyForManual}
                       className={`px-4 py-1.5 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
-                        isReadyForDiscount
+                        isReadyForManual
                           ? "bg-green-600 hover:bg-green-700"
-                          : "bg-gray-500 hover:bg-gray-600"
+                          : "bg-gray-400 cursor-not-allowed"
                       }`}
                     >
                       {creatingGroup ? "..." : editingGroup ? "Aktualisieren" : "Rabattgruppe erstellen"}

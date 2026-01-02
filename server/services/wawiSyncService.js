@@ -86,10 +86,9 @@ const PRODUCT_FIELDS = [
   "description_sale",
   "write_date",
   "product_tmpl_id",
-  "variant_image_url",
-  "template_image_url",
   "product_template_attribute_value_ids",
   "combination_indices",
+  "image_512",
 ];
 
 // Product attribute fields
@@ -382,7 +381,6 @@ async function syncProducts(options = {}) {
       });
 
       const products = result.data;
-      console.log(products[0]);
 
       if (!products || products.length === 0) {
         hasMore = false;
@@ -834,6 +832,12 @@ function mapOrderState(wawiState) {
  * Map WAWI product to MongoDB schema
  */
 function mapWawiProduct(wawiProduct) {
+  // Get image from base64 field (image_512 from product.product)
+  let image = undefined;
+  if (wawiProduct.image_512 && wawiProduct.image_512 !== false) {
+    image = `data:image/png;base64,${wawiProduct.image_512}`;
+  }
+
   return {
     productId: wawiProduct.id,
     productTemplateId: Array.isArray(wawiProduct.product_tmpl_id)
@@ -855,6 +859,7 @@ function mapWawiProduct(wawiProduct) {
     type: wawiProduct.type || "product",
     description: wawiProduct.description_sale || undefined,
     combinationIndices: wawiProduct.combination_indices || undefined,
+    image: image,
   };
 }
 
