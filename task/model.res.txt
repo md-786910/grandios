@@ -1,0 +1,7 @@
+res.partner
+pos.order
+pos.order.line
+product.product
+product.attribute
+product.attribute.value
+product.attribute.custom.value

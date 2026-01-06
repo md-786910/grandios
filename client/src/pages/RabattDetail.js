@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
+import ConfirmModal from "../components/ConfirmModal";
 import { discountsAPI } from "../services/api";
 
 const RabattDetail = () => {
@@ -17,8 +18,29 @@ const RabattDetail = () => {
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
-  const [dataVersion, setDataVersion] = useState(0);
   const [editingGroup, setEditingGroup] = useState(null); // Group being edited
+  const [discountItems, setDiscountItems] = useState([]); // Items for discount group: [{orders: [id1, id2], isBundle: true}]
+  const [expandedBundles, setExpandedBundles] = useState({}); // Track which bundles are expanded: {groupId_bundleIdx: true}
+  const [deleteGroupId, setDeleteGroupId] = useState(null); // Group ID to delete (for confirmation modal)
+  const [expandedItems, setExpandedItems] = useState({}); // Track which added items are expanded: {index: true}
+  const [draftItemsLoaded, setDraftItemsLoaded] = useState(false); // Track if draft items have been loaded from DB
+
+  // Save discountItems to database whenever it changes (after initial load)
+  useEffect(() => {
+    if (!draftItemsLoaded) return; // Don't save until we've loaded from DB
+
+    const saveDraftItems = async () => {
+      try {
+        await discountsAPI.saveDraftItems(id, discountItems);
+      } catch (error) {
+        console.error("Failed to save draft items:", error);
+      }
+    };
+
+    // Debounce the save to avoid too many API calls
+    const timeoutId = setTimeout(saveDraftItems, 500);
+    return () => clearTimeout(timeoutId);
+  }, [discountItems, id, draftItemsLoaded]);
 
   const fetchData = async () => {
     try {
@@ -31,7 +53,12 @@ const RabattDetail = () => {
         setNotizen(data.notes || "");
         setQueue(data.queue || null);
         setSettings(data.settings || { discountRate: 10, ordersRequiredForDiscount: 3 });
-        setDataVersion(v => v + 1);
+
+        // Load draft items from database (only on initial load)
+        if (!draftItemsLoaded && data.draftDiscountItems) {
+          setDiscountItems(data.draftDiscountItems);
+        }
+        setDraftItemsLoaded(true);
       }
     } catch (error) {
       console.error("Failed to fetch customer discount:", error);
@@ -80,10 +107,16 @@ const RabattDetail = () => {
   // Handle order selection
   const handleOrderSelect = (orderId) => {
     const orderStatus = getOrderStatus(orderId);
+    const ordersInItems = getOrdersInItems();
 
-    // When editing, allow selecting orders that are in the editing group
-    if (orderStatus.inGroup && (!editingGroup || orderStatus.groupId !== editingGroup._id)) {
-      return; // Can't select orders in other groups
+    // Can't select redeemed orders
+    if (orderStatus.status === 'redeemed') {
+      return;
+    }
+
+    // Can't select orders already added to discount items
+    if (ordersInItems.includes(orderId)) {
+      return;
     }
 
     setSelectedOrders(prev => {
@@ -109,15 +142,119 @@ const RabattDetail = () => {
   const handleCancelEdit = () => {
     setEditingGroup(null);
     setSelectedOrders([]);
+    setDiscountItems([]);
+  };
+
+  // Add selected orders as one item (single order or bundle)
+  const handleAddAsItem = () => {
+    if (selectedOrders.length === 0) return;
+
+    const newItem = {
+      orders: [...selectedOrders],
+      isBundle: selectedOrders.length > 1
+    };
+
+    setDiscountItems(prev => [...prev, newItem]);
+    setSelectedOrders([]);
+  };
+
+  // Create discount group from both discountItems and selected orders
+  const handleCreateDirectDiscountGroup = async () => {
+    // Allow creation if we have either discountItems or selectedOrders
+    if (selectedOrders.length === 0 && discountItems.length === 0) return;
+
+    setCreatingGroup(true);
+    setMessage({ type: "", text: "" });
+
+    try {
+      let ordersWithBundles = [];
+      let bundleIndex = 0;
+
+      // First, add orders from discountItems (pre-added groups)
+      discountItems.forEach((item) => {
+        item.orders.forEach(orderId => {
+          ordersWithBundles.push({
+            orderId,
+            bundleIndex: bundleIndex
+          });
+        });
+        bundleIndex++; // Each item gets its own bundleIndex
+      });
+
+      // Then, add selected orders (each as individual item)
+      selectedOrders.forEach((orderId) => {
+        ordersWithBundles.push({
+          orderId,
+          bundleIndex: bundleIndex
+        });
+        bundleIndex++; // Each selected order gets its own bundleIndex
+      });
+
+      await discountsAPI.createGroup(id, ordersWithBundles, settings.discountRate);
+      setMessage({ type: "success", text: "Rabattgruppe erfolgreich erstellt!" });
+      setSelectedOrders([]);
+      setDiscountItems([]);
+      await fetchData();
+    } catch (error) {
+      console.error("Failed to create discount group:", error);
+      setMessage({ type: "error", text: error.message || "Fehler beim Erstellen der Rabattgruppe" });
+    } finally {
+      setCreatingGroup(false);
+    }
+  };
+
+  // Remove an item from discount items
+  const handleRemoveItem = (index) => {
+    setDiscountItems(prev => prev.filter((_, i) => i !== index));
+    setExpandedItems(prev => {
+      const newExpanded = { ...prev };
+      delete newExpanded[index];
+      return newExpanded;
+    });
+  };
+
+  // Remove individual order from a bundle item
+  const handleRemoveOrderFromItem = (itemIndex, orderId) => {
+    setDiscountItems(prev => {
+      const newItems = [...prev];
+      const item = newItems[itemIndex];
+      const newOrders = item.orders.filter(id => id !== orderId);
+
+      if (newOrders.length === 0) {
+        // Remove entire item if no orders left
+        return prev.filter((_, i) => i !== itemIndex);
+      } else {
+        // Update item with remaining orders
+        newItems[itemIndex] = {
+          ...item,
+          orders: newOrders,
+          isBundle: newOrders.length > 1
+        };
+        return newItems;
+      }
+    });
+  };
+
+  // Toggle expanded state for added items
+  const toggleItemExpanded = (index) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
+
+  // Get all order IDs that are already in discount items
+  const getOrdersInItems = () => {
+    return discountItems.flatMap(item => item.orders);
   };
 
   // Create or update discount group
   const handleCreateDiscountGroup = async () => {
-    // Validate exact order count
-    if (selectedOrders.length !== settings.ordersRequiredForDiscount) {
+    // Validate at least one item is provided
+    if (discountItems.length === 0) {
       setMessage({
         type: "error",
-        text: `Sie müssen genau ${settings.ordersRequiredForDiscount} Bestellungen auswählen`
+        text: "Bitte fügen Sie mindestens einen Artikel hinzu"
       });
       return;
     }
@@ -126,16 +263,22 @@ const RabattDetail = () => {
     setMessage({ type: "", text: "" });
 
     try {
+      // Flatten all orders from items with bundleIndex
+      const ordersWithBundles = discountItems.flatMap((item, index) =>
+        item.orders.map(orderId => ({ orderId, bundleIndex: index }))
+      );
+
       if (editingGroup) {
         // Update existing group
-        await discountsAPI.updateGroup(id, editingGroup._id, selectedOrders, settings.discountRate);
+        await discountsAPI.updateGroup(id, editingGroup._id, ordersWithBundles, settings.discountRate);
         setMessage({ type: "success", text: "Rabattgruppe erfolgreich aktualisiert!" });
       } else {
         // Create new group
-        await discountsAPI.createGroup(id, selectedOrders, settings.discountRate);
+        await discountsAPI.createGroup(id, ordersWithBundles, settings.discountRate);
         setMessage({ type: "success", text: "Rabattgruppe erfolgreich erstellt!" });
       }
       setSelectedOrders([]);
+      setDiscountItems([]);
       setEditingGroup(null);
       await fetchData();
     } catch (error) {
@@ -158,17 +301,24 @@ const RabattDetail = () => {
     }
   };
 
-  // Delete discount group
-  const handleDeleteGroup = async (groupId) => {
-    if (!window.confirm("Möchten Sie diese Rabattgruppe wirklich löschen?")) return;
+  // Delete discount group - show confirmation modal
+  const handleDeleteGroup = (groupId) => {
+    setDeleteGroupId(groupId);
+  };
+
+  // Confirm delete discount group
+  const confirmDeleteGroup = async () => {
+    if (!deleteGroupId) return;
 
     try {
-      await discountsAPI.deleteGroup(id, groupId);
+      await discountsAPI.deleteGroup(id, deleteGroupId);
       setMessage({ type: "success", text: "Rabattgruppe gelöscht!" });
+      setDeleteGroupId(null);
       await fetchData();
     } catch (error) {
       console.error("Failed to delete group:", error);
       setMessage({ type: "error", text: error.message || "Fehler beim Löschen" });
+      setDeleteGroupId(null);
     }
   };
 
@@ -226,10 +376,22 @@ const RabattDetail = () => {
   }, 0);
   const selectedDiscount = (selectedOrdersTotal * settings.discountRate) / 100;
 
-  // Selection status
-  const isExactCount = selectedOrders.length === settings.ordersRequiredForDiscount;
-  const isTooMany = selectedOrders.length > settings.ordersRequiredForDiscount;
-  const isTooFew = selectedOrders.length > 0 && selectedOrders.length < settings.ordersRequiredForDiscount;
+  // Selection status for items (manual creation allows any number of items)
+  const hasItems = discountItems.length > 0;
+  const hasSelectedOrders = selectedOrders.length > 0;
+
+  // Calculate total discount from all items
+  const itemsTotal = discountItems.reduce((acc, item) => {
+    return acc + item.orders.reduce((sum, orderId) => {
+      const order = orders.find(o => (o._id || o.id) === orderId);
+      if (order) {
+        const eligible = order.items?.filter(i => i.discountEligible) || [];
+        return sum + eligible.reduce((s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity), 0);
+      }
+      return sum;
+    }, 0);
+  }, 0);
+  const itemsDiscount = (itemsTotal * settings.discountRate) / 100;
 
   return (
     <Layout>
@@ -246,131 +408,277 @@ const RabattDetail = () => {
         )}
       </div>
 
-      {/* Header Buttons */}
-      <div key={`header-${selectedOrders.length}-${editingGroup?._id || 'none'}`} className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-4">
-          <div style={{ display: selectedOrders.length > 0 ? 'block' : 'none' }}>
-            {selectedOrders.length > 0 && (
-              <div className={`flex items-center gap-3 rounded-lg px-4 py-2 ${
-                isExactCount
-                  ? "bg-green-50 border border-green-200"
-                  : isTooMany
-                    ? "bg-red-50 border border-red-200"
-                    : "bg-yellow-50 border border-yellow-200"
-              }`}>
-                <span className={`text-sm ${
-                  isExactCount
-                    ? "text-green-800"
-                    : isTooMany
-                      ? "text-red-800"
-                      : "text-yellow-800"
-                }`}>
-                  <strong>{selectedOrders.length}</strong>/{settings.ordersRequiredForDiscount} Bestellung(en) ausgewählt
-                </span>
-                {isExactCount ? (
-                  <span className="text-sm text-green-600">
-                    Rabatt: <strong>€ {formatCurrency(selectedDiscount)}</strong> ({settings.discountRate}%)
-                  </span>
-                ) : isTooFew ? (
-                  <span className="text-sm text-yellow-600 font-medium">
-                    (Noch {settings.ordersRequiredForDiscount - selectedOrders.length} benötigt)
-                  </span>
-                ) : (
-                  <span className="text-sm text-red-600 font-medium">
-                    (Max. {settings.ordersRequiredForDiscount} erlaubt)
-                  </span>
-                )}
-                <button
-                  onClick={handleCreateDiscountGroup}
-                  disabled={creatingGroup || !isExactCount}
-                  className={`px-4 py-1.5 text-white rounded-lg transition-colors text-sm disabled:opacity-50 ${
-                    isExactCount
-                      ? "bg-green-600 hover:bg-green-700"
-                      : "bg-gray-400 cursor-not-allowed"
-                  }`}
-                >
-                  {creatingGroup ? "Speichern..." : editingGroup ? "Gruppe aktualisieren" : "Rabattgruppe erstellen"}
-                </button>
-                <button
-                  onClick={editingGroup ? handleCancelEdit : () => setSelectedOrders([])}
-                  className={`px-3 py-1.5 text-sm ${
-                    isExactCount
-                      ? "text-green-600 hover:text-green-800"
-                      : isTooMany
-                        ? "text-red-600 hover:text-red-800"
-                        : "text-yellow-600 hover:text-yellow-800"
-                  }`}
-                >
-                  Abbrechen
-                </button>
-              </div>
-            )}
-          </div>
-          <div style={{ display: selectedOrders.length === 0 ? 'block' : 'none' }}>
-            {selectedOrders.length === 0 && (
-              <div className="text-sm text-gray-500">
-                Wählen Sie {settings.ordersRequiredForDiscount} Bestellungen aus, um eine Rabattgruppe zu erstellen
-              </div>
-            )}
-          </div>
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Rabatt Details</h1>
+          <p className="text-gray-500 text-sm mt-1">{customer?.name || 'Kunde'}</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => navigate("/rabatt")}
-            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm"
-          >
-            Zurück
-          </button>
-        </div>
+        <button
+          onClick={() => navigate("/rabatt")}
+          className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm"
+        >
+          Zurück
+        </button>
       </div>
+
+      {/* Pending Discount Group - Professional Design */}
+      {discountItems.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 mb-6 overflow-hidden shadow-sm">
+          {/* Header with Status */}
+          <div className="bg-gradient-to-r from-amber-100 to-orange-100 px-5 py-4 border-b border-amber-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {/* Pending Icon */}
+                <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center shadow-sm">
+                  <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-amber-900">Rabattgruppe wird erstellt</h3>
+                  <p className="text-xs text-amber-600 mt-0.5">Anzahl der Bestellungen</p>
+                  <p className="text-sm font-bold text-amber-900">
+                    {discountItems.reduce((sum, item) => sum + item.orders.length, 0)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {/* Total Discount Preview */}
+                <div className="text-right">
+                  <p className="text-xs text-amber-600 font-medium">Voraussichtlicher Rabatt</p>
+                  <p className="text-lg font-bold text-amber-900">€ {formatCurrency(itemsDiscount)}</p>
+                </div>
+                {/* Expand/Collapse Button */}
+                <button
+                  onClick={() => setExpandedItems(prev => ({ ...prev, accordion: !prev.accordion }))}
+                  className="p-2 rounded-lg bg-white/60 hover:bg-white transition-colors border border-amber-200"
+                >
+                  <svg className={`h-5 w-5 text-amber-700 transition-transform ${expandedItems.accordion ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Expanded Content */}
+          {expandedItems.accordion && (
+            <div className="bg-white/80">
+              {/* Column Headers */}
+              <div className="grid grid-cols-[40px_1fr_120px_100px_50px] gap-2 px-5 py-2 bg-amber-50/50 border-b border-amber-100 text-xs font-semibold text-amber-800 uppercase tracking-wide">
+                <span>#</span>
+                <span>Artikel / Bestellung</span>
+                <span className="text-right">Rabattfähig</span>
+                <span className="text-right">Rabatt</span>
+                <span></span>
+              </div>
+
+              {/* Items List */}
+              <div className="divide-y divide-amber-100">
+                {discountItems.map((item, index) => {
+                  const isItemExpanded = expandedItems[index];
+                  const itemOrders = item.orders.map(orderId =>
+                    orders.find(o => (o._id || o.id) === orderId)
+                  ).filter(Boolean);
+
+                  // Calculate item totals
+                  const itemEligible = itemOrders.reduce((sum, order) => {
+                    const eligible = order?.items?.filter(i => i.discountEligible) || [];
+                    return sum + eligible.reduce((s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity), 0);
+                  }, 0);
+                  const itemDiscount = (itemEligible * settings.discountRate) / 100;
+
+                  return (
+                    <div key={index}>
+                      {/* Item Row */}
+                      <div
+                        className={`grid grid-cols-[40px_1fr_120px_100px_50px] gap-2 px-5 py-3 items-center ${item.isBundle ? 'cursor-pointer hover:bg-amber-50/50' : ''} transition-colors`}
+                        onClick={() => item.isBundle && toggleItemExpanded(index)}
+                      >
+                        {/* Index */}
+                        <div className="flex items-center justify-center">
+                          <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold flex items-center justify-center">
+                            {index + 1}
+                          </span>
+                        </div>
+
+                        {/* Item Info */}
+                        <div className="flex items-center gap-3">
+                          {item.isBundle ? (
+                            <>
+                              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                                <svg className="h-4 w-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                  <rect x="6" y="2" width="12" height="14" rx="2" className="fill-blue-50" />
+                                  <rect x="4" y="4" width="12" height="14" rx="2" className="fill-blue-100" />
+                                  <rect x="2" y="6" width="12" height="14" rx="2" className="fill-white" />
+                                </svg>
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-gray-900">Gruppe</span>
+                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                                    {item.orders.length} Bestellungen
+                                  </span>
+                                  <svg className={`h-4 w-4 text-gray-400 transition-transform ${isItemExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-0.5">Klicken zum Erweitern</p>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                                <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">{itemOrders[0]?.posReference || 'Bestellung'}</p>
+                                <p className="text-xs text-gray-500">{formatDate(itemOrders[0]?.orderDate)}</p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Eligible Amount */}
+                        <div className="text-right">
+                          <span className="text-sm text-gray-700">€ {formatCurrency(itemEligible)}</span>
+                        </div>
+
+                        {/* Discount Amount */}
+                        <div className="text-right">
+                          <span className="text-sm font-semibold text-green-600">€ {formatCurrency(itemDiscount)}</span>
+                        </div>
+
+                        {/* Remove Button */}
+                        <div className="flex justify-center">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleRemoveItem(index); }}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            title="Entfernen"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Expanded Bundle Orders */}
+                      {item.isBundle && isItemExpanded && (
+                        <div className="bg-blue-50/30 border-t border-blue-100">
+                          {itemOrders.map((order, orderIdx) => {
+                            const orderId = order._id || order.id;
+                            const orderEligible = (order?.items?.filter(i => i.discountEligible) || [])
+                              .reduce((s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity), 0);
+                            const orderDiscount = (orderEligible * settings.discountRate) / 100;
+
+                            return (
+                              <div
+                                key={orderId}
+                                className={`grid grid-cols-[40px_1fr_120px_100px_50px] gap-2 px-5 py-2.5 items-center ml-4 ${orderIdx < itemOrders.length - 1 ? 'border-b border-blue-100' : ''}`}
+                              >
+                                <div className="flex items-center justify-center">
+                                  <span className="text-xs text-gray-400">{orderIdx + 1}.</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-gray-700">{order.posReference}</span>
+                                  <span className="text-xs text-gray-400">• {formatDate(order.orderDate)}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-xs text-gray-500">€ {formatCurrency(orderEligible)}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-xs text-green-600">€ {formatCurrency(orderDiscount)}</span>
+                                </div>
+                                <div className="flex justify-center">
+                                  <button
+                                    onClick={() => handleRemoveOrderFromItem(index, orderId)}
+                                    className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                    title="Aus Gruppe entfernen"
+                                  >
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer with Total and Actions */}
+              <div className="px-5 py-4 bg-amber-50 border-t border-amber-200">
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => setDiscountItems([])}
+                    className="px-4 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors font-medium"
+                  >
+                    Alle löschen
+                  </button>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-xs text-amber-600">Gesamtrabatt</p>
+                      <p className="text-xl font-bold text-amber-900">€ {formatCurrency(itemsDiscount)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Editing Mode Banner */}
-      <div key="editing-banner" style={{ display: editingGroup ? 'block' : 'none' }}>
-        {editingGroup && (
-          <div className="bg-orange-50 rounded-xl border border-orange-200 p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <svg className="h-5 w-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                <span className="text-sm text-orange-800">
-                  <strong>Bearbeitungsmodus:</strong> Rabattgruppe wird bearbeitet
-                </span>
-              </div>
-              <button
-                onClick={handleCancelEdit}
-                className="px-3 py-1 text-orange-600 hover:text-orange-800 text-sm font-medium"
-              >
-                Abbrechen
-              </button>
+      {editingGroup && (
+        <div className="bg-orange-50 rounded-xl border border-orange-200 p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="h-5 w-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              <span className="text-sm text-orange-800">
+                <strong>Bearbeitungsmodus:</strong> Rabattgruppe wird bearbeitet
+              </span>
             </div>
+            <button
+              onClick={handleCancelEdit}
+              className="px-3 py-1 text-orange-600 hover:text-orange-800 text-sm font-medium"
+            >
+              Abbrechen
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Queue Info Bar */}
-      <div key="queue-banner" style={{ display: queue && queue.orderCount > 0 && !editingGroup ? 'block' : 'none' }}>
-        {queue && queue.orderCount > 0 && !editingGroup && (
-          <div className="bg-blue-50 rounded-xl border border-blue-100 p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                <span className="text-sm text-blue-800">
-                  <strong>{queue.orderCount}</strong> Bestellung(en) in Warteschlange
-                  ({queue.orderCount}/{settings.ordersRequiredForDiscount} für automatischen Rabatt)
-                </span>
-              </div>
-              {queue.readyForDiscount && (
-                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                  Bereit für automatischen Rabatt
-                </span>
-              )}
+      {queue && queue.orderCount > 0 && !editingGroup && (
+        <div className="bg-blue-50 rounded-xl border border-blue-100 p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              <span className="text-sm text-blue-800">
+                <strong>{queue.orderCount}</strong> Bestellung(en) in Warteschlange
+                ({queue.orderCount}/{settings.ordersRequiredForDiscount} für automatischen Rabatt)
+              </span>
             </div>
+            {queue.readyForDiscount && (
+              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                Bereit für automatischen Rabatt
+              </span>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Top Section */}
       <div className="flex gap-4 mb-4">
@@ -453,13 +761,142 @@ const RabattDetail = () => {
         </div>
       </div>
 
+      {/* Action Bar - Selection and Creation */}
+      {(() => {
+        // Calculate total items: selected orders + added bundles
+        const MANUAL_MIN_ORDERS = 2; // Manual creation requires 2+ orders
+        const totalItems = selectedOrders.length + discountItems.length;
+        const isReadyForManual = totalItems >= MANUAL_MIN_ORDERS;
+        const isReadyForAuto = totalItems >= settings.ordersRequiredForDiscount;
+
+        return (
+          <div
+            className={`rounded-xl border p-4 mb-6 transition-colors ${
+              isReadyForManual
+                ? "bg-green-50 border-green-200"
+                : totalItems > 0
+                  ? "bg-blue-50 border-blue-200"
+                  : "bg-white border-gray-200"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                {/* Progress indicator - shows 2 dots for manual creation */}
+                <div className="flex items-center gap-1">
+                  {[...Array(MANUAL_MIN_ORDERS)].map((_, i) => (
+                    <div
+                      key={i}
+                      className={`w-3 h-3 rounded-full transition-colors ${
+                        i < totalItems
+                          ? isReadyForManual ? "bg-green-500" : "bg-blue-500"
+                          : "bg-gray-200"
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                {/* Status text */}
+                <div className="flex items-center gap-3">
+                  {totalItems === 0 ? (
+                    <span className="text-sm text-gray-500">
+                      Wählen Sie mindestens {MANUAL_MIN_ORDERS} Bestellungen
+                    </span>
+                  ) : (
+                    <>
+                      <span className={`text-sm font-medium ${isReadyForManual ? "text-green-700" : "text-blue-700"}`}>
+                        {totalItems} Bestellung{totalItems > 1 ? 'en' : ''} ausgewählt
+                      </span>
+                      {hasSelectedOrders && (
+                        <span className="text-xs text-gray-500">
+                          ({selectedOrders.length} ausgewählt)
+                        </span>
+                      )}
+                      {hasItems && (
+                        <span className="text-xs text-gray-500">
+                          ({discountItems.length} Gruppe{discountItems.length > 1 ? 'n' : ''})
+                        </span>
+                      )}
+                      {isReadyForManual && (
+                        <span className="text-sm text-green-600 font-medium">
+                          • Rabatt: € {formatCurrency(itemsDiscount + selectedDiscount)}
+                        </span>
+                      )}
+                      {!isReadyForManual && (
+                        <span className="text-xs text-gray-400">
+                          (noch {MANUAL_MIN_ORDERS - totalItems} benötigt)
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2">
+                {hasSelectedOrders && (
+                  <>
+                    {selectedOrders.length > 1 && (
+                      <button
+                        onClick={handleAddAsItem}
+                        className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                        title="Ausgewählte Bestellungen als eine Gruppe zusammenfassen"
+                      >
+                        Als Gruppe
+                      </button>
+                    )}
+                    <button
+                      onClick={handleCreateDirectDiscountGroup}
+                      disabled={creatingGroup || !isReadyForManual}
+                      className={`px-4 py-1.5 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                        isReadyForManual
+                          ? "bg-green-600 hover:bg-green-700"
+                          : "bg-gray-400 cursor-not-allowed"
+                      }`}
+                    >
+                      {creatingGroup ? "..." : "Rabattgruppe erstellen"}
+                    </button>
+                    <button
+                      onClick={() => setSelectedOrders([])}
+                      className="px-2 py-1.5 text-gray-500 hover:text-gray-700 text-sm"
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+                {hasItems && !hasSelectedOrders && (
+                  <>
+                    <button
+                      onClick={handleCreateDiscountGroup}
+                      disabled={creatingGroup || !isReadyForManual}
+                      className={`px-4 py-1.5 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                        isReadyForManual
+                          ? "bg-green-600 hover:bg-green-700"
+                          : "bg-gray-400 cursor-not-allowed"
+                      }`}
+                    >
+                      {creatingGroup ? "..." : editingGroup ? "Aktualisieren" : "Rabattgruppe erstellen"}
+                    </button>
+                    <button
+                      onClick={() => { setDiscountItems([]); setSelectedOrders([]); }}
+                      className="px-2 py-1.5 text-gray-500 hover:text-gray-700 text-sm"
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Orders List with Selection */}
-      <div key={`orders-${dataVersion}-${editingGroup?._id || 'none'}`} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {orders.length > 0 ? (
           <>
             <div className="p-4 border-b border-gray-200 bg-gray-50">
               <p className="text-sm text-gray-600">
-                Wählen Sie genau <strong>{settings.ordersRequiredForDiscount}</strong> Bestellungen aus, um eine Rabattgruppe zu erstellen.
+                Wählen Sie Bestellungen aus, um eine Rabattgruppe zu erstellen.
                 {editingGroup ? " Sie bearbeiten gerade eine bestehende Gruppe." : " Bereits gruppierte oder eingelöste Bestellungen können nicht ausgewählt werden."}
               </p>
             </div>
@@ -474,8 +911,8 @@ const RabattDetail = () => {
             </div>
 
             <div>
-              {/* Render discount groups first */}
-              {discountGroups.map((group) => {
+              {/* Render discount groups first - sorted by date (recent first) */}
+              {[...discountGroups].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map((group) => {
                 const isRedeemed = group.status === 'redeemed';
                 const isBeingEdited = editingGroup?._id === group._id;
 
@@ -488,6 +925,36 @@ const RabattDetail = () => {
                 // If editing this group, don't show it here (show orders individually below)
                 if (isBeingEdited) return null;
 
+                // Group orders by bundleIndex
+                const ordersByBundle = {};
+                group.orders?.forEach(o => {
+                  const bundleIdx = o.bundleIndex ?? 0;
+                  if (!ordersByBundle[bundleIdx]) {
+                    ordersByBundle[bundleIdx] = [];
+                  }
+                  const foundOrder = groupOrders.find(go =>
+                    (go._id || go.id)?.toString() === (o.orderId?._id || o.orderId)?.toString()
+                  );
+                  if (foundOrder) {
+                    ordersByBundle[bundleIdx].push(foundOrder);
+                  }
+                });
+
+                // Convert to array of bundles
+                const bundles = Object.entries(ordersByBundle).map(([bundleIdx, bundleOrders]) => ({
+                  bundleIndex: parseInt(bundleIdx),
+                  orders: bundleOrders,
+                  isBundle: bundleOrders.length > 1
+                }));
+
+                // Toggle bundle expansion
+                const toggleBundle = (bundleKey) => {
+                  setExpandedBundles(prev => ({
+                    ...prev,
+                    [bundleKey]: !prev[bundleKey]
+                  }));
+                };
+
                 return (
                   <div
                     key={group._id || group.id}
@@ -496,66 +963,138 @@ const RabattDetail = () => {
                     <div className="flex">
                       {/* Group orders container */}
                       <div className="flex-1">
-                        {groupOrders.map((order, idx) => {
-                          const orderId = order._id || order.id;
-                          const discountEligibleItems = order.items?.filter(item => item.discountEligible) || [];
-                          const discountEligibleAmount = discountEligibleItems.reduce(
-                            (sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0
-                          );
+                        {bundles.map((bundle, bundleIdx) => {
+                          const bundleKey = `${group._id}_${bundle.bundleIndex}`;
+                          const isExpanded = expandedBundles[bundleKey];
+                          const firstOrder = bundle.orders[0];
+
+                          // Calculate total for bundle
+                          const bundleTotalEligible = bundle.orders.reduce((total, order) => {
+                            const eligible = order.items?.filter(item => item.discountEligible) || [];
+                            return total + eligible.reduce((sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0);
+                          }, 0);
+
+                          // If bundle has only 1 order, show single order row
+                          if (!bundle.isBundle) {
+                            const order = firstOrder;
+                            const orderId = order._id || order.id;
+                            const discountEligibleItems = order.items?.filter(item => item.discountEligible) || [];
+                            const discountEligibleAmount = discountEligibleItems.reduce(
+                              (sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0
+                            );
+                            const isLastBundle = bundleIdx === bundles.length - 1;
+
+                            return (
+                              <div
+                                key={orderId}
+                                className={`grid grid-cols-[60px_1fr_1fr_100px] ${!isLastBundle ? 'border-b border-gray-100' : ''}`}
+                              >
+                                <div className="p-4 flex items-center justify-center border-r border-gray-100">
+                                  <input type="checkbox" checked={false} disabled className="w-5 h-5 rounded border-gray-300 cursor-not-allowed" />
+                                </div>
+                                <div className="p-4 border-r border-gray-100">
+                                  <p className="text-sm text-gray-900"><span className="font-semibold">Bestellnummer</span> - {order.posReference || order.orderId}</p>
+                                  <p className="text-sm text-gray-900"><span className="font-semibold">Bestelldatum</span> - {formatDate(order.orderDate)}</p>
+                                  <p className="text-sm mt-1 text-gray-600"><span className="font-semibold">Rabattfähig:</span> € {formatCurrency(discountEligibleAmount)}</p>
+                                </div>
+                                <div className="p-4 border-r border-gray-100">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {(order.items || []).slice(0, 4).map((item, imgIdx) => (
+                                      <img key={`${orderId}-item-${imgIdx}`} src={item.image || "https://via.placeholder.com/50"} alt="" className="w-12 h-12 object-cover rounded border border-gray-200" />
+                                    ))}
+                                    {(order.items?.length || 0) > 4 && <span className="text-sm font-medium text-gray-600">+{order.items.length - 4}</span>}
+                                  </div>
+                                </div>
+                                <div className="p-4 flex items-center justify-center">
+                                  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Bundle with multiple orders - show collapsed or expanded
+                          const isLastBundle = bundleIdx === bundles.length - 1;
 
                           return (
-                            <div
-                              key={orderId}
-                              className={`grid grid-cols-[60px_1fr_1fr_100px] ${idx !== groupOrders.length - 1 ? 'border-b border-gray-100' : ''}`}
-                            >
-                              {/* Empty checkbox space */}
-                              <div className="p-4 flex items-center justify-center border-r border-gray-100">
-                                <input
-                                  type="checkbox"
-                                  checked={false}
-                                  disabled
-                                  className="w-5 h-5 rounded border-gray-300 cursor-not-allowed"
-                                />
-                              </div>
-
-                              {/* Order Info */}
-                              <div className="p-4 border-r border-gray-100">
-                                <p className="text-sm text-gray-900">
-                                  <span className="font-semibold">Bestellnummer</span> - {order.posReference || order.orderId}
-                                </p>
-                                <p className="text-sm text-gray-900">
-                                  <span className="font-semibold">Bestelldatum</span> - {formatDate(order.orderDate)}
-                                </p>
-                                <p className="text-sm mt-1 text-gray-600">
-                                  <span className="font-semibold">Rabattfähig:</span> € {formatCurrency(discountEligibleAmount)}
-                                </p>
-                              </div>
-
-                              {/* Product Images */}
-                              <div className="p-4 border-r border-gray-100">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  {(order.items || []).slice(0, 4).map((item, imgIdx) => (
-                                    <img
-                                      key={`${orderId}-item-${imgIdx}`}
-                                      src={item.image || "https://via.placeholder.com/50"}
-                                      alt=""
-                                      className="w-12 h-12 object-cover rounded border border-gray-200"
-                                    />
-                                  ))}
-                                  {(order.items?.length || 0) > 4 && (
-                                    <span className="text-sm font-medium text-gray-600">+{order.items.length - 4}</span>
-                                  )}
+                            <div key={bundleKey} className={!isLastBundle ? 'border-b border-gray-100' : ''}>
+                              {/* Collapsed bundle header - click to expand */}
+                              <div
+                                className={`grid grid-cols-[60px_1fr_1fr_100px] cursor-pointer hover:bg-gray-50 transition-colors ${isExpanded ? 'bg-blue-50' : ''}`}
+                                onClick={() => toggleBundle(bundleKey)}
+                              >
+                                <div className="p-4 flex items-center justify-center border-r border-gray-100">
+                                  <input type="checkbox" checked={false} disabled className="w-5 h-5 rounded border-gray-300 cursor-not-allowed" />
+                                </div>
+                                <div className="p-4 border-r border-gray-100">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                                      {bundle.orders.length} Bestellungen
+                                    </span>
+                                    <svg className={`h-4 w-4 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  </div>
+                                  <p className="text-sm mt-1 text-gray-600"><span className="font-semibold">Rabattfähig:</span> € {formatCurrency(bundleTotalEligible)}</p>
+                                </div>
+                                <div className="p-4 border-r border-gray-100">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {bundle.orders.flatMap(o => o.items || []).slice(0, 6).map((item, imgIdx) => (
+                                      <img key={`bundle-${bundleKey}-item-${imgIdx}`} src={item.image || "https://via.placeholder.com/50"} alt="" className="w-10 h-10 object-cover rounded border border-gray-200" />
+                                    ))}
+                                    {bundle.orders.flatMap(o => o.items || []).length > 6 && (
+                                      <span className="text-sm font-medium text-gray-600">+{bundle.orders.flatMap(o => o.items || []).length - 6}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="p-4 flex items-center justify-center">
+                                  <svg className="h-7 w-7 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                    <rect x="6" y="2" width="14" height="16" rx="2" className="fill-blue-100 stroke-blue-500" />
+                                    <rect x="4" y="4" width="14" height="16" rx="2" className="fill-blue-50 stroke-blue-400" />
+                                    <rect x="2" y="6" width="14" height="16" rx="2" className="fill-white stroke-blue-500" />
+                                    <line x1="5" y1="11" x2="13" y2="11" className="stroke-blue-300" strokeWidth="1" />
+                                    <line x1="5" y1="14" x2="11" y2="14" className="stroke-blue-300" strokeWidth="1" />
+                                    <line x1="5" y1="17" x2="9" y2="17" className="stroke-blue-300" strokeWidth="1" />
+                                  </svg>
                                 </div>
                               </div>
 
-                              {/* Group icon column */}
-                              <div className="p-4 flex items-center justify-center">
-                                {idx === 0 && (
-                                  <svg className="h-6 w-6 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                  </svg>
-                                )}
-                              </div>
+                              {/* Expanded bundle - show all orders */}
+                              {isExpanded && (
+                                <div className="bg-blue-50/50 border-t border-blue-100">
+                                  {bundle.orders.map((order, orderIdx) => {
+                                    const orderId = order._id || order.id;
+                                    const discountEligibleItems = order.items?.filter(item => item.discountEligible) || [];
+                                    const discountEligibleAmount = discountEligibleItems.reduce(
+                                      (sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0
+                                    );
+                                    const isLastOrder = orderIdx === bundle.orders.length - 1;
+
+                                    return (
+                                      <div key={orderId} className={`grid grid-cols-[60px_1fr_1fr_100px] ml-4 ${!isLastOrder ? 'border-b border-blue-100' : ''}`}>
+                                        <div className="p-3 flex items-center justify-center border-r border-blue-100">
+                                          <span className="text-xs text-gray-400">{orderIdx + 1}</span>
+                                        </div>
+                                        <div className="p-3 border-r border-blue-100">
+                                          <p className="text-sm text-gray-900"><span className="font-semibold">Bestellnummer</span> - {order.posReference || order.orderId}</p>
+                                          <p className="text-sm text-gray-900"><span className="font-semibold">Bestelldatum</span> - {formatDate(order.orderDate)}</p>
+                                          <p className="text-sm mt-1 text-gray-600"><span className="font-semibold">Rabattfähig:</span> € {formatCurrency(discountEligibleAmount)}</p>
+                                        </div>
+                                        <div className="p-3 border-r border-blue-100">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            {(order.items || []).slice(0, 4).map((item, imgIdx) => (
+                                              <img key={`${orderId}-item-${imgIdx}`} src={item.image || "https://via.placeholder.com/50"} alt="" className="w-10 h-10 object-cover rounded border border-gray-200" />
+                                            ))}
+                                            {(order.items?.length || 0) > 4 && <span className="text-sm font-medium text-gray-600">+{order.items.length - 4}</span>}
+                                          </div>
+                                        </div>
+                                        <div className="p-3"></div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -578,12 +1117,23 @@ const RabattDetail = () => {
                             >
                               Tilgen
                             </button>
-                            <button
-                              onClick={() => handleStartEditGroup(group)}
-                              className="w-full px-4 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-100 transition-colors"
-                            >
-                              Bearbeiten
-                            </button>
+                            <div className="flex gap-1 w-full">
+                              <button
+                                onClick={() => handleStartEditGroup(group)}
+                                className="flex-1 px-2 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-100 transition-colors"
+                              >
+                                Bearbeiten
+                              </button>
+                              <button
+                                onClick={() => handleDeleteGroup(group._id)}
+                                className="px-2 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs hover:bg-red-50 transition-colors"
+                                title="Rabattgruppe löschen"
+                              >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
                           </>
                         )}
                         <span className="text-xs text-green-600 font-medium">
@@ -595,8 +1145,8 @@ const RabattDetail = () => {
                 );
               })}
 
-              {/* Render available orders (not in any group or being edited) */}
-              {orders.map((order, index) => {
+              {/* Render available orders (not in any group or being edited) - sorted by date (recent first) */}
+              {[...orders].sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate)).map((order, index) => {
                 const orderId = order._id || order.id || `order-${index}`;
                 const orderStatus = getOrderStatus(orderId);
                 const isSelected = selectedOrders.includes(orderId);
@@ -608,7 +1158,9 @@ const RabattDetail = () => {
                 // Skip if in a group and not editing
                 if (orderStatus.inGroup && !isInEditingGroup) return null;
 
-                const canSelect = (!orderStatus.inGroup || isInEditingGroup) && !isRedeemed;
+                // Check if order is already in discount items
+                const isInDiscountItems = getOrdersInItems().includes(orderId);
+                const canSelect = (!orderStatus.inGroup || isInEditingGroup) && !isRedeemed && !isInDiscountItems;
 
                 // Calculate discount eligible amount for this order
                 const discountEligibleItems = order.items?.filter(item => item.discountEligible) || [];
@@ -622,16 +1174,18 @@ const RabattDetail = () => {
                     className={`grid grid-cols-[60px_1fr_1fr_100px_160px] border-b border-gray-100 ${
                       isSelected
                         ? "bg-blue-50"
-                        : isInEditingGroup && !isSelected
-                          ? "bg-orange-50"
-                          : "bg-white"
+                        : isInDiscountItems
+                          ? "bg-green-50"
+                          : isInEditingGroup && !isSelected
+                            ? "bg-orange-50"
+                            : "bg-white"
                     }`}
                   >
                     {/* Checkbox */}
                     <div className="p-4 flex items-center justify-center border-r border-gray-100">
                       <input
                         type="checkbox"
-                        checked={isSelected}
+                        checked={isSelected || isInDiscountItems}
                         onChange={() => handleOrderSelect(orderId)}
                         disabled={!canSelect}
                         className={`w-5 h-5 rounded border-gray-300 ${
@@ -681,17 +1235,22 @@ const RabattDetail = () => {
                     <div className="p-4 flex flex-col items-center justify-center bg-gray-50">
                       {discountEligibleAmount > 0 ? (
                         <>
-                          {isSelected && (
+                          {isInDiscountItems && (
+                            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                              In Artikel
+                            </span>
+                          )}
+                          {isSelected && !isInDiscountItems && (
                             <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
                               Ausgewählt
                             </span>
                           )}
-                          {isInEditingGroup && !isSelected && (
+                          {isInEditingGroup && !isSelected && !isInDiscountItems && (
                             <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
                               In Gruppe
                             </span>
                           )}
-                          {!isSelected && !isInEditingGroup && (
+                          {!isSelected && !isInEditingGroup && !isInDiscountItems && (
                             <span className="text-xs text-gray-500">Verfügbar</span>
                           )}
                         </>
@@ -710,6 +1269,17 @@ const RabattDetail = () => {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteGroupId}
+        onClose={() => setDeleteGroupId(null)}
+        onConfirm={confirmDeleteGroup}
+        title="RABATTGRUPPE LÖSCHEN"
+        message="Möchten Sie diese Rabattgruppe wirklich löschen? Die Bestellungen werden wieder verfügbar."
+        confirmText="Ja, löschen"
+        cancelText="Abbrechen"
+      />
     </Layout>
   );
 };

@@ -19,6 +19,10 @@ const DiscountOrderItemSchema = new mongoose.Schema({
   discountAmount: {
     type: Number,
     default: 0
+  },
+  bundleIndex: {
+    type: Number,
+    default: 0  // Orders with same bundleIndex are bundled together as 1 item
   }
 }, { _id: true });
 

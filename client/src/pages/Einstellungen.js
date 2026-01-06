@@ -177,30 +177,6 @@ const Einstellungen = () => {
               </p>
             </div>
           </div>
-          <div className="mt-4">
-            <label className="flex items-center justify-between cursor-pointer">
-              <div>
-                <span className="text-sm font-medium text-gray-700">
-                  Automatische Rabatterstellung
-                </span>
-                <p className="text-xs text-gray-500 mt-1">
-                  Rabatt automatisch erstellen, wenn die erforderliche Anzahl von Bestellungen erreicht ist
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.discount?.autoCreateDiscount || false}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  discount: {
-                    ...settings.discount,
-                    autoCreateDiscount: e.target.checked
-                  }
-                })}
-                className="w-5 h-5 text-gray-900 border-gray-300 rounded focus:ring-gray-900"
-              />
-            </label>
-          </div>
         </div>
 
         {/* Notification Settings */}

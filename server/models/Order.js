@@ -76,6 +76,11 @@ const OrderSchema = new mongoose.Schema({
     default: false
   },
   items: [OrderItemSchema],
+  // Reference to separate OrderLine collection for advanced queries
+  orderLines: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'OrderLine'
+  }],
   syncedAt: Date
 }, {
   timestamps: true,

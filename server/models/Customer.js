@@ -41,7 +41,15 @@ const CustomerSchema = new mongoose.Schema({
     default: 0
   },
   companyType: String,
-  syncedAt: Date
+  syncedAt: Date,
+  notes: {
+    type: String,
+    default: ''
+  },
+  draftDiscountItems: [{
+    orders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order' }],
+    isBundle: { type: Boolean, default: false }
+  }]
 }, {
   timestamps: true,
   toJSON: { virtuals: true },

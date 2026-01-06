@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { discountsAPI } from "../services/api";
@@ -6,6 +6,7 @@ import { discountsAPI } from "../services/api";
 const Rabatt = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [customersData, setCustomersData] = useState([]);
   const [stats, setStats] = useState({
     totalCustomers: 0,
@@ -18,50 +19,50 @@ const Rabatt = () => {
   });
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
   const [itemsPerPage] = useState(10);
 
+  // Debounce search input
   useEffect(() => {
-    const fetchDiscounts = async () => {
-      try {
-        // Fetch all discounts for client-side pagination
-        const response = await discountsAPI.getAll(1, 1000);
-        if (response.data.success) {
-          setCustomersData(response.data.data);
-          setStats(response.data.stats || {
-            totalCustomers: response.data.data.length,
-            totalOrderValue: 0,
-            totalDiscountGranted: 0,
-            totalInQueue: 0,
-            customersReadyForDiscount: 0,
-            discountRate: 10,
-            ordersRequiredForDiscount: 3
-          });
-        }
-      } catch (error) {
-        console.error("Failed to fetch discounts:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDiscounts();
-  }, []);
-
-  // Reset to page 1 when search term changes
-  useEffect(() => {
-    setCurrentPage(1);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1); // Reset to page 1 on search
+    }, 300);
+    return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  const filteredCustomers = customersData.filter(customer =>
-    customer.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.customerNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const fetchDiscounts = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await discountsAPI.getAll(currentPage, itemsPerPage, debouncedSearch);
+      if (response.data.success) {
+        setCustomersData(response.data.data);
+        setTotalItems(response.data.total || 0);
+        setStats(response.data.stats || {
+          totalCustomers: response.data.total || 0,
+          totalOrderValue: 0,
+          totalDiscountGranted: 0,
+          totalInQueue: 0,
+          customersReadyForDiscount: 0,
+          discountRate: 10,
+          ordersRequiredForDiscount: 3
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch discounts:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPage, itemsPerPage, debouncedSearch]);
+
+  useEffect(() => {
+    fetchDiscounts();
+  }, [fetchDiscounts]);
 
   // Pagination calculations
-  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedCustomers = filteredCustomers.slice(startIndex, endIndex);
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
 
   const formatCurrency = (value) => {
     return value?.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.') || '0,00';
@@ -152,16 +153,16 @@ const Rabatt = () => {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
           </div>
-        ) : filteredCustomers.length === 0 ? (
+        ) : customersData.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             Keine Kunden gefunden
           </div>
         ) : (
-          paginatedCustomers.map((discount, index) => (
+          customersData.map((discount, index) => (
             <div
               key={discount.id || discount._id}
               className={`flex items-center justify-between p-4 ${
-                index !== paginatedCustomers.length - 1 ? "border-b border-gray-100" : ""
+                index !== customersData.length - 1 ? "border-b border-gray-100" : ""
               }`}
             >
               {/* Customer Info */}
@@ -222,7 +223,7 @@ const Rabatt = () => {
       {/* Pagination */}
       <div className="flex items-center justify-between mt-4 px-2">
         <div className="text-sm text-gray-500">
-          Zeige {filteredCustomers.length > 0 ? startIndex + 1 : 0}-{Math.min(endIndex, filteredCustomers.length)} von {filteredCustomers.length} Kunden
+          Zeige {totalItems > 0 ? startIndex + 1 : 0}-{endIndex} von {totalItems} Kunden
         </div>
         {totalPages > 1 && (
           <div className="flex items-center gap-2">

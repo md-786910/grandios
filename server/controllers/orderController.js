@@ -1,5 +1,8 @@
 const Order = require('../models/Order');
 const Customer = require('../models/Customer');
+const OrderLine = require('../models/OrderLine');
+const Product = require('../models/Product');
+const DiscountOrder = require('../models/DiscountOrder');
 const { addOrderToQueue } = require('./queueController');
 
 // @desc    Get all orders
@@ -25,16 +28,36 @@ exports.getOrders = async (req, res, next) => {
       .limit(limit)
       .sort({ orderDate: -1 });
 
+    // Get discount status for all orders
+    const orderIds = orders.map(o => o._id);
+    const discountOrders = await DiscountOrder.find({
+      'orders.orderId': { $in: orderIds }
+    });
+
+    // Create a map of orderId -> discount status
+    const discountStatusMap = {};
+    discountOrders.forEach(dg => {
+      dg.orders.forEach(o => {
+        discountStatusMap[o.orderId.toString()] = dg.status;
+      });
+    });
+
+    // Add discountStatus to each order
+    const ordersWithStatus = orders.map(order => ({
+      ...order.toObject(),
+      discountStatus: discountStatusMap[order._id.toString()] || null
+    }));
+
     res.status(200).json({
       success: true,
-      count: orders.length,
+      count: ordersWithStatus.length,
       total,
       pagination: {
         page,
         limit,
         pages: Math.ceil(total / limit)
       },
-      data: orders
+      data: ordersWithStatus
     });
   } catch (err) {
     next(err);
@@ -47,7 +70,14 @@ exports.getOrders = async (req, res, next) => {
 exports.getOrder = async (req, res, next) => {
   try {
     const order = await Order.findById(req.params.id)
-      .populate('customerId', 'name email ref phone address');
+      .populate('customerId', 'name email ref contactId phone mobile address')
+      .populate({
+        path: 'orderLines',
+        populate: {
+          path: 'productRef',
+          select: 'name image listPrice defaultCode barcode categoryName attributeValues',
+        },
+      });
 
     if (!order) {
       return res.status(404).json({
@@ -56,9 +86,19 @@ exports.getOrder = async (req, res, next) => {
       });
     }
 
+    // Get discount status for this order
+    const discountOrder = await DiscountOrder.findOne({
+      'orders.orderId': order._id
+    });
+
+    const orderWithStatus = {
+      ...order.toObject(),
+      discountStatus: discountOrder ? discountOrder.status : null
+    };
+
     res.status(200).json({
       success: true,
-      data: order
+      data: orderWithStatus
     });
   } catch (err) {
     next(err);
