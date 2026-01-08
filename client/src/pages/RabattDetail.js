@@ -22,6 +22,7 @@ const RabattDetail = () => {
   const [discountItems, setDiscountItems] = useState([]); // Items for discount group: [{orders: [id1, id2], isBundle: true}]
   const [expandedBundles, setExpandedBundles] = useState({}); // Track which bundles are expanded: {groupId_bundleIdx: true}
   const [deleteGroupId, setDeleteGroupId] = useState(null); // Group ID to delete (for confirmation modal)
+  const [redeemGroupId, setRedeemGroupId] = useState(null); // Group ID to redeem (for confirmation modal)
   const [expandedItems, setExpandedItems] = useState({}); // Track which added items are expanded: {index: true}
   const [draftItemsLoaded, setDraftItemsLoaded] = useState(false); // Track if draft items have been loaded from DB
 
@@ -289,15 +290,24 @@ const RabattDetail = () => {
     }
   };
 
-  // Redeem discount group
-  const handleRedeemGroup = async (groupId) => {
+  // Redeem discount group - show confirmation modal
+  const handleRedeemGroup = (groupId) => {
+    setRedeemGroupId(groupId);
+  };
+
+  // Confirm redeem discount group
+  const confirmRedeemGroup = async () => {
+    if (!redeemGroupId) return;
+
     try {
-      await discountsAPI.redeemGroup(id, groupId);
+      await discountsAPI.redeemGroup(id, redeemGroupId);
       setMessage({ type: "success", text: "Rabatt erfolgreich eingelöst!" });
+      setRedeemGroupId(null);
       await fetchData();
     } catch (error) {
       console.error("Failed to redeem group:", error);
       setMessage({ type: "error", text: error.message || "Fehler beim Einlösen" });
+      setRedeemGroupId(null);
     }
   };
 
@@ -323,7 +333,7 @@ const RabattDetail = () => {
   };
 
   const formatCurrency = (value) => {
-    return value?.toFixed(2).replace('.', ',') || '0,00';
+    return (value || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   const formatDate = (date) => {
@@ -1278,6 +1288,17 @@ const RabattDetail = () => {
         title="RABATTGRUPPE LÖSCHEN"
         message="Möchten Sie diese Rabattgruppe wirklich löschen? Die Bestellungen werden wieder verfügbar."
         confirmText="Ja, löschen"
+        cancelText="Abbrechen"
+      />
+
+      {/* Redeem Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!redeemGroupId}
+        onClose={() => setRedeemGroupId(null)}
+        onConfirm={confirmRedeemGroup}
+        title="RABATT EINLÖSEN"
+        message="Möchten Sie diesen Rabatt wirklich einlösen? Diese Aktion kann nicht rückgängig gemacht werden."
+        confirmText="Ja, einlösen"
         cancelText="Abbrechen"
       />
     </Layout>

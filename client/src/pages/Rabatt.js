@@ -65,7 +65,7 @@ const Rabatt = () => {
   const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
 
   const formatCurrency = (value) => {
-    return value?.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.') || '0,00';
+    return (value || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   const handleViewCustomer = (customerId) => {

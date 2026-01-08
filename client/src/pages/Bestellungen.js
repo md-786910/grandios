@@ -181,7 +181,7 @@ const Bestellungen = () => {
   };
 
   const formatCurrency = (value) => {
-    return value?.toFixed(2).replace(".", ",") || "0,00";
+    return (value || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   const formatDate = (date) => {

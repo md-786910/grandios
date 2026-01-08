@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { dashboardAPI } from "../services/api";
 
+const formatCurrency = (value) => {
+  return (value || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
 const Dashboard = () => {
   const [stats, setStats] = useState([
     { label: "Gesamter gewährter Rabatt", value: "€ 0,00", bgColor: "bg-blue-100", labelColor: "text-blue-500" },
@@ -26,7 +30,7 @@ const Dashboard = () => {
           setStats([
             {
               label: "Gesamter gewährter Rabatt",
-              value: `€ ${data.totalDiscountGranted.toFixed(2).replace('.', ',')}`,
+              value: `€ ${formatCurrency(data.totalDiscountGranted)}`,
               bgColor: "bg-blue-100",
               labelColor: "text-blue-500"
             },
@@ -132,7 +136,7 @@ const Dashboard = () => {
                     <span className="text-sm font-semibold text-gray-900">
                       Gesamtbestellwert -
                     </span>
-                    <span className="text-sm text-gray-600">€ {order.amountTotal?.toFixed(2).replace('.', ',')}</span>
+                    <span className="text-sm text-gray-600">€ {formatCurrency(order.amountTotal)}</span>
                   </div>
                 </div>
 
