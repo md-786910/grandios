@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { discountsAPI } from "../services/api";
+import { sanitizeName } from "../utils/helpers";
 
 const Rabatt = () => {
   const navigate = useNavigate();
@@ -167,7 +168,7 @@ const Rabatt = () => {
             >
               {/* Customer Info */}
               <div className="min-w-[250px]">
-                <h4 className="font-semibold text-gray-900">{discount.customerName || "Unbekannt"}</h4>
+                <h4 className="font-semibold text-gray-900">{sanitizeName(discount.customerName)}</h4>
                 <p className="text-sm text-gray-600">
                   <span className="font-medium">Kundennummer:</span> {discount.customerNumber || "-"}
                 </p>

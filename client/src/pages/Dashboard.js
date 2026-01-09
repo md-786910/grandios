@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { dashboardAPI } from "../services/api";
+import { sanitizeName } from "../utils/helpers";
 
 const formatCurrency = (value) => {
   return (value || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -143,7 +144,7 @@ const Dashboard = () => {
                 {/* Customer Info */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 mb-1">
-                    {order.customerId?.name || "Unbekannt"}
+                    {sanitizeName(order.customerId?.name)}
                   </p>
                   <div className="flex items-center gap-1">
                     <span className="text-sm font-semibold text-gray-900">

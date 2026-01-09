@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import ConfirmModal from "../components/ConfirmModal";
 import { ordersAPI, testAPI, customersAPI } from "../services/api";
+import { sanitizeName } from "../utils/helpers";
 
 const Bestellungen = () => {
   const { id } = useParams();
@@ -214,8 +215,8 @@ const Bestellungen = () => {
       const matchesSearch =
         !searchTerm ||
         order.posReference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.customerId?.name
-          ?.toLowerCase()
+        sanitizeName(order.customerId?.name)
+          .toLowerCase()
           .includes(searchTerm.toLowerCase()) ||
         order.customerId?.ref?.toLowerCase().includes(searchTerm.toLowerCase());
 
@@ -502,7 +503,7 @@ const Bestellungen = () => {
                                   setCustomerDropdownOpen(false);
                                 }}
                               >
-                                {customer.name} ({customer.ref || customer._id.slice(-6)})
+                                {sanitizeName(customer.name)} ({customer.ref || customer._id.slice(-6)})
                               </div>
                             ))}
                             {loadingCustomers && (
@@ -602,7 +603,7 @@ const Bestellungen = () => {
                         <td className="px-6 py-4">
                           <div>
                             <div className="text-sm font-medium text-gray-900">
-                              {order.customerId?.name || "Unbekannt"}
+                              {sanitizeName(order.customerId?.name)}
                             </div>
                             <div className="text-sm text-gray-500">
                               {order.customerId?.ref || "-"}
@@ -853,7 +854,7 @@ const Bestellungen = () => {
             </div>
             <div className="flex">
               <span className="text-gray-500 w-36">Kundenname:</span>
-              <span className="text-gray-900">{customer.name || "-"}</span>
+              <span className="text-gray-900">{sanitizeName(customer.name)}</span>
             </div>
             <div className="flex">
               <span className="text-gray-500 w-36">E-Mail:</span>

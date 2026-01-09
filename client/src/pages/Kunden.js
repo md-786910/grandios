@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { syncAPI } from "../services/api";
+import { sanitizeName } from "../utils/helpers";
 
 const Kunden = () => {
   const navigate = useNavigate();
@@ -193,11 +194,11 @@ const Kunden = () => {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
-                        {customer.name?.charAt(0) || "?"}
+                        {sanitizeName(customer.name).charAt(0)}
                       </div>
                       <div>
                         <div className="text-sm font-medium text-gray-900">
-                          {customer.name}
+                          {sanitizeName(customer.name)}
                         </div>
                         <div className="text-sm text-gray-500">
                           {customer.email}

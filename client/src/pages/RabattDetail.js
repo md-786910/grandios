@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import ConfirmModal from "../components/ConfirmModal";
 import { discountsAPI } from "../services/api";
+import { sanitizeName } from "../utils/helpers";
 
 const RabattDetail = () => {
   const { id } = useParams();
@@ -422,7 +423,7 @@ const RabattDetail = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Rabatt Details</h1>
-          <p className="text-gray-500 text-sm mt-1">{customer?.name || 'Kunde'}</p>
+          <p className="text-gray-500 text-sm mt-1">{sanitizeName(customer?.name)}</p>
         </div>
         <button
           onClick={() => navigate("/rabatt")}
@@ -702,7 +703,7 @@ const RabattDetail = () => {
             </div>
             <div className="flex">
               <span className="text-gray-500 w-32">Kundenname:</span>
-              <span className="text-gray-900">{customer.customerName || customer.name}</span>
+              <span className="text-gray-900">{sanitizeName(customer.customerName || customer.name)}</span>
             </div>
             <div className="flex">
               <span className="text-gray-500 w-32">E-Mail:</span>
