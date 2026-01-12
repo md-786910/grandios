@@ -1,4 +1,5 @@
-import React from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const ConfirmModal = ({
   isOpen,
@@ -9,15 +10,31 @@ const ConfirmModal = ({
   confirmText = "Ja",
   cancelText = "Stornieren",
 }) => {
-  if (!isOpen) return null;
+  const [mounted, setMounted] = useState(false);
+  const portalRef = useRef(null);
 
-  return (
+  useEffect(() => {
+    // Create a dedicated portal container for this modal instance
+    const portalRoot = document.createElement("div");
+    portalRoot.setAttribute("data-modal-root", "true");
+    document.body.appendChild(portalRoot);
+    portalRef.current = portalRoot;
+    setMounted(true);
+
+    return () => {
+      // Clean up the portal container on unmount
+      if (portalRef.current && portalRef.current.parentNode) {
+        portalRef.current.parentNode.removeChild(portalRef.current);
+      }
+    };
+  }, []);
+
+  if (!mounted || !isOpen || !portalRef.current) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/20"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative bg-white rounded-lg shadow-lg w-full max-w-sm mx-4">
@@ -68,7 +85,8 @@ const ConfirmModal = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    portalRef.current
   );
 };
 
