@@ -69,8 +69,8 @@ export const authAPI = {
 export const dashboardAPI = {
   getStats: () => apiCall("/dashboard/stats"),
 
-  getRecentOrders: (limit = 6) =>
-    apiCall(`/dashboard/recent-orders?limit=${limit}`),
+  getRecentOrders: (page = 1, limit = 10) =>
+    apiCall(`/dashboard/recent-orders?page=${page}&limit=${limit}`),
 };
 
 // Customers API

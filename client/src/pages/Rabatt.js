@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { discountsAPI } from "../services/api";
@@ -22,6 +22,7 @@ const Rabatt = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [itemsPerPage] = useState(10);
+  const [statusFilter, setStatusFilter] = useState("");
 
   // Debounce search input
   useEffect(() => {
@@ -31,6 +32,11 @@ const Rabatt = () => {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter]);
 
   const fetchDiscounts = useCallback(async () => {
     try {
@@ -60,10 +66,23 @@ const Rabatt = () => {
     fetchDiscounts();
   }, [fetchDiscounts]);
 
+  // Filter customers based on status filter
+  const filteredCustomers = customersData.filter((discount) => {
+    if (!statusFilter) return true;
+    if (statusFilter === "redeemable") return discount.redeemable;
+    if (statusFilter === "ready") return discount.readyForDiscount;
+    if (statusFilter === "inQueue") return discount.queueCount > 0;
+    return true;
+  });
+
   // Pagination calculations
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const filteredTotal = statusFilter ? filteredCustomers.length : totalItems;
+  const totalPages = Math.ceil(filteredTotal / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  const endIndex = Math.min(startIndex + itemsPerPage, filteredTotal);
+  const paginatedCustomers = statusFilter
+    ? filteredCustomers.slice(startIndex, endIndex)
+    : customersData;
 
   const formatCurrency = (value) => {
     return (value || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -85,15 +104,20 @@ const Rabatt = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-64 pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm"
           />
-          <button className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </button>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
         </div>
-        <button className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm">
-          Filter
-        </button>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm bg-white"
+        >
+          <option value="">Alle Status</option>
+          <option value="redeemable">Einlösbar</option>
+          <option value="ready">Bereit für Rabatt</option>
+          <option value="inQueue">In Warteschlange</option>
+        </select>
       </div>
 
       {/* Stats Cards */}
@@ -154,16 +178,16 @@ const Rabatt = () => {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
           </div>
-        ) : customersData.length === 0 ? (
+        ) : paginatedCustomers.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             Keine Kunden gefunden
           </div>
         ) : (
-          customersData.map((discount, index) => (
+          paginatedCustomers.map((discount, index) => (
             <div
               key={discount.id || discount._id}
               className={`flex items-center justify-between p-4 ${
-                index !== customersData.length - 1 ? "border-b border-gray-100" : ""
+                index !== paginatedCustomers.length - 1 ? "border-b border-gray-100" : ""
               }`}
             >
               {/* Customer Info */}
@@ -222,64 +246,54 @@ const Rabatt = () => {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between mt-4 px-2">
-        <div className="text-sm text-gray-500">
-          Zeige {totalItems > 0 ? startIndex + 1 : 0}-{endIndex} von {totalItems} Kunden
-        </div>
-        {totalPages > 1 && (
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6">
+          <p className="text-sm text-gray-600">
+            Zeige {filteredTotal > 0 ? startIndex + 1 : 0}-{endIndex} von {filteredTotal} Kunden
+            {statusFilter && ` (gefiltert)`}
+          </p>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                currentPage === 1
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Zurück
             </button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-                return (
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(page => {
+                if (totalPages <= 7) return true;
+                if (page === 1 || page === totalPages) return true;
+                if (Math.abs(page - currentPage) <= 1) return true;
+                return false;
+              })
+              .map((page, index, array) => (
+                <React.Fragment key={page}>
+                  {index > 0 && array[index - 1] !== page - 1 && (
+                    <span className="px-2 text-gray-400">...</span>
+                  )}
                   <button
-                    key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                      currentPage === pageNum
-                        ? 'bg-gray-900 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-4 py-2 text-sm font-medium rounded-lg ${
+                      currentPage === page
+                        ? "bg-blue-500 text-white"
+                        : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
                     }`}
                   >
-                    {pageNum}
+                    {page}
                   </button>
-                );
-              })}
-            </div>
+                </React.Fragment>
+              ))}
             <button
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
               disabled={currentPage === totalPages}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                currentPage === totalPages
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Weiter
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </Layout>
   );
 };

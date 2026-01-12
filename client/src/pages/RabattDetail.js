@@ -5,6 +5,30 @@ import ConfirmModal from "../components/ConfirmModal";
 import { discountsAPI } from "../services/api";
 import { sanitizeName } from "../utils/helpers";
 
+// Default product image fallback
+const DEFAULT_PRODUCT_IMAGE =
+  "https://11316b7a2b.wawi.onretail.eu/web/image/product.template/472/image_256";
+
+// Fallback component for broken/missing images
+const ProductImage = ({ src, size = "md", className = "" }) => {
+  const [hasError, setHasError] = useState(false);
+  const sizeClasses = {
+    sm: "w-10 h-10",
+    md: "w-12 h-12",
+  };
+
+  const imageSrc = !src || hasError ? DEFAULT_PRODUCT_IMAGE : src;
+
+  return (
+    <img
+      src={imageSrc}
+      alt=""
+      className={`${sizeClasses[size]} ${className} object-cover rounded border border-gray-200`}
+      onError={() => setHasError(true)}
+    />
+  );
+};
+
 const RabattDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -13,7 +37,10 @@ const RabattDetail = () => {
   const [orders, setOrders] = useState([]);
   const [discountGroups, setDiscountGroups] = useState([]);
   const [queue, setQueue] = useState(null);
-  const [settings, setSettings] = useState({ discountRate: 10, ordersRequiredForDiscount: 3 });
+  const [settings, setSettings] = useState({
+    discountRate: 10,
+    ordersRequiredForDiscount: 3,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedOrders, setSelectedOrders] = useState([]);
@@ -54,7 +81,9 @@ const RabattDetail = () => {
         setDiscountGroups(data.discountGroups || []);
         setNotizen(data.notes || "");
         setQueue(data.queue || null);
-        setSettings(data.settings || { discountRate: 10, ordersRequiredForDiscount: 3 });
+        setSettings(
+          data.settings || { discountRate: 10, ordersRequiredForDiscount: 3 }
+        );
 
         // Load draft items from database (only on initial load)
         if (!draftItemsLoaded && data.draftDiscountItems) {
@@ -90,16 +119,17 @@ const RabattDetail = () => {
   // Check if order is already in a discount group
   const getOrderStatus = (orderId) => {
     for (const group of discountGroups) {
-      const orderInGroup = group.orders?.find(o =>
-        o.orderId?._id?.toString() === orderId?.toString() ||
-        o.orderId?.toString() === orderId?.toString()
+      const orderInGroup = group.orders?.find(
+        (o) =>
+          o.orderId?._id?.toString() === orderId?.toString() ||
+          o.orderId?.toString() === orderId?.toString()
       );
       if (orderInGroup) {
         return {
           inGroup: true,
           status: group.status,
           groupId: group._id,
-          discountAmount: orderInGroup.discountAmount
+          discountAmount: orderInGroup.discountAmount,
         };
       }
     }
@@ -112,7 +142,7 @@ const RabattDetail = () => {
     const ordersInItems = getOrdersInItems();
 
     // Can't select redeemed orders
-    if (orderStatus.status === 'redeemed') {
+    if (orderStatus.status === "redeemed") {
       return;
     }
 
@@ -121,9 +151,9 @@ const RabattDetail = () => {
       return;
     }
 
-    setSelectedOrders(prev => {
+    setSelectedOrders((prev) => {
       if (prev.includes(orderId)) {
-        return prev.filter(id => id !== orderId);
+        return prev.filter((id) => id !== orderId);
       } else {
         return [...prev, orderId];
       }
@@ -132,11 +162,12 @@ const RabattDetail = () => {
 
   // Start editing a discount group
   const handleStartEditGroup = (group) => {
-    if (group.status === 'redeemed') return; // Can't edit redeemed groups
+    if (group.status === "redeemed") return; // Can't edit redeemed groups
 
     setEditingGroup(group);
     // Pre-select the orders in this group
-    const orderIds = group.orders?.map(o => o.orderId?._id || o.orderId) || [];
+    const orderIds =
+      group.orders?.map((o) => o.orderId?._id || o.orderId) || [];
     setSelectedOrders(orderIds);
   };
 
@@ -153,10 +184,10 @@ const RabattDetail = () => {
 
     const newItem = {
       orders: [...selectedOrders],
-      isBundle: selectedOrders.length > 1
+      isBundle: selectedOrders.length > 1,
     };
 
-    setDiscountItems(prev => [...prev, newItem]);
+    setDiscountItems((prev) => [...prev, newItem]);
     setSelectedOrders([]);
   };
 
@@ -174,10 +205,10 @@ const RabattDetail = () => {
 
       // First, add orders from discountItems (pre-added groups)
       discountItems.forEach((item) => {
-        item.orders.forEach(orderId => {
+        item.orders.forEach((orderId) => {
           ordersWithBundles.push({
             orderId,
-            bundleIndex: bundleIndex
+            bundleIndex: bundleIndex,
           });
         });
         bundleIndex++; // Each item gets its own bundleIndex
@@ -187,19 +218,29 @@ const RabattDetail = () => {
       selectedOrders.forEach((orderId) => {
         ordersWithBundles.push({
           orderId,
-          bundleIndex: bundleIndex
+          bundleIndex: bundleIndex,
         });
         bundleIndex++; // Each selected order gets its own bundleIndex
       });
 
-      await discountsAPI.createGroup(id, ordersWithBundles, settings.discountRate);
-      setMessage({ type: "success", text: "Rabattgruppe erfolgreich erstellt!" });
+      await discountsAPI.createGroup(
+        id,
+        ordersWithBundles,
+        settings.discountRate
+      );
+      setMessage({
+        type: "success",
+        text: "Rabattgruppe erfolgreich erstellt!",
+      });
       setSelectedOrders([]);
       setDiscountItems([]);
       await fetchData();
     } catch (error) {
       console.error("Failed to create discount group:", error);
-      setMessage({ type: "error", text: error.message || "Fehler beim Erstellen der Rabattgruppe" });
+      setMessage({
+        type: "error",
+        text: error.message || "Fehler beim Erstellen der Rabattgruppe",
+      });
     } finally {
       setCreatingGroup(false);
     }
@@ -207,8 +248,8 @@ const RabattDetail = () => {
 
   // Remove an item from discount items
   const handleRemoveItem = (index) => {
-    setDiscountItems(prev => prev.filter((_, i) => i !== index));
-    setExpandedItems(prev => {
+    setDiscountItems((prev) => prev.filter((_, i) => i !== index));
+    setExpandedItems((prev) => {
       const newExpanded = { ...prev };
       delete newExpanded[index];
       return newExpanded;
@@ -217,10 +258,10 @@ const RabattDetail = () => {
 
   // Remove individual order from a bundle item
   const handleRemoveOrderFromItem = (itemIndex, orderId) => {
-    setDiscountItems(prev => {
+    setDiscountItems((prev) => {
       const newItems = [...prev];
       const item = newItems[itemIndex];
-      const newOrders = item.orders.filter(id => id !== orderId);
+      const newOrders = item.orders.filter((id) => id !== orderId);
 
       if (newOrders.length === 0) {
         // Remove entire item if no orders left
@@ -230,7 +271,7 @@ const RabattDetail = () => {
         newItems[itemIndex] = {
           ...item,
           orders: newOrders,
-          isBundle: newOrders.length > 1
+          isBundle: newOrders.length > 1,
         };
         return newItems;
       }
@@ -239,15 +280,15 @@ const RabattDetail = () => {
 
   // Toggle expanded state for added items
   const toggleItemExpanded = (index) => {
-    setExpandedItems(prev => ({
+    setExpandedItems((prev) => ({
       ...prev,
-      [index]: !prev[index]
+      [index]: !prev[index],
     }));
   };
 
   // Get all order IDs that are already in discount items
   const getOrdersInItems = () => {
-    return discountItems.flatMap(item => item.orders);
+    return discountItems.flatMap((item) => item.orders);
   };
 
   // Create or update discount group
@@ -256,7 +297,7 @@ const RabattDetail = () => {
     if (discountItems.length === 0) {
       setMessage({
         type: "error",
-        text: "Bitte fügen Sie mindestens einen Artikel hinzu"
+        text: "Bitte fügen Sie mindestens einen Artikel hinzu",
       });
       return;
     }
@@ -267,17 +308,32 @@ const RabattDetail = () => {
     try {
       // Flatten all orders from items with bundleIndex
       const ordersWithBundles = discountItems.flatMap((item, index) =>
-        item.orders.map(orderId => ({ orderId, bundleIndex: index }))
+        item.orders.map((orderId) => ({ orderId, bundleIndex: index }))
       );
 
       if (editingGroup) {
         // Update existing group
-        await discountsAPI.updateGroup(id, editingGroup._id, ordersWithBundles, settings.discountRate);
-        setMessage({ type: "success", text: "Rabattgruppe erfolgreich aktualisiert!" });
+        await discountsAPI.updateGroup(
+          id,
+          editingGroup._id,
+          ordersWithBundles,
+          settings.discountRate
+        );
+        setMessage({
+          type: "success",
+          text: "Rabattgruppe erfolgreich aktualisiert!",
+        });
       } else {
         // Create new group
-        await discountsAPI.createGroup(id, ordersWithBundles, settings.discountRate);
-        setMessage({ type: "success", text: "Rabattgruppe erfolgreich erstellt!" });
+        await discountsAPI.createGroup(
+          id,
+          ordersWithBundles,
+          settings.discountRate
+        );
+        setMessage({
+          type: "success",
+          text: "Rabattgruppe erfolgreich erstellt!",
+        });
       }
       setSelectedOrders([]);
       setDiscountItems([]);
@@ -285,7 +341,12 @@ const RabattDetail = () => {
       await fetchData();
     } catch (error) {
       console.error("Failed to create/update discount group:", error);
-      setMessage({ type: "error", text: error.message || "Fehler beim Erstellen/Aktualisieren der Rabattgruppe" });
+      setMessage({
+        type: "error",
+        text:
+          error.message ||
+          "Fehler beim Erstellen/Aktualisieren der Rabattgruppe",
+      });
     } finally {
       setCreatingGroup(false);
     }
@@ -307,7 +368,10 @@ const RabattDetail = () => {
       await fetchData();
     } catch (error) {
       console.error("Failed to redeem group:", error);
-      setMessage({ type: "error", text: error.message || "Fehler beim Einlösen" });
+      setMessage({
+        type: "error",
+        text: error.message || "Fehler beim Einlösen",
+      });
       setRedeemGroupId(null);
     }
   };
@@ -328,27 +392,48 @@ const RabattDetail = () => {
       await fetchData();
     } catch (error) {
       console.error("Failed to delete group:", error);
-      setMessage({ type: "error", text: error.message || "Fehler beim Löschen" });
+      setMessage({
+        type: "error",
+        text: error.message || "Fehler beim Löschen",
+      });
       setDeleteGroupId(null);
     }
   };
 
   const formatCurrency = (value) => {
-    return (value || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (value || 0).toLocaleString("de-DE", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   };
 
   const formatDate = (date) => {
     if (!date) return "-";
-    return new Date(date).toLocaleDateString('de-DE');
+    return new Date(date).toLocaleDateString("de-DE");
   };
 
   if (loading) {
     return (
       <Layout>
         <div className="flex items-center justify-center py-12">
-          <svg className="animate-spin h-8 w-8 text-gray-400" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          <svg
+            className="animate-spin h-8 w-8 text-gray-400"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+              fill="none"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
           </svg>
         </div>
       </Layout>
@@ -372,16 +457,32 @@ const RabattDetail = () => {
   }
 
   const totalOrders = orders.length;
-  const totalItems = orders.reduce((acc, order) => acc + (order.items?.length || 0), 0);
-  const totalOrderValue = orders.reduce((acc, order) => acc + (order.amountTotal || 0), 0);
-  const totalDiscountGranted = discountGroups.reduce((acc, g) => acc + (g.totalDiscount || 0), 0);
+  const totalItems = orders.reduce(
+    (acc, order) => acc + (order.items?.length || 0),
+    0
+  );
+  const totalOrderValue = orders.reduce(
+    (acc, order) => acc + (order.amountTotal || 0),
+    0
+  );
+  const totalDiscountGranted = discountGroups.reduce(
+    (acc, g) => acc + (g.totalDiscount || 0),
+    0
+  );
 
   // Calculate selected orders discount
   const selectedOrdersTotal = selectedOrders.reduce((acc, orderId) => {
-    const order = orders.find(o => (o._id || o.id) === orderId);
+    const order = orders.find((o) => (o._id || o.id) === orderId);
     if (order) {
-      const eligible = order.items?.filter(i => i.discountEligible) || [];
-      return acc + eligible.reduce((sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0);
+      const eligible = order.items?.filter((i) => i.discountEligible) || [];
+      return (
+        acc +
+        eligible.reduce(
+          (sum, item) =>
+            sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
+          0
+        )
+      );
     }
     return acc;
   }, 0);
@@ -393,27 +494,38 @@ const RabattDetail = () => {
 
   // Calculate total discount from all items
   const itemsTotal = discountItems.reduce((acc, item) => {
-    return acc + item.orders.reduce((sum, orderId) => {
-      const order = orders.find(o => (o._id || o.id) === orderId);
-      if (order) {
-        const eligible = order.items?.filter(i => i.discountEligible) || [];
-        return sum + eligible.reduce((s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity), 0);
-      }
-      return sum;
-    }, 0);
+    return (
+      acc +
+      item.orders.reduce((sum, orderId) => {
+        const order = orders.find((o) => (o._id || o.id) === orderId);
+        if (order) {
+          const eligible = order.items?.filter((i) => i.discountEligible) || [];
+          return (
+            sum +
+            eligible.reduce(
+              (s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
+              0
+            )
+          );
+        }
+        return sum;
+      }, 0)
+    );
   }, 0);
   const itemsDiscount = (itemsTotal * settings.discountRate) / 100;
 
   return (
     <Layout>
       {/* Message */}
-      <div className="mb-4" style={{ minHeight: message.text ? 'auto' : 0 }}>
+      <div className="mb-4" style={{ minHeight: message.text ? "auto" : 0 }}>
         {message.text && (
-          <div className={`p-4 rounded-lg ${
-            message.type === "success"
-              ? "bg-green-50 border border-green-200 text-green-700"
-              : "bg-red-50 border border-red-200 text-red-700"
-          }`}>
+          <div
+            className={`p-4 rounded-lg ${
+              message.type === "success"
+                ? "bg-green-50 border border-green-200 text-green-700"
+                : "bg-red-50 border border-red-200 text-red-700"
+            }`}
+          >
             {message.text}
           </div>
         )}
@@ -423,7 +535,9 @@ const RabattDetail = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Rabatt Details</h1>
-          <p className="text-gray-500 text-sm mt-1">{sanitizeName(customer?.name)}</p>
+          <p className="text-gray-500 text-sm mt-1">
+            {sanitizeName(customer?.customerName || customer?.name)}
+          </p>
         </div>
         <button
           onClick={() => navigate("/rabatt")}
@@ -442,31 +556,69 @@ const RabattDetail = () => {
               <div className="flex items-center gap-3">
                 {/* Pending Icon */}
                 <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center shadow-sm">
-                  <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <svg
+                    className="h-5 w-5 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-amber-900">Rabattgruppe wird erstellt</h3>
-                  <p className="text-xs text-amber-600 mt-0.5">Anzahl der Bestellungen</p>
+                  <h3 className="text-base font-semibold text-amber-900">
+                    Rabattgruppe wird erstellt
+                  </h3>
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    Anzahl der Bestellungen
+                  </p>
                   <p className="text-sm font-bold text-amber-900">
-                    {discountItems.reduce((sum, item) => sum + item.orders.length, 0)}
+                    {discountItems.reduce(
+                      (sum, item) => sum + item.orders.length,
+                      0
+                    )}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 {/* Total Discount Preview */}
                 <div className="text-right">
-                  <p className="text-xs text-amber-600 font-medium">Voraussichtlicher Rabatt</p>
-                  <p className="text-lg font-bold text-amber-900">€ {formatCurrency(itemsDiscount)}</p>
+                  <p className="text-xs text-amber-600 font-medium">
+                    Voraussichtlicher Rabatt
+                  </p>
+                  <p className="text-lg font-bold text-amber-900">
+                    € {formatCurrency(itemsDiscount)}
+                  </p>
                 </div>
                 {/* Expand/Collapse Button */}
                 <button
-                  onClick={() => setExpandedItems(prev => ({ ...prev, accordion: !prev.accordion }))}
+                  onClick={() =>
+                    setExpandedItems((prev) => ({
+                      ...prev,
+                      accordion: !prev.accordion,
+                    }))
+                  }
                   className="p-2 rounded-lg bg-white/60 hover:bg-white transition-colors border border-amber-200"
                 >
-                  <svg className={`h-5 w-5 text-amber-700 transition-transform ${expandedItems.accordion ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  <svg
+                    className={`h-5 w-5 text-amber-700 transition-transform ${
+                      expandedItems.accordion ? "rotate-180" : ""
+                    }`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
                   </svg>
                 </button>
               </div>
@@ -489,23 +641,40 @@ const RabattDetail = () => {
               <div className="divide-y divide-amber-100">
                 {discountItems.map((item, index) => {
                   const isItemExpanded = expandedItems[index];
-                  const itemOrders = item.orders.map(orderId =>
-                    orders.find(o => (o._id || o.id) === orderId)
-                  ).filter(Boolean);
+                  const itemOrders = item.orders
+                    .map((orderId) =>
+                      orders.find((o) => (o._id || o.id) === orderId)
+                    )
+                    .filter(Boolean);
 
                   // Calculate item totals
                   const itemEligible = itemOrders.reduce((sum, order) => {
-                    const eligible = order?.items?.filter(i => i.discountEligible) || [];
-                    return sum + eligible.reduce((s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity), 0);
+                    const eligible =
+                      order?.items?.filter((i) => i.discountEligible) || [];
+                    return (
+                      sum +
+                      eligible.reduce(
+                        (s, i) =>
+                          s + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
+                        0
+                      )
+                    );
                   }, 0);
-                  const itemDiscount = (itemEligible * settings.discountRate) / 100;
+                  const itemDiscount =
+                    (itemEligible * settings.discountRate) / 100;
 
                   return (
                     <div key={index}>
                       {/* Item Row */}
                       <div
-                        className={`grid grid-cols-[40px_1fr_120px_100px_50px] gap-2 px-5 py-3 items-center ${item.isBundle ? 'cursor-pointer hover:bg-amber-50/50' : ''} transition-colors`}
-                        onClick={() => item.isBundle && toggleItemExpanded(index)}
+                        className={`grid grid-cols-[40px_1fr_120px_100px_50px] gap-2 px-5 py-3 items-center ${
+                          item.isBundle
+                            ? "cursor-pointer hover:bg-amber-50/50"
+                            : ""
+                        } transition-colors`}
+                        onClick={() =>
+                          item.isBundle && toggleItemExpanded(index)
+                        }
                       >
                         {/* Index */}
                         <div className="flex items-center justify-center">
@@ -519,35 +688,92 @@ const RabattDetail = () => {
                           {item.isBundle ? (
                             <>
                               <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                                <svg className="h-4 w-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                  <rect x="6" y="2" width="12" height="14" rx="2" className="fill-blue-50" />
-                                  <rect x="4" y="4" width="12" height="14" rx="2" className="fill-blue-100" />
-                                  <rect x="2" y="6" width="12" height="14" rx="2" className="fill-white" />
+                                <svg
+                                  className="h-4 w-4 text-blue-600"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                >
+                                  <rect
+                                    x="6"
+                                    y="2"
+                                    width="12"
+                                    height="14"
+                                    rx="2"
+                                    className="fill-blue-50"
+                                  />
+                                  <rect
+                                    x="4"
+                                    y="4"
+                                    width="12"
+                                    height="14"
+                                    rx="2"
+                                    className="fill-blue-100"
+                                  />
+                                  <rect
+                                    x="2"
+                                    y="6"
+                                    width="12"
+                                    height="14"
+                                    rx="2"
+                                    className="fill-white"
+                                  />
                                 </svg>
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium text-gray-900">Gruppe</span>
+                                  <span className="text-sm font-medium text-gray-900">
+                                    Gruppe
+                                  </span>
                                   <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
                                     {item.orders.length} Bestellungen
                                   </span>
-                                  <svg className={`h-4 w-4 text-gray-400 transition-transform ${isItemExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  <svg
+                                    className={`h-4 w-4 text-gray-400 transition-transform ${
+                                      isItemExpanded ? "rotate-180" : ""
+                                    }`}
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M19 9l-7 7-7-7"
+                                    />
                                   </svg>
                                 </div>
-                                <p className="text-xs text-gray-500 mt-0.5">Klicken zum Erweitern</p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  Klicken zum Erweitern
+                                </p>
                               </div>
                             </>
                           ) : (
                             <>
                               <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                                <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                <svg
+                                  className="h-4 w-4 text-gray-500"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                  />
                                 </svg>
                               </div>
                               <div>
-                                <p className="text-sm font-medium text-gray-900">{itemOrders[0]?.posReference || 'Bestellung'}</p>
-                                <p className="text-xs text-gray-500">{formatDate(itemOrders[0]?.orderDate)}</p>
+                                <p className="text-sm font-medium text-gray-900">
+                                  {itemOrders[0]?.posReference || "Bestellung"}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {formatDate(itemOrders[0]?.orderDate)}
+                                </p>
                               </div>
                             </>
                           )}
@@ -555,23 +781,40 @@ const RabattDetail = () => {
 
                         {/* Eligible Amount */}
                         <div className="text-right">
-                          <span className="text-sm text-gray-700">€ {formatCurrency(itemEligible)}</span>
+                          <span className="text-sm text-gray-700">
+                            € {formatCurrency(itemEligible)}
+                          </span>
                         </div>
 
                         {/* Discount Amount */}
                         <div className="text-right">
-                          <span className="text-sm font-semibold text-green-600">€ {formatCurrency(itemDiscount)}</span>
+                          <span className="text-sm font-semibold text-green-600">
+                            € {formatCurrency(itemDiscount)}
+                          </span>
                         </div>
 
                         {/* Remove Button */}
                         <div className="flex justify-center">
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleRemoveItem(index); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveItem(index);
+                            }}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                             title="Entfernen"
                           >
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            <svg
+                              className="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
                             </svg>
                           </button>
                         </div>
@@ -582,36 +825,71 @@ const RabattDetail = () => {
                         <div className="bg-blue-50/30 border-t border-blue-100">
                           {itemOrders.map((order, orderIdx) => {
                             const orderId = order._id || order.id;
-                            const orderEligible = (order?.items?.filter(i => i.discountEligible) || [])
-                              .reduce((s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity), 0);
-                            const orderDiscount = (orderEligible * settings.discountRate) / 100;
+                            const orderEligible = (
+                              order?.items?.filter((i) => i.discountEligible) ||
+                              []
+                            ).reduce(
+                              (s, i) =>
+                                s +
+                                (i.priceSubtotalIncl ||
+                                  i.priceUnit * i.quantity),
+                              0
+                            );
+                            const orderDiscount =
+                              (orderEligible * settings.discountRate) / 100;
 
                             return (
                               <div
                                 key={orderId}
-                                className={`grid grid-cols-[40px_1fr_120px_100px_50px] gap-2 px-5 py-2.5 items-center ml-4 ${orderIdx < itemOrders.length - 1 ? 'border-b border-blue-100' : ''}`}
+                                className={`grid grid-cols-[40px_1fr_120px_100px_50px] gap-2 px-5 py-2.5 items-center ml-4 ${
+                                  orderIdx < itemOrders.length - 1
+                                    ? "border-b border-blue-100"
+                                    : ""
+                                }`}
                               >
                                 <div className="flex items-center justify-center">
-                                  <span className="text-xs text-gray-400">{orderIdx + 1}.</span>
+                                  <span className="text-xs text-gray-400">
+                                    {orderIdx + 1}.
+                                  </span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm text-gray-700">{order.posReference}</span>
-                                  <span className="text-xs text-gray-400">• {formatDate(order.orderDate)}</span>
+                                  <span className="text-sm text-gray-700">
+                                    {order.posReference}
+                                  </span>
+                                  <span className="text-xs text-gray-400">
+                                    • {formatDate(order.orderDate)}
+                                  </span>
                                 </div>
                                 <div className="text-right">
-                                  <span className="text-xs text-gray-500">€ {formatCurrency(orderEligible)}</span>
+                                  <span className="text-xs text-gray-500">
+                                    € {formatCurrency(orderEligible)}
+                                  </span>
                                 </div>
                                 <div className="text-right">
-                                  <span className="text-xs text-green-600">€ {formatCurrency(orderDiscount)}</span>
+                                  <span className="text-xs text-green-600">
+                                    € {formatCurrency(orderDiscount)}
+                                  </span>
                                 </div>
                                 <div className="flex justify-center">
                                   <button
-                                    onClick={() => handleRemoveOrderFromItem(index, orderId)}
+                                    onClick={() =>
+                                      handleRemoveOrderFromItem(index, orderId)
+                                    }
                                     className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                                     title="Aus Gruppe entfernen"
                                   >
-                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    <svg
+                                      className="h-3.5 w-3.5"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M6 18L18 6M6 6l12 12"
+                                      />
                                     </svg>
                                   </button>
                                 </div>
@@ -637,7 +915,9 @@ const RabattDetail = () => {
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <p className="text-xs text-amber-600">Gesamtrabatt</p>
-                      <p className="text-xl font-bold text-amber-900">€ {formatCurrency(itemsDiscount)}</p>
+                      <p className="text-xl font-bold text-amber-900">
+                        € {formatCurrency(itemsDiscount)}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -652,8 +932,18 @@ const RabattDetail = () => {
         <div className="bg-orange-50 rounded-xl border border-orange-200 p-4 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <svg className="h-5 w-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              <svg
+                className="h-5 w-5 text-orange-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                />
               </svg>
               <span className="text-sm text-orange-800">
                 <strong>Bearbeitungsmodus:</strong> Rabattgruppe wird bearbeitet
@@ -674,12 +964,23 @@ const RabattDetail = () => {
         <div className="bg-blue-50 rounded-xl border border-blue-100 p-4 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              <svg
+                className="h-5 w-5 text-blue-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                />
               </svg>
               <span className="text-sm text-blue-800">
-                <strong>{queue.orderCount}</strong> Bestellung(en) in Warteschlange
-                ({queue.orderCount}/{settings.ordersRequiredForDiscount} für automatischen Rabatt)
+                <strong>{queue.orderCount}</strong> Bestellung(en) in
+                Warteschlange ({queue.orderCount}/
+                {settings.ordersRequiredForDiscount} für automatischen Rabatt)
               </span>
             </div>
             {queue.readyForDiscount && (
@@ -695,15 +996,21 @@ const RabattDetail = () => {
       <div className="flex gap-4 mb-4">
         {/* Kundendetails */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 w-[350px]">
-          <h3 className="text-center font-semibold text-gray-900 mb-6">Kundendetails</h3>
+          <h3 className="text-center font-semibold text-gray-900 mb-6">
+            Kundendetails
+          </h3>
           <div className="space-y-3 text-sm">
             <div className="flex">
               <span className="text-gray-500 w-32">Kundennummer:</span>
-              <span className="text-gray-900">{customer.customerNumber || customer.ref || "-"}</span>
+              <span className="text-gray-900">
+                {customer.customerNumber || customer.ref || "-"}
+              </span>
             </div>
             <div className="flex">
               <span className="text-gray-500 w-32">Kundenname:</span>
-              <span className="text-gray-900">{sanitizeName(customer.customerName || customer.name)}</span>
+              <span className="text-gray-900">
+                {sanitizeName(customer.customerName || customer.name)}
+              </span>
             </div>
             <div className="flex">
               <span className="text-gray-500 w-32">E-Mail:</span>
@@ -711,13 +1018,17 @@ const RabattDetail = () => {
             </div>
             <div className="flex">
               <span className="text-gray-500 w-32">Telefonnummer:</span>
-              <span className="text-gray-900">{customer.phone || customer.mobile || "-"}</span>
+              <span className="text-gray-900">
+                {customer.phone || customer.mobile || "-"}
+              </span>
             </div>
             <div className="flex">
               <span className="text-gray-500 w-32">Adresse:</span>
               <div className="text-gray-900">
                 <div>{customer.address?.street || "-"}</div>
-                <div>{customer.address?.postalCode} {customer.address?.city}</div>
+                <div>
+                  {customer.address?.postalCode} {customer.address?.city}
+                </div>
                 <div>{customer.address?.country}</div>
               </div>
             </div>
@@ -728,20 +1039,30 @@ const RabattDetail = () => {
         <div className="flex flex-col gap-4">
           {/* Gesamtbestellwert */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center min-w-[220px]">
-            <h3 className="font-semibold text-green-600 mb-2 text-sm">Gesamtbestellwert</h3>
-            <p className="text-3xl font-bold text-gray-900">€ {formatCurrency(totalOrderValue)}</p>
+            <h3 className="font-semibold text-green-600 mb-2 text-sm">
+              Gesamtbestellwert
+            </h3>
+            <p className="text-3xl font-bold text-gray-900">
+              € {formatCurrency(totalOrderValue)}
+            </p>
           </div>
 
           {/* Gesamtrabatt Gewährt */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center">
-            <h3 className="font-semibold text-gray-600 mb-2 text-sm">Gesamtrabatt Gewährt</h3>
-            <p className="text-3xl font-bold text-gray-900">€ {formatCurrency(totalDiscountGranted)}</p>
+            <h3 className="font-semibold text-gray-600 mb-2 text-sm">
+              Gesamtrabatt Gewährt
+            </h3>
+            <p className="text-3xl font-bold text-gray-900">
+              € {formatCurrency(totalDiscountGranted)}
+            </p>
           </div>
         </div>
 
         {/* Notizen */}
         <div className="flex-1 bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">Notizen Hinzufügen</h3>
+          <h3 className="font-semibold text-gray-900 mb-4">
+            Notizen Hinzufügen
+          </h3>
           <textarea
             value={notizen}
             onChange={(e) => setNotizen(e.target.value)}
@@ -763,11 +1084,15 @@ const RabattDetail = () => {
       {/* Bottom Stats Row */}
       <div className="flex gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center w-[350px]">
-          <h3 className="font-semibold text-gray-600 mb-2 text-sm">Anzahl Der Bestellungen</h3>
+          <h3 className="font-semibold text-gray-600 mb-2 text-sm">
+            Anzahl Der Bestellungen
+          </h3>
           <p className="text-3xl font-bold text-gray-900">{totalOrders}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center min-w-[220px]">
-          <h3 className="font-semibold text-gray-600 mb-2 text-sm">Anzahl Der Artikel</h3>
+          <h3 className="font-semibold text-gray-600 mb-2 text-sm">
+            Anzahl Der Artikel
+          </h3>
           <p className="text-3xl font-bold text-gray-900">{totalItems}</p>
         </div>
       </div>
@@ -786,8 +1111,8 @@ const RabattDetail = () => {
               isReadyForManual
                 ? "bg-green-50 border-green-200"
                 : totalItems > 0
-                  ? "bg-blue-50 border-blue-200"
-                  : "bg-white border-gray-200"
+                ? "bg-blue-50 border-blue-200"
+                : "bg-white border-gray-200"
             }`}
           >
             <div className="flex items-center justify-between">
@@ -799,7 +1124,9 @@ const RabattDetail = () => {
                       key={i}
                       className={`w-3 h-3 rounded-full transition-colors ${
                         i < totalItems
-                          ? isReadyForManual ? "bg-green-500" : "bg-blue-500"
+                          ? isReadyForManual
+                            ? "bg-green-500"
+                            : "bg-blue-500"
                           : "bg-gray-200"
                       }`}
                     />
@@ -814,8 +1141,13 @@ const RabattDetail = () => {
                     </span>
                   ) : (
                     <>
-                      <span className={`text-sm font-medium ${isReadyForManual ? "text-green-700" : "text-blue-700"}`}>
-                        {totalItems} Bestellung{totalItems > 1 ? 'en' : ''} ausgewählt
+                      <span
+                        className={`text-sm font-medium ${
+                          isReadyForManual ? "text-green-700" : "text-blue-700"
+                        }`}
+                      >
+                        {totalItems} Bestellung{totalItems > 1 ? "en" : ""}{" "}
+                        ausgewählt
                       </span>
                       {hasSelectedOrders && (
                         <span className="text-xs text-gray-500">
@@ -824,12 +1156,14 @@ const RabattDetail = () => {
                       )}
                       {hasItems && (
                         <span className="text-xs text-gray-500">
-                          ({discountItems.length} Gruppe{discountItems.length > 1 ? 'n' : ''})
+                          ({discountItems.length} Gruppe
+                          {discountItems.length > 1 ? "n" : ""})
                         </span>
                       )}
                       {isReadyForManual && (
                         <span className="text-sm text-green-600 font-medium">
-                          • Rabatt: € {formatCurrency(itemsDiscount + selectedDiscount)}
+                          • Rabatt: €{" "}
+                          {formatCurrency(itemsDiscount + selectedDiscount)}
                         </span>
                       )}
                       {!isReadyForManual && (
@@ -885,10 +1219,17 @@ const RabattDetail = () => {
                           : "bg-gray-400 cursor-not-allowed"
                       }`}
                     >
-                      {creatingGroup ? "..." : editingGroup ? "Aktualisieren" : "Rabattgruppe erstellen"}
+                      {creatingGroup
+                        ? "..."
+                        : editingGroup
+                        ? "Aktualisieren"
+                        : "Rabattgruppe erstellen"}
                     </button>
                     <button
-                      onClick={() => { setDiscountItems([]); setSelectedOrders([]); }}
+                      onClick={() => {
+                        setDiscountItems([]);
+                        setSelectedOrders([]);
+                      }}
                       className="px-2 py-1.5 text-gray-500 hover:text-gray-700 text-sm"
                     >
                       ✕
@@ -908,370 +1249,636 @@ const RabattDetail = () => {
             <div className="p-4 border-b border-gray-200 bg-gray-50">
               <p className="text-sm text-gray-600">
                 Wählen Sie Bestellungen aus, um eine Rabattgruppe zu erstellen.
-                {editingGroup ? " Sie bearbeiten gerade eine bestehende Gruppe." : " Bereits gruppierte oder eingelöste Bestellungen können nicht ausgewählt werden."}
+                {editingGroup
+                  ? " Sie bearbeiten gerade eine bestehende Gruppe."
+                  : " Bereits gruppierte oder eingelöste Bestellungen können nicht ausgewählt werden."}
               </p>
             </div>
 
             {/* Table Header */}
             <div className="grid grid-cols-[60px_1fr_1fr_100px_160px] border-b border-gray-200 bg-gray-50">
               <div className="p-3 text-center text-xs font-semibold text-gray-600 uppercase border-r border-gray-200"></div>
-              <div className="p-3 text-xs font-semibold text-gray-600 uppercase border-r border-gray-200">Bestelldetails</div>
-              <div className="p-3 text-xs font-semibold text-gray-600 uppercase border-r border-gray-200">Artikel</div>
-              <div className="p-3 text-center text-xs font-semibold text-gray-600 uppercase border-r border-gray-200">Gruppe</div>
-              <div className="p-3 text-center text-xs font-semibold text-gray-600 uppercase">Aktion</div>
+              <div className="p-3 text-xs font-semibold text-gray-600 uppercase border-r border-gray-200">
+                Bestelldetails
+              </div>
+              <div className="p-3 text-xs font-semibold text-gray-600 uppercase border-r border-gray-200">
+                Artikel
+              </div>
+              <div className="p-3 text-center text-xs font-semibold text-gray-600 uppercase border-r border-gray-200">
+                Gruppe
+              </div>
+              <div className="p-3 text-center text-xs font-semibold text-gray-600 uppercase">
+                Aktion
+              </div>
             </div>
 
             <div>
               {/* Render discount groups first - sorted by date (recent first) */}
-              {[...discountGroups].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map((group) => {
-                const isRedeemed = group.status === 'redeemed';
-                const isBeingEdited = editingGroup?._id === group._id;
+              {[...discountGroups]
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                .map((group) => {
+                  const isRedeemed = group.status === "redeemed";
+                  const isBeingEdited = editingGroup?._id === group._id;
 
-                // Get orders that belong to this group
-                const groupOrderIds = group.orders?.map(o => (o.orderId?._id || o.orderId)?.toString()) || [];
-                const groupOrders = orders.filter(order =>
-                  groupOrderIds.includes((order._id || order.id)?.toString())
-                );
-
-                // If editing this group, don't show it here (show orders individually below)
-                if (isBeingEdited) return null;
-
-                // Group orders by bundleIndex
-                const ordersByBundle = {};
-                group.orders?.forEach(o => {
-                  const bundleIdx = o.bundleIndex ?? 0;
-                  if (!ordersByBundle[bundleIdx]) {
-                    ordersByBundle[bundleIdx] = [];
-                  }
-                  const foundOrder = groupOrders.find(go =>
-                    (go._id || go.id)?.toString() === (o.orderId?._id || o.orderId)?.toString()
+                  // Get orders that belong to this group
+                  const groupOrderIds =
+                    group.orders?.map((o) =>
+                      (o.orderId?._id || o.orderId)?.toString()
+                    ) || [];
+                  const groupOrders = orders.filter((order) =>
+                    groupOrderIds.includes((order._id || order.id)?.toString())
                   );
-                  if (foundOrder) {
-                    ordersByBundle[bundleIdx].push(foundOrder);
-                  }
-                });
 
-                // Convert to array of bundles
-                const bundles = Object.entries(ordersByBundle).map(([bundleIdx, bundleOrders]) => ({
-                  bundleIndex: parseInt(bundleIdx),
-                  orders: bundleOrders,
-                  isBundle: bundleOrders.length > 1
-                }));
+                  // If editing this group, don't show it here (show orders individually below)
+                  if (isBeingEdited) return null;
 
-                // Toggle bundle expansion
-                const toggleBundle = (bundleKey) => {
-                  setExpandedBundles(prev => ({
-                    ...prev,
-                    [bundleKey]: !prev[bundleKey]
-                  }));
-                };
+                  // Group orders by bundleIndex
+                  const ordersByBundle = {};
+                  group.orders?.forEach((o) => {
+                    const bundleIdx = o.bundleIndex ?? 0;
+                    if (!ordersByBundle[bundleIdx]) {
+                      ordersByBundle[bundleIdx] = [];
+                    }
+                    const foundOrder = groupOrders.find(
+                      (go) =>
+                        (go._id || go.id)?.toString() ===
+                        (o.orderId?._id || o.orderId)?.toString()
+                    );
+                    if (foundOrder) {
+                      ordersByBundle[bundleIdx].push(foundOrder);
+                    }
+                  });
 
-                return (
-                  <div
-                    key={group._id || group.id}
-                    className="border-b border-gray-200 bg-white"
-                  >
-                    <div className="flex">
-                      {/* Group orders container */}
-                      <div className="flex-1">
-                        {bundles.map((bundle, bundleIdx) => {
-                          const bundleKey = `${group._id}_${bundle.bundleIndex}`;
-                          const isExpanded = expandedBundles[bundleKey];
-                          const firstOrder = bundle.orders[0];
+                  // Convert to array of bundles
+                  const bundles = Object.entries(ordersByBundle).map(
+                    ([bundleIdx, bundleOrders]) => ({
+                      bundleIndex: parseInt(bundleIdx),
+                      orders: bundleOrders,
+                      isBundle: bundleOrders.length > 1,
+                    })
+                  );
 
-                          // Calculate total for bundle
-                          const bundleTotalEligible = bundle.orders.reduce((total, order) => {
-                            const eligible = order.items?.filter(item => item.discountEligible) || [];
-                            return total + eligible.reduce((sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0);
-                          }, 0);
+                  // Toggle bundle expansion
+                  const toggleBundle = (bundleKey) => {
+                    setExpandedBundles((prev) => ({
+                      ...prev,
+                      [bundleKey]: !prev[bundleKey],
+                    }));
+                  };
 
-                          // If bundle has only 1 order, show single order row
-                          if (!bundle.isBundle) {
-                            const order = firstOrder;
-                            const orderId = order._id || order.id;
-                            const discountEligibleItems = order.items?.filter(item => item.discountEligible) || [];
-                            const discountEligibleAmount = discountEligibleItems.reduce(
-                              (sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0
+                  return (
+                    <div
+                      key={group._id || group.id}
+                      className="border-b border-gray-200 bg-white"
+                    >
+                      <div className="flex">
+                        {/* Group orders container */}
+                        <div className="flex-1">
+                          {bundles.map((bundle, bundleIdx) => {
+                            const bundleKey = `${group._id}_${bundle.bundleIndex}`;
+                            const isExpanded = expandedBundles[bundleKey];
+                            const firstOrder = bundle.orders[0];
+
+                            // Calculate total for bundle
+                            const bundleTotalEligible = bundle.orders.reduce(
+                              (total, order) => {
+                                const eligible =
+                                  order.items?.filter(
+                                    (item) => item.discountEligible
+                                  ) || [];
+                                return (
+                                  total +
+                                  eligible.reduce(
+                                    (sum, item) =>
+                                      sum +
+                                      (item.priceSubtotalIncl ||
+                                        item.priceUnit * item.quantity),
+                                    0
+                                  )
+                                );
+                              },
+                              0
                             );
-                            const isLastBundle = bundleIdx === bundles.length - 1;
+
+                            // If bundle has only 1 order, show single order row
+                            if (!bundle.isBundle) {
+                              const order = firstOrder;
+                              const orderId = order._id || order.id;
+                              const discountEligibleItems =
+                                order.items?.filter(
+                                  (item) => item.discountEligible
+                                ) || [];
+                              const discountEligibleAmount =
+                                discountEligibleItems.reduce(
+                                  (sum, item) =>
+                                    sum +
+                                    (item.priceSubtotalIncl ||
+                                      item.priceUnit * item.quantity),
+                                  0
+                                );
+                              const isLastBundle =
+                                bundleIdx === bundles.length - 1;
+
+                              return (
+                                <div
+                                  key={orderId}
+                                  className={`grid grid-cols-[60px_1fr_1fr_100px] ${
+                                    !isLastBundle
+                                      ? "border-b border-gray-100"
+                                      : ""
+                                  }`}
+                                >
+                                  <div className="p-4 flex items-center justify-center border-r border-gray-100">
+                                    <input
+                                      type="checkbox"
+                                      checked={false}
+                                      disabled
+                                      className="w-5 h-5 rounded border-gray-300 cursor-not-allowed"
+                                    />
+                                  </div>
+                                  <div className="p-4 border-r border-gray-100">
+                                    <p className="text-sm text-gray-900">
+                                      <span className="font-semibold">
+                                        Bestellnummer
+                                      </span>{" "}
+                                      - {order.posReference || order.orderId}
+                                    </p>
+                                    <p className="text-sm text-gray-900">
+                                      <span className="font-semibold">
+                                        Bestelldatum
+                                      </span>{" "}
+                                      - {formatDate(order.orderDate)}
+                                    </p>
+                                    <p className="text-sm mt-1 text-gray-600">
+                                      <span className="font-semibold">
+                                        Rabattfähig:
+                                      </span>{" "}
+                                      € {formatCurrency(discountEligibleAmount)}
+                                    </p>
+                                  </div>
+                                  <div className="p-4 border-r border-gray-100">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      {(order.items || [])
+                                        .slice(0, 4)
+                                        .map((item, imgIdx) => (
+                                          <ProductImage
+                                            key={`${orderId}-item-${imgIdx}`}
+                                            src={item.image}
+                                            size="md"
+                                          />
+                                        ))}
+                                      {(order.items?.length || 0) > 4 && (
+                                        <span className="text-sm font-medium text-gray-600">
+                                          +{order.items.length - 4}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="p-4 flex items-center justify-center">
+                                    <svg
+                                      className="h-6 w-6 text-gray-400"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                      />
+                                    </svg>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // Bundle with multiple orders - show collapsed or expanded
+                            const isLastBundle =
+                              bundleIdx === bundles.length - 1;
 
                             return (
                               <div
-                                key={orderId}
-                                className={`grid grid-cols-[60px_1fr_1fr_100px] ${!isLastBundle ? 'border-b border-gray-100' : ''}`}
+                                key={bundleKey}
+                                className={
+                                  !isLastBundle
+                                    ? "border-b border-gray-100"
+                                    : ""
+                                }
                               >
-                                <div className="p-4 flex items-center justify-center border-r border-gray-100">
-                                  <input type="checkbox" checked={false} disabled className="w-5 h-5 rounded border-gray-300 cursor-not-allowed" />
-                                </div>
-                                <div className="p-4 border-r border-gray-100">
-                                  <p className="text-sm text-gray-900"><span className="font-semibold">Bestellnummer</span> - {order.posReference || order.orderId}</p>
-                                  <p className="text-sm text-gray-900"><span className="font-semibold">Bestelldatum</span> - {formatDate(order.orderDate)}</p>
-                                  <p className="text-sm mt-1 text-gray-600"><span className="font-semibold">Rabattfähig:</span> € {formatCurrency(discountEligibleAmount)}</p>
-                                </div>
-                                <div className="p-4 border-r border-gray-100">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    {(order.items || []).slice(0, 4).map((item, imgIdx) => (
-                                      <img key={`${orderId}-item-${imgIdx}`} src={item.image || "https://via.placeholder.com/50"} alt="" className="w-12 h-12 object-cover rounded border border-gray-200" />
-                                    ))}
-                                    {(order.items?.length || 0) > 4 && <span className="text-sm font-medium text-gray-600">+{order.items.length - 4}</span>}
+                                {/* Collapsed bundle header - click to expand */}
+                                <div
+                                  className={`grid grid-cols-[60px_1fr_1fr_100px] cursor-pointer hover:bg-gray-50 transition-colors ${
+                                    isExpanded ? "bg-blue-50" : ""
+                                  }`}
+                                  onClick={() => toggleBundle(bundleKey)}
+                                >
+                                  <div className="p-4 flex items-center justify-center border-r border-gray-100">
+                                    <input
+                                      type="checkbox"
+                                      checked={false}
+                                      disabled
+                                      className="w-5 h-5 rounded border-gray-300 cursor-not-allowed"
+                                    />
                                   </div>
-                                </div>
-                                <div className="p-4 flex items-center justify-center">
-                                  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                  </svg>
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          // Bundle with multiple orders - show collapsed or expanded
-                          const isLastBundle = bundleIdx === bundles.length - 1;
-
-                          return (
-                            <div key={bundleKey} className={!isLastBundle ? 'border-b border-gray-100' : ''}>
-                              {/* Collapsed bundle header - click to expand */}
-                              <div
-                                className={`grid grid-cols-[60px_1fr_1fr_100px] cursor-pointer hover:bg-gray-50 transition-colors ${isExpanded ? 'bg-blue-50' : ''}`}
-                                onClick={() => toggleBundle(bundleKey)}
-                              >
-                                <div className="p-4 flex items-center justify-center border-r border-gray-100">
-                                  <input type="checkbox" checked={false} disabled className="w-5 h-5 rounded border-gray-300 cursor-not-allowed" />
-                                </div>
-                                <div className="p-4 border-r border-gray-100">
-                                  <div className="flex items-center gap-2">
-                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                                      {bundle.orders.length} Bestellungen
-                                    </span>
-                                    <svg className={`h-4 w-4 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  <div className="p-4 border-r border-gray-100">
+                                    <div className="flex items-center gap-2">
+                                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                                        {bundle.orders.length} Bestellungen
+                                      </span>
+                                      <svg
+                                        className={`h-4 w-4 text-gray-500 transition-transform ${
+                                          isExpanded ? "rotate-180" : ""
+                                        }`}
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M19 9l-7 7-7-7"
+                                        />
+                                      </svg>
+                                    </div>
+                                    <p className="text-sm mt-1 text-gray-600">
+                                      <span className="font-semibold">
+                                        Rabattfähig:
+                                      </span>{" "}
+                                      € {formatCurrency(bundleTotalEligible)}
+                                    </p>
+                                  </div>
+                                  <div className="p-4 border-r border-gray-100">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      {bundle.orders
+                                        .flatMap((o) => o.items || [])
+                                        .slice(0, 6)
+                                        .map((item, imgIdx) => (
+                                          <ProductImage
+                                            key={`bundle-${bundleKey}-item-${imgIdx}`}
+                                            src={item.image}
+                                            size="sm"
+                                          />
+                                        ))}
+                                      {bundle.orders.flatMap(
+                                        (o) => o.items || []
+                                      ).length > 6 && (
+                                        <span className="text-sm font-medium text-gray-600">
+                                          +
+                                          {bundle.orders.flatMap(
+                                            (o) => o.items || []
+                                          ).length - 6}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="p-4 flex items-center justify-center">
+                                    <svg
+                                      className="h-7 w-7 text-blue-500"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="1.5"
+                                    >
+                                      <rect
+                                        x="6"
+                                        y="2"
+                                        width="14"
+                                        height="16"
+                                        rx="2"
+                                        className="fill-blue-100 stroke-blue-500"
+                                      />
+                                      <rect
+                                        x="4"
+                                        y="4"
+                                        width="14"
+                                        height="16"
+                                        rx="2"
+                                        className="fill-blue-50 stroke-blue-400"
+                                      />
+                                      <rect
+                                        x="2"
+                                        y="6"
+                                        width="14"
+                                        height="16"
+                                        rx="2"
+                                        className="fill-white stroke-blue-500"
+                                      />
+                                      <line
+                                        x1="5"
+                                        y1="11"
+                                        x2="13"
+                                        y2="11"
+                                        className="stroke-blue-300"
+                                        strokeWidth="1"
+                                      />
+                                      <line
+                                        x1="5"
+                                        y1="14"
+                                        x2="11"
+                                        y2="14"
+                                        className="stroke-blue-300"
+                                        strokeWidth="1"
+                                      />
+                                      <line
+                                        x1="5"
+                                        y1="17"
+                                        x2="9"
+                                        y2="17"
+                                        className="stroke-blue-300"
+                                        strokeWidth="1"
+                                      />
                                     </svg>
                                   </div>
-                                  <p className="text-sm mt-1 text-gray-600"><span className="font-semibold">Rabattfähig:</span> € {formatCurrency(bundleTotalEligible)}</p>
                                 </div>
-                                <div className="p-4 border-r border-gray-100">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    {bundle.orders.flatMap(o => o.items || []).slice(0, 6).map((item, imgIdx) => (
-                                      <img key={`bundle-${bundleKey}-item-${imgIdx}`} src={item.image || "https://via.placeholder.com/50"} alt="" className="w-10 h-10 object-cover rounded border border-gray-200" />
-                                    ))}
-                                    {bundle.orders.flatMap(o => o.items || []).length > 6 && (
-                                      <span className="text-sm font-medium text-gray-600">+{bundle.orders.flatMap(o => o.items || []).length - 6}</span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="p-4 flex items-center justify-center">
-                                  <svg className="h-7 w-7 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                    <rect x="6" y="2" width="14" height="16" rx="2" className="fill-blue-100 stroke-blue-500" />
-                                    <rect x="4" y="4" width="14" height="16" rx="2" className="fill-blue-50 stroke-blue-400" />
-                                    <rect x="2" y="6" width="14" height="16" rx="2" className="fill-white stroke-blue-500" />
-                                    <line x1="5" y1="11" x2="13" y2="11" className="stroke-blue-300" strokeWidth="1" />
-                                    <line x1="5" y1="14" x2="11" y2="14" className="stroke-blue-300" strokeWidth="1" />
-                                    <line x1="5" y1="17" x2="9" y2="17" className="stroke-blue-300" strokeWidth="1" />
-                                  </svg>
-                                </div>
-                              </div>
 
-                              {/* Expanded bundle - show all orders */}
-                              {isExpanded && (
-                                <div className="bg-blue-50/50 border-t border-blue-100">
-                                  {bundle.orders.map((order, orderIdx) => {
-                                    const orderId = order._id || order.id;
-                                    const discountEligibleItems = order.items?.filter(item => item.discountEligible) || [];
-                                    const discountEligibleAmount = discountEligibleItems.reduce(
-                                      (sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0
-                                    );
-                                    const isLastOrder = orderIdx === bundle.orders.length - 1;
+                                {/* Expanded bundle - show all orders */}
+                                {isExpanded && (
+                                  <div className="bg-blue-50/50 border-t border-blue-100">
+                                    {bundle.orders.map((order, orderIdx) => {
+                                      const orderId = order._id || order.id;
+                                      const discountEligibleItems =
+                                        order.items?.filter(
+                                          (item) => item.discountEligible
+                                        ) || [];
+                                      const discountEligibleAmount =
+                                        discountEligibleItems.reduce(
+                                          (sum, item) =>
+                                            sum +
+                                            (item.priceSubtotalIncl ||
+                                              item.priceUnit * item.quantity),
+                                          0
+                                        );
+                                      const isLastOrder =
+                                        orderIdx === bundle.orders.length - 1;
 
-                                    return (
-                                      <div key={orderId} className={`grid grid-cols-[60px_1fr_1fr_100px] ml-4 ${!isLastOrder ? 'border-b border-blue-100' : ''}`}>
-                                        <div className="p-3 flex items-center justify-center border-r border-blue-100">
-                                          <span className="text-xs text-gray-400">{orderIdx + 1}</span>
-                                        </div>
-                                        <div className="p-3 border-r border-blue-100">
-                                          <p className="text-sm text-gray-900"><span className="font-semibold">Bestellnummer</span> - {order.posReference || order.orderId}</p>
-                                          <p className="text-sm text-gray-900"><span className="font-semibold">Bestelldatum</span> - {formatDate(order.orderDate)}</p>
-                                          <p className="text-sm mt-1 text-gray-600"><span className="font-semibold">Rabattfähig:</span> € {formatCurrency(discountEligibleAmount)}</p>
-                                        </div>
-                                        <div className="p-3 border-r border-blue-100">
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            {(order.items || []).slice(0, 4).map((item, imgIdx) => (
-                                              <img key={`${orderId}-item-${imgIdx}`} src={item.image || "https://via.placeholder.com/50"} alt="" className="w-10 h-10 object-cover rounded border border-gray-200" />
-                                            ))}
-                                            {(order.items?.length || 0) > 4 && <span className="text-sm font-medium text-gray-600">+{order.items.length - 4}</span>}
+                                      return (
+                                        <div
+                                          key={orderId}
+                                          className={`grid grid-cols-[60px_1fr_1fr_100px] ml-4 ${
+                                            !isLastOrder
+                                              ? "border-b border-blue-100"
+                                              : ""
+                                          }`}
+                                        >
+                                          <div className="p-3 flex items-center justify-center border-r border-blue-100">
+                                            <span className="text-xs text-gray-400">
+                                              {orderIdx + 1}
+                                            </span>
                                           </div>
+                                          <div className="p-3 border-r border-blue-100">
+                                            <p className="text-sm text-gray-900">
+                                              <span className="font-semibold">
+                                                Bestellnummer
+                                              </span>{" "}
+                                              -{" "}
+                                              {order.posReference ||
+                                                order.orderId}
+                                            </p>
+                                            <p className="text-sm text-gray-900">
+                                              <span className="font-semibold">
+                                                Bestelldatum
+                                              </span>{" "}
+                                              - {formatDate(order.orderDate)}
+                                            </p>
+                                            <p className="text-sm mt-1 text-gray-600">
+                                              <span className="font-semibold">
+                                                Rabattfähig:
+                                              </span>{" "}
+                                              €{" "}
+                                              {formatCurrency(
+                                                discountEligibleAmount
+                                              )}
+                                            </p>
+                                          </div>
+                                          <div className="p-3 border-r border-blue-100">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              {(order.items || [])
+                                                .slice(0, 4)
+                                                .map((item, imgIdx) => (
+                                                  <ProductImage
+                                                    key={`${orderId}-item-${imgIdx}`}
+                                                    src={item.image}
+                                                    size="sm"
+                                                  />
+                                                ))}
+                                              {(order.items?.length || 0) >
+                                                4 && (
+                                                <span className="text-sm font-medium text-gray-600">
+                                                  +{order.items.length - 4}
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <div className="p-3"></div>
                                         </div>
-                                        <div className="p-3"></div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
 
-                      {/* Action Column for entire group */}
-                      <div className="w-[160px] flex flex-col items-center justify-center gap-2 p-4 border-l border-gray-200 bg-gray-50">
-                        {isRedeemed ? (
-                          <button
-                            disabled
-                            className="w-full px-4 py-2 bg-gray-400 text-white rounded-lg text-sm cursor-not-allowed"
-                          >
-                            Eingelöst
-                          </button>
-                        ) : (
-                          <>
+                        {/* Action Column for entire group */}
+                        <div className="w-[160px] flex flex-col items-center justify-center gap-2 p-4 border-l border-gray-200 bg-gray-50">
+                          {isRedeemed ? (
                             <button
-                              onClick={() => handleRedeemGroup(group._id)}
-                              className="w-full px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition-colors font-medium"
+                              disabled
+                              className="w-full px-4 py-2 bg-gray-400 text-white rounded-lg text-sm cursor-not-allowed"
                             >
-                              Tilgen
+                              Eingelöst
                             </button>
-                            <div className="flex gap-1 w-full">
+                          ) : (
+                            <>
                               <button
-                                onClick={() => handleStartEditGroup(group)}
-                                className="flex-1 px-2 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-100 transition-colors"
+                                onClick={() => handleRedeemGroup(group._id)}
+                                className="w-full px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition-colors font-medium"
                               >
-                                Bearbeiten
+                                Tilgen
                               </button>
-                              <button
-                                onClick={() => handleDeleteGroup(group._id)}
-                                className="px-2 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs hover:bg-red-50 transition-colors"
-                                title="Rabattgruppe löschen"
-                              >
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            </div>
-                          </>
-                        )}
-                        <span className="text-xs text-green-600 font-medium">
-                          € {formatCurrency(group.totalDiscount)}
-                        </span>
+                              <div className="flex gap-1 w-full">
+                                <button
+                                  onClick={() => handleStartEditGroup(group)}
+                                  className="flex-1 px-2 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-100 transition-colors"
+                                >
+                                  Bearbeiten
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteGroup(group._id)}
+                                  className="px-2 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs hover:bg-red-50 transition-colors"
+                                  title="Rabattgruppe löschen"
+                                >
+                                  <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                    />
+                                  </svg>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                          <span className="text-xs text-green-600 font-medium">
+                            € {formatCurrency(group.totalDiscount)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
 
               {/* Render available orders (not in any group or being edited) - sorted by date (recent first) */}
-              {[...orders].sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate)).map((order, index) => {
-                const orderId = order._id || order.id || `order-${index}`;
-                const orderStatus = getOrderStatus(orderId);
-                const isSelected = selectedOrders.includes(orderId);
+              {[...orders]
+                .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate))
+                .map((order, index) => {
+                  const orderId = order._id || order.id || `order-${index}`;
+                  const orderStatus = getOrderStatus(orderId);
+                  const isSelected = selectedOrders.includes(orderId);
 
-                // Skip orders that are in groups (unless editing that group)
-                const isRedeemed = orderStatus.status === 'redeemed';
-                const isInEditingGroup = editingGroup && orderStatus.groupId === editingGroup._id && !isRedeemed;
+                  // Skip orders that are in groups (unless editing that group)
+                  const isRedeemed = orderStatus.status === "redeemed";
+                  const isInEditingGroup =
+                    editingGroup &&
+                    orderStatus.groupId === editingGroup._id &&
+                    !isRedeemed;
 
-                // Skip if in a group and not editing
-                if (orderStatus.inGroup && !isInEditingGroup) return null;
+                  // Skip if in a group and not editing
+                  if (orderStatus.inGroup && !isInEditingGroup) return null;
 
-                // Check if order is already in discount items
-                const isInDiscountItems = getOrdersInItems().includes(orderId);
-                const canSelect = (!orderStatus.inGroup || isInEditingGroup) && !isRedeemed && !isInDiscountItems;
+                  // Check if order is already in discount items
+                  const isInDiscountItems =
+                    getOrdersInItems().includes(orderId);
+                  const canSelect =
+                    (!orderStatus.inGroup || isInEditingGroup) &&
+                    !isRedeemed &&
+                    !isInDiscountItems;
 
-                // Calculate discount eligible amount for this order
-                const discountEligibleItems = order.items?.filter(item => item.discountEligible) || [];
-                const discountEligibleAmount = discountEligibleItems.reduce(
-                  (sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0
-                );
+                  // Calculate discount eligible amount for this order
+                  const discountEligibleItems =
+                    order.items?.filter((item) => item.discountEligible) || [];
+                  const discountEligibleAmount = discountEligibleItems.reduce(
+                    (sum, item) =>
+                      sum +
+                      (item.priceSubtotalIncl ||
+                        item.priceUnit * item.quantity),
+                    0
+                  );
 
-                return (
-                  <div
-                    key={orderId}
-                    className={`grid grid-cols-[60px_1fr_1fr_100px_160px] border-b border-gray-100 ${
-                      isSelected
-                        ? "bg-blue-50"
-                        : isInDiscountItems
+                  return (
+                    <div
+                      key={orderId}
+                      className={`grid grid-cols-[60px_1fr_1fr_100px_160px] border-b border-gray-100 ${
+                        isSelected
+                          ? "bg-blue-50"
+                          : isInDiscountItems
                           ? "bg-green-50"
                           : isInEditingGroup && !isSelected
-                            ? "bg-orange-50"
-                            : "bg-white"
-                    }`}
-                  >
-                    {/* Checkbox */}
-                    <div className="p-4 flex items-center justify-center border-r border-gray-100">
-                      <input
-                        type="checkbox"
-                        checked={isSelected || isInDiscountItems}
-                        onChange={() => handleOrderSelect(orderId)}
-                        disabled={!canSelect}
-                        className={`w-5 h-5 rounded border-gray-300 ${
-                          canSelect
-                            ? "text-blue-600 focus:ring-blue-500 cursor-pointer"
-                            : "text-gray-300 cursor-not-allowed"
-                        }`}
-                      />
-                    </div>
+                          ? "bg-orange-50"
+                          : "bg-white"
+                      }`}
+                    >
+                      {/* Checkbox */}
+                      <div className="p-4 flex items-center justify-center border-r border-gray-100">
+                        <input
+                          type="checkbox"
+                          checked={isSelected || isInDiscountItems}
+                          onChange={() => handleOrderSelect(orderId)}
+                          disabled={!canSelect}
+                          className={`w-5 h-5 rounded border-gray-300 ${
+                            canSelect
+                              ? "text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              : "text-gray-300 cursor-not-allowed"
+                          }`}
+                        />
+                      </div>
 
-                    {/* Order Info */}
-                    <div className="p-4 border-r border-gray-100">
-                      <p className="text-sm text-gray-900">
-                        <span className="font-semibold">Bestellnummer</span> - {order.posReference || order.orderId}
-                      </p>
-                      <p className="text-sm text-gray-900">
-                        <span className="font-semibold">Bestelldatum</span> - {formatDate(order.orderDate)}
-                      </p>
-                      <p className="text-sm mt-1 text-gray-600">
-                        <span className="font-semibold">Rabattfähig:</span> € {formatCurrency(discountEligibleAmount)}
-                      </p>
-                    </div>
+                      {/* Order Info */}
+                      <div className="p-4 border-r border-gray-100">
+                        <p className="text-sm text-gray-900">
+                          <span className="font-semibold">Bestellnummer</span> -{" "}
+                          {order.posReference || order.orderId}
+                        </p>
+                        <p className="text-sm text-gray-900">
+                          <span className="font-semibold">Bestelldatum</span> -{" "}
+                          {formatDate(order.orderDate)}
+                        </p>
+                        <p className="text-sm mt-1 text-gray-600">
+                          <span className="font-semibold">Rabattfähig:</span> €{" "}
+                          {formatCurrency(discountEligibleAmount)}
+                        </p>
+                      </div>
 
-                    {/* Product Images */}
-                    <div className="p-4 border-r border-gray-100">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {(order.items || []).slice(0, 4).map((item, idx) => (
-                          <img
-                            key={`${orderId}-item-${idx}`}
-                            src={item.image || "https://via.placeholder.com/50"}
-                            alt=""
-                            className="w-12 h-12 object-cover rounded border border-gray-200"
-                          />
-                        ))}
-                        {(order.items?.length || 0) > 4 && (
-                          <span className="text-sm font-medium text-gray-600">+{order.items.length - 4}</span>
+                      {/* Product Images */}
+                      <div className="p-4 border-r border-gray-100">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {(order.items || []).slice(0, 4).map((item, idx) => (
+                            <ProductImage
+                              key={`${orderId}-item-${idx}`}
+                              src={item.image}
+                              size="md"
+                            />
+                          ))}
+                          {(order.items?.length || 0) > 4 && (
+                            <span className="text-sm font-medium text-gray-600">
+                              +{order.items.length - 4}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Empty Group Column */}
+                      <div className="p-4 border-r border-gray-100 flex items-center justify-center">
+                        {/* Available orders have no group icon */}
+                      </div>
+
+                      {/* Status Column */}
+                      <div className="p-4 flex flex-col items-center justify-center bg-gray-50">
+                        {discountEligibleAmount > 0 ? (
+                          <>
+                            {isInDiscountItems && (
+                              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                                In Artikel
+                              </span>
+                            )}
+                            {isSelected && !isInDiscountItems && (
+                              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                                Ausgewählt
+                              </span>
+                            )}
+                            {isInEditingGroup &&
+                              !isSelected &&
+                              !isInDiscountItems && (
+                                <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
+                                  In Gruppe
+                                </span>
+                              )}
+                            {!isSelected &&
+                              !isInEditingGroup &&
+                              !isInDiscountItems && (
+                                <span className="text-xs text-gray-500">
+                                  Verfügbar
+                                </span>
+                              )}
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-400">
+                            Kein Rabatt
+                          </span>
                         )}
                       </div>
                     </div>
-
-                    {/* Empty Group Column */}
-                    <div className="p-4 border-r border-gray-100 flex items-center justify-center">
-                      {/* Available orders have no group icon */}
-                    </div>
-
-                    {/* Status Column */}
-                    <div className="p-4 flex flex-col items-center justify-center bg-gray-50">
-                      {discountEligibleAmount > 0 ? (
-                        <>
-                          {isInDiscountItems && (
-                            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                              In Artikel
-                            </span>
-                          )}
-                          {isSelected && !isInDiscountItems && (
-                            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                              Ausgewählt
-                            </span>
-                          )}
-                          {isInEditingGroup && !isSelected && !isInDiscountItems && (
-                            <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
-                              In Gruppe
-                            </span>
-                          )}
-                          {!isSelected && !isInEditingGroup && !isInDiscountItems && (
-                            <span className="text-xs text-gray-500">Verfügbar</span>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-xs text-gray-400">Kein Rabatt</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </>
         ) : (

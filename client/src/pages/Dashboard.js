@@ -16,16 +16,16 @@ const Dashboard = () => {
   ]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const itemsPerPage = 10;
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchStats = async () => {
       try {
-        const [statsRes, ordersRes] = await Promise.all([
-          dashboardAPI.getStats(),
-          dashboardAPI.getRecentOrders()
-        ]);
-
+        const statsRes = await dashboardAPI.getStats();
         if (statsRes.data.success) {
           const data = statsRes.data.data;
           setStats([
@@ -49,19 +49,31 @@ const Dashboard = () => {
             },
           ]);
         }
+      } catch (error) {
+        console.error("Failed to fetch stats:", error);
+      }
+    };
+    fetchStats();
+  }, []);
 
+  useEffect(() => {
+    const fetchOrders = async () => {
+      setLoading(true);
+      try {
+        const ordersRes = await dashboardAPI.getRecentOrders(currentPage, itemsPerPage);
         if (ordersRes.data.success) {
           setOrders(ordersRes.data.data);
+          setTotalPages(ordersRes.data.pagination.pages);
+          setTotalOrders(ordersRes.data.total);
         }
       } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
+        console.error("Failed to fetch orders:", error);
       } finally {
         setLoading(false);
       }
     };
-
-    fetchDashboardData();
-  }, []);
+    fetchOrders();
+  }, [currentPage]);
 
   const getStatusInfo = (order) => {
     if (order.state === "pending") return { status: "Ausstehend", statusType: "pending" };
@@ -177,6 +189,55 @@ const Dashboard = () => {
           })
         )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6">
+          <p className="text-sm text-gray-600">
+            Zeige {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalOrders)} von {totalOrders} Bestellungen
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Zurück
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(page => {
+                if (totalPages <= 7) return true;
+                if (page === 1 || page === totalPages) return true;
+                if (Math.abs(page - currentPage) <= 1) return true;
+                return false;
+              })
+              .map((page, index, array) => (
+                <React.Fragment key={page}>
+                  {index > 0 && array[index - 1] !== page - 1 && (
+                    <span className="px-2 text-gray-400">...</span>
+                  )}
+                  <button
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-4 py-2 text-sm font-medium rounded-lg ${
+                      currentPage === page
+                        ? "bg-blue-500 text-white"
+                        : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                </React.Fragment>
+              ))}
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Weiter
+            </button>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };
