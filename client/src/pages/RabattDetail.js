@@ -1033,7 +1033,7 @@ const RabattDetail = () => {
 
         return (
           <div
-            className={`rounded-xl border p-4 mb-6 transition-colors overflow-hidden sticky top-[120px] z-30 ${
+            className={`rounded-xl border p-4 mb-6 transition-colors overflow-hidden sticky z-30 ${
               isTooMany
                 ? "bg-red-50 border-red-200"
                 : isReadyForManual
@@ -1041,7 +1041,7 @@ const RabattDetail = () => {
                 : totalItems > 0
                 ? "bg-blue-50 border-blue-200"
                 : "bg-white border-gray-200"
-            }`}
+            } ${discountItems.length > 0 ? "top-[120px]" : "top-[64px]"}`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
