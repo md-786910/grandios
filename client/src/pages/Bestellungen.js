@@ -767,7 +767,7 @@ const Bestellungen = () => {
         </div>
         <button
           onClick={() => navigate("/bestellungen")}
-          className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+          className="px-6 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px]"
         >
           Zurück
         </button>

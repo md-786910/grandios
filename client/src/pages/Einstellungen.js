@@ -227,7 +227,7 @@ const Einstellungen = () => {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+            className="px-6 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px]"
           >
             {saving ? "Speichern..." : "Einstellungen speichern"}
           </button>
