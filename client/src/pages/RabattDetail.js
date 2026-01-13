@@ -1211,7 +1211,12 @@ const RabattDetail = () => {
                 : totalItems > 0
                 ? "bg-blue-50 border-blue-200"
                 : "bg-white border-gray-200"
-            } ${discountItems.length > 0 ? "top-[120px]" : "top-[64px]"}`}
+            } ${discountItems.length > 0
+                  ? pendingSectionCollapsed
+                  ? "top-[120px]"
+                  : "top-[210px]"
+                  : "top-[64px]"}`
+                }
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
