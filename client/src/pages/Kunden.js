@@ -226,7 +226,11 @@ const Kunden = () => {
                   </td>
                   <td className="px-6 py-4">
                     <button
-                      onClick={() => navigate(`/rabatt/${customer._id}`)}
+                      onClick={() =>
+                        navigate(`/rabatt/${customer._id}`, {
+                          state: { customerName: customer.name },
+                        })
+                      }
                       className="text-sm text-gray-500 hover:text-gray-900 hover:underline"
                     >
                       Anzeigen

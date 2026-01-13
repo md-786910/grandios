@@ -626,7 +626,12 @@ const Bestellungen = () => {
                         <td className="px-6 py-4">
                           <button
                             onClick={() =>
-                              navigate(`/bestellungen/${order._id}`)
+                              navigate(`/bestellungen/${order._id}`, {
+                                state: {
+                                  orderNumber: order.posReference,
+                                  customerName: order.customerId?.name,
+                                },
+                              })
                             }
                             className="text-sm text-gray-500 hover:text-gray-900 hover:underline"
                           >

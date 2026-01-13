@@ -88,8 +88,8 @@ const Rabatt = () => {
     return (value || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  const handleViewCustomer = (customerId) => {
-    navigate(`/rabatt/${customerId}`);
+  const handleViewCustomer = (customerId, customerName) => {
+    navigate(`/rabatt/${customerId}`, { state: { customerName } });
   };
 
   return (
@@ -227,7 +227,12 @@ const Rabatt = () => {
               {/* Action Button */}
               <div className="flex flex-col items-end gap-1">
                 <button
-                  onClick={() => handleViewCustomer(discount.id || discount.customerId)}
+                  onClick={() =>
+                    handleViewCustomer(
+                      discount.id || discount.customerId,
+                      discount.customerName
+                    )
+                  }
                   className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm"
                 >
                   Sicht
