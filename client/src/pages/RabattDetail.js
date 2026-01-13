@@ -1076,10 +1076,10 @@ const RabattDetail = () => {
                   ) : isTooMany ? (
                     <>
                       <span className="text-sm font-medium text-red-700">
-                        {totalItems} Bestellung{totalItems > 1 ? "en" : ""} ausgewählt
+                        {totalItems} Bestellungen/Gruppen sind für einen Rabatt erforderlich!{totalItems > 1 ? "en" : ""}
                       </span>
                       <span className="text-sm text-red-600 font-medium">
-                        • Maximal {MANUAL_MIN_ORDERS} Bestellungen/Gruppen erlaubt!
+                        • {MANUAL_MIN_ORDERS} Ausgewählte Bestellungen, die für Gruppenbestellungen in Frage kommen
                       </span>
                       {hasSelectedOrders && (
                         <span className="text-xs text-red-500">
@@ -1138,7 +1138,7 @@ const RabattDetail = () => {
                         onClick={() => setShowGroupConfirm(true)}
                         className={`px-3 py-1.5 text-white rounded-lg text-sm font-medium transition-colors ${
                           isTooMany
-                            ? "bg-orange-500 hover:bg-orange-600"
+                            ? "bg-blue-600 hover:bg-blue-700"
                             : "bg-blue-600 hover:bg-blue-700"
                         }`}
                         title="Ausgewählte Bestellungen als eine Gruppe zusammenfassen"
