@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import Layout from "../components/Layout";
 import ConfirmModal from "../components/ConfirmModal";
 import { discountsAPI } from "../services/api";
@@ -52,6 +53,10 @@ const RabattDetail = () => {
   const [deleteGroupId, setDeleteGroupId] = useState(null); // Group ID to delete (for confirmation modal)
   const [redeemGroupId, setRedeemGroupId] = useState(null); // Group ID to redeem (for confirmation modal)
   const [showGroupConfirm, setShowGroupConfirm] = useState(false); // Confirmation for "Als Gruppe" action
+  const [createGroupConfirm, setCreateGroupConfirm] = useState({
+    open: false,
+    mode: null,
+  });
   const [removeItemIndex, setRemoveItemIndex] = useState(null); // Index of item to remove (for confirmation modal)
   const [removeOrderFromItem, setRemoveOrderFromItem] = useState(null); // {itemIndex, orderId} for removing order from bundle
   const [expandedItems, setExpandedItems] = useState({}); // Track which added items are expanded: {index: true}
@@ -208,7 +213,9 @@ const RabattDetail = () => {
   // Cancel editing - remove only the edit items, keep other pending items
   const handleCancelEdit = () => {
     // Remove the selected edit items (they were auto-selected when editing started)
-    setDiscountItems((prev) => prev.filter((_, index) => !selectedDiscountItems.includes(index)));
+    setDiscountItems((prev) =>
+      prev.filter((_, index) => !selectedDiscountItems.includes(index))
+    );
     setEditingGroup(null);
     setSelectedOrders([]);
     setSelectedDiscountItems([]);
@@ -236,18 +243,17 @@ const RabattDetail = () => {
 
     setDiscountItems((prev) => {
       const newItems = [...prev, newItem];
-      // Auto-select the new item
-      setSelectedDiscountItems((prevSelected) => [...prevSelected, newItems.length - 1]);
       return newItems;
     });
     setSelectedOrders([]);
+    toast.success("Als Gruppe hinzugefügt.");
   };
-
 
   // Create discount group from both selected discountItems and selected orders
   const handleCreateDirectDiscountGroup = async () => {
     // Allow creation if we have either selected discountItems or selectedOrders
-    if (selectedOrders.length === 0 && selectedDiscountItems.length === 0) return;
+    if (selectedOrders.length === 0 && selectedDiscountItems.length === 0)
+      return;
 
     setCreatingGroup(true);
     setMessage({ type: "", text: "" });
@@ -287,9 +293,12 @@ const RabattDetail = () => {
         type: "success",
         text: "Rabattgruppe erfolgreich erstellt!",
       });
+      toast.success("Rabattgruppe erstellt.");
       setSelectedOrders([]);
       // Only remove selected discount items, keep unselected ones
-      setDiscountItems((prev) => prev.filter((_, index) => !selectedDiscountItems.includes(index)));
+      setDiscountItems((prev) =>
+        prev.filter((_, index) => !selectedDiscountItems.includes(index))
+      );
       setSelectedDiscountItems([]);
       await fetchData();
     } catch (error) {
@@ -308,13 +317,14 @@ const RabattDetail = () => {
     setDiscountItems((prev) => prev.filter((_, i) => i !== index));
     // Also remove from selected and adjust indices
     setSelectedDiscountItems((prev) =>
-      prev.filter((i) => i !== index).map((i) => i > index ? i - 1 : i)
+      prev.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i))
     );
     setExpandedItems((prev) => {
       const newExpanded = { ...prev };
       delete newExpanded[index];
       return newExpanded;
     });
+    toast.success("Artikel entfernt.");
   };
 
   // Remove individual order from a bundle item
@@ -337,6 +347,7 @@ const RabattDetail = () => {
         return newItems;
       }
     });
+    toast.success("Bestellung aus Gruppe entfernt.");
   };
 
   // Get all order IDs that are already in discount items
@@ -383,6 +394,7 @@ const RabattDetail = () => {
           type: "success",
           text: "Rabattgruppe erfolgreich aktualisiert!",
         });
+        toast.success("Rabattgruppe aktualisiert.");
       } else {
         // Create new group
         await discountsAPI.createGroup(
@@ -394,10 +406,13 @@ const RabattDetail = () => {
           type: "success",
           text: "Rabattgruppe erfolgreich erstellt!",
         });
+        toast.success("Rabattgruppe erstellt.");
       }
       setSelectedOrders([]);
       // Only remove selected discount items, keep unselected ones
-      setDiscountItems((prev) => prev.filter((_, index) => !selectedDiscountItems.includes(index)));
+      setDiscountItems((prev) =>
+        prev.filter((_, index) => !selectedDiscountItems.includes(index))
+      );
       setSelectedDiscountItems([]);
       setEditingGroup(null);
       await fetchData();
@@ -426,6 +441,7 @@ const RabattDetail = () => {
     try {
       await discountsAPI.redeemGroup(id, redeemGroupId);
       setMessage({ type: "success", text: "Rabatt erfolgreich eingelöst!" });
+      toast.success("Rabatt eingelöst.");
       setRedeemGroupId(null);
       await fetchData();
     } catch (error) {
@@ -450,6 +466,7 @@ const RabattDetail = () => {
     try {
       await discountsAPI.deleteGroup(id, deleteGroupId);
       setMessage({ type: "success", text: "Rabattgruppe gelöscht!" });
+      toast.success("Rabattgruppe gelöscht.");
       setDeleteGroupId(null);
       await fetchData();
     } catch (error) {
@@ -621,28 +638,57 @@ const RabattDetail = () => {
           >
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center">
-                <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="h-4 w-4 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
               </div>
-              <span className="text-sm font-semibold text-amber-900">Rabattgruppe wird erstellt</span>
+              <span className="text-sm font-semibold text-amber-900">
+                Rabattgruppe wird erstellt
+              </span>
               <span className="px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full text-xs font-medium">
-                {discountItems.reduce((sum, item) => sum + item.orders.length, 0)} Bestellungen
+                {discountItems.reduce(
+                  (sum, item) => sum + item.orders.length,
+                  0
+                )}{" "}
+                Bestellungen
               </span>
               {/* Collapse/Expand indicator */}
               <svg
-                className={`h-4 w-4 text-amber-700 transition-transform ${pendingSectionCollapsed ? "" : "rotate-180"}`}
+                className={`h-4 w-4 text-amber-700 transition-transform ${
+                  pendingSectionCollapsed ? "" : "rotate-180"
+                }`}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm font-bold text-amber-900">€ {formatCurrency(itemsDiscount)}</span>
+              <span className="text-sm font-bold text-amber-900">
+                € {formatCurrency(itemsDiscount)}
+              </span>
               <button
-                onClick={(e) => { e.stopPropagation(); setDiscountItems([]); setSelectedDiscountItems([]); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDiscountItems([]);
+                  setSelectedDiscountItems([]);
+                }}
                 className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
               >
                 Alle löschen
@@ -652,201 +698,325 @@ const RabattDetail = () => {
 
           {/* Items as collapsible rows - only show when not collapsed */}
           {!pendingSectionCollapsed && (
-          <div className="divide-y divide-gray-100">
-            {discountItems.map((item, index) => {
-              const itemKey = `pending_${index}`;
-              const isExpanded = expandedItems[itemKey];
-              const itemOrders = item.orders
-                .map((orderId) => orders.find((o) => (o._id || o.id) === orderId))
-                .filter(Boolean);
+            <div className="divide-y divide-gray-100">
+              {discountItems.map((item, index) => {
+                const itemKey = `pending_${index}`;
+                const isExpanded = expandedItems[itemKey];
+                const itemOrders = item.orders
+                  .map((orderId) =>
+                    orders.find((o) => (o._id || o.id) === orderId)
+                  )
+                  .filter(Boolean);
 
-              // Calculate totals
-              const itemEligible = itemOrders.reduce((sum, order) => {
-                const eligible = order?.items?.filter((i) => i.discountEligible) || [];
-                return sum + eligible.reduce((s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity), 0);
-              }, 0);
-              const itemDiscount = (itemEligible * settings.discountRate) / 100;
+                // Calculate totals
+                const itemEligible = itemOrders.reduce((sum, order) => {
+                  const eligible =
+                    order?.items?.filter((i) => i.discountEligible) || [];
+                  return (
+                    sum +
+                    eligible.reduce(
+                      (s, i) =>
+                        s + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
+                      0
+                    )
+                  );
+                }, 0);
+                const itemDiscount =
+                  (itemEligible * settings.discountRate) / 100;
 
-              // Toggle item expansion
-              const toggleItem = () => {
-                setExpandedItems((prev) => ({ ...prev, [itemKey]: !prev[itemKey] }));
-              };
+                // Toggle item expansion
+                const toggleItem = () => {
+                  setExpandedItems((prev) => ({
+                    ...prev,
+                    [itemKey]: !prev[itemKey],
+                  }));
+                };
 
-              // For single orders (not bundle)
-              if (!item.isBundle) {
-                const order = itemOrders[0];
-                if (!order) return null;
-                const orderId = order._id || order.id;
+                // For single orders (not bundle)
+                if (!item.isBundle) {
+                  const order = itemOrders[0];
+                  if (!order) return null;
+                  const orderId = order._id || order.id;
 
-                return (
-                  <div key={index} className="grid grid-cols-[60px_1fr_1fr_100px_80px] bg-white hover:bg-gray-50">
-                    <div className="p-3 flex items-center justify-center border-r border-gray-100">
-                      <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold flex items-center justify-center">
-                        {index + 1}
-                      </span>
-                    </div>
-                    <div className="p-3 border-r border-gray-100">
-                      <p className="text-sm text-gray-900">
-                        <span className="font-semibold">Bestellnummer</span> - {order.posReference || order.orderId}
-                      </p>
-                      <p className="text-sm text-gray-900">
-                        <span className="font-semibold">Bestelldatum</span> - {formatDate(order.orderDate)}
-                      </p>
-                      <p className="text-sm mt-1 text-gray-600">
-                        <span className="font-semibold">Rabattfähig:</span> € {formatCurrency(itemEligible)}
-                      </p>
-                    </div>
-                    <div className="p-3 border-r border-gray-100">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {(order.items || []).slice(0, 4).map((itm, imgIdx) => (
-                          <ProductImage key={`pending-${orderId}-${imgIdx}`} src={itm.image} size="sm" />
-                        ))}
-                        {(order.items?.length || 0) > 4 && (
-                          <span className="text-sm font-medium text-gray-600">+{order.items.length - 4}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="p-3 border-r border-gray-100 flex items-center justify-center">
-                      <span className="text-sm font-semibold text-green-600">€ {formatCurrency(itemDiscount)}</span>
-                    </div>
-                    <div className="p-3 flex items-center justify-center">
-                      <button
-                        onClick={() => setRemoveItemIndex(index)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        title="Entfernen"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
-
-              // For bundles (multiple orders grouped with "Als Gruppe")
-              return (
-                <div key={index} className="bg-white">
-                  {/* Collapsed bundle header */}
-                  <div
-                    className={`grid grid-cols-[60px_1fr_1fr_100px_80px] cursor-pointer hover:bg-amber-50 transition-colors ${
-                      isExpanded ? "bg-amber-50" : ""
-                    }`}
-                    onClick={toggleItem}
-                  >
-                    <div className="p-3 flex items-center justify-center border-r border-gray-100">
-                      <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold flex items-center justify-center">
-                        {index + 1}
-                      </span>
-                    </div>
-                    <div className="p-3 border-r border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                          Gruppenbestellung - {item.orders.length} Bestellungen
+                  return (
+                    <div
+                      key={index}
+                      className="grid grid-cols-[60px_1fr_1fr_100px_80px] bg-white hover:bg-gray-50"
+                    >
+                      <div className="p-3 flex items-center justify-center border-r border-gray-100">
+                        <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold flex items-center justify-center">
+                          {index + 1}
                         </span>
-                        <svg
-                          className={`h-4 w-4 text-gray-500 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                      </div>
+                      <div className="p-3 border-r border-gray-100">
+                        <p className="text-sm text-gray-900">
+                          <span className="font-semibold">Bestellnummer</span> -{" "}
+                          {order.posReference || order.orderId}
+                        </p>
+                        <p className="text-sm text-gray-900">
+                          <span className="font-semibold">Bestelldatum</span> -{" "}
+                          {formatDate(order.orderDate)}
+                        </p>
+                        <p className="text-sm mt-1 text-gray-600">
+                          <span className="font-semibold">Rabattfähig:</span> €{" "}
+                          {formatCurrency(itemEligible)}
+                        </p>
+                      </div>
+                      <div className="p-3 border-r border-gray-100">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {(order.items || [])
+                            .slice(0, 4)
+                            .map((itm, imgIdx) => (
+                              <ProductImage
+                                key={`pending-${orderId}-${imgIdx}`}
+                                src={itm.image}
+                                size="sm"
+                              />
+                            ))}
+                          {(order.items?.length || 0) > 4 && (
+                            <span className="text-sm font-medium text-gray-600">
+                              +{order.items.length - 4}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="p-3 border-r border-gray-100 flex items-center justify-center">
+                        <span className="text-sm font-semibold text-green-600">
+                          € {formatCurrency(itemDiscount)}
+                        </span>
+                      </div>
+                      <div className="p-3 flex items-center justify-center">
+                        <button
+                          onClick={() => setRemoveItemIndex(index)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Entfernen"
                         >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                      <p className="text-sm mt-1 text-gray-600">
-                        <span className="font-semibold">Rabattfähig:</span> € {formatCurrency(itemEligible)}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-0.5">Klicken zum Erweitern</p>
-                    </div>
-                    <div className="p-3 border-r border-gray-100">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {itemOrders.flatMap((o) => o.items || []).slice(0, 6).map((itm, imgIdx) => (
-                          <ProductImage key={`pending-bundle-${index}-${imgIdx}`} src={itm.image} size="sm" />
-                        ))}
-                        {itemOrders.flatMap((o) => o.items || []).length > 6 && (
-                          <span className="text-sm font-medium text-gray-600">
-                            +{itemOrders.flatMap((o) => o.items || []).length - 6}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="p-3 border-r border-gray-100 flex items-center justify-center">
-                      <span className="text-sm font-semibold text-green-600">€ {formatCurrency(itemDiscount)}</span>
-                    </div>
-                    <div className="p-3 flex items-center justify-center">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setRemoveItemIndex(index); }}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        title="Entfernen"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Expanded orders */}
-                  {isExpanded && (
-                    <div className="bg-blue-50/30 border-t border-blue-100">
-                      {itemOrders.map((order, orderIdx) => {
-                        const orderId = order._id || order.id;
-                        const orderEligible = (order?.items?.filter((i) => i.discountEligible) || []).reduce(
-                          (s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity), 0
-                        );
-                        const orderDiscount = (orderEligible * settings.discountRate) / 100;
-                        const isLastOrder = orderIdx === itemOrders.length - 1;
-
-                        return (
-                          <div
-                            key={orderId}
-                            className={`grid grid-cols-[60px_1fr_1fr_100px_80px] ml-4 ${!isLastOrder ? "border-b border-blue-100" : ""}`}
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
                           >
-                            <div className="p-2 flex items-center justify-center border-r border-blue-100">
-                              <span className="text-xs text-gray-400">{orderIdx + 1}</span>
-                            </div>
-                            <div className="p-2 border-r border-blue-100">
-                              <p className="text-sm text-gray-900">
-                                <span className="font-semibold">Bestellnummer</span> - {order.posReference || order.orderId}
-                              </p>
-                              <p className="text-sm text-gray-900">
-                                <span className="font-semibold">Bestelldatum</span> - {formatDate(order.orderDate)}
-                              </p>
-                              <p className="text-sm mt-1 text-gray-600">
-                                <span className="font-semibold">Rabattfähig:</span> € {formatCurrency(orderEligible)}
-                              </p>
-                            </div>
-                            <div className="p-2 border-r border-blue-100">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {(order.items || []).slice(0, 4).map((itm, imgIdx) => (
-                                  <ProductImage key={`${orderId}-item-${imgIdx}`} src={itm.image} size="sm" />
-                                ))}
-                                {(order.items?.length || 0) > 4 && (
-                                  <span className="text-sm font-medium text-gray-600">+{order.items.length - 4}</span>
-                                )}
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // For bundles (multiple orders grouped with "Als Gruppe")
+                return (
+                  <div key={index} className="bg-white">
+                    {/* Collapsed bundle header */}
+                    <div
+                      className={`grid grid-cols-[60px_1fr_1fr_100px_80px] cursor-pointer hover:bg-amber-50 transition-colors ${
+                        isExpanded ? "bg-amber-50" : ""
+                      }`}
+                      onClick={toggleItem}
+                    >
+                      <div className="p-3 flex items-center justify-center border-r border-gray-100">
+                        <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold flex items-center justify-center">
+                          {index + 1}
+                        </span>
+                      </div>
+                      <div className="p-3 border-r border-gray-100">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                            Gruppenbestellung - {item.orders.length}{" "}
+                            Bestellungen
+                          </span>
+                          <svg
+                            className={`h-4 w-4 text-gray-500 transition-transform ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 9l-7 7-7-7"
+                            />
+                          </svg>
+                        </div>
+                        <p className="text-sm mt-1 text-gray-600">
+                          <span className="font-semibold">Rabattfähig:</span> €{" "}
+                          {formatCurrency(itemEligible)}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          Klicken zum Erweitern
+                        </p>
+                      </div>
+                      <div className="p-3 border-r border-gray-100">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {itemOrders
+                            .flatMap((o) => o.items || [])
+                            .slice(0, 6)
+                            .map((itm, imgIdx) => (
+                              <ProductImage
+                                key={`pending-bundle-${index}-${imgIdx}`}
+                                src={itm.image}
+                                size="sm"
+                              />
+                            ))}
+                          {itemOrders.flatMap((o) => o.items || []).length >
+                            6 && (
+                            <span className="text-sm font-medium text-gray-600">
+                              +
+                              {itemOrders.flatMap((o) => o.items || []).length -
+                                6}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="p-3 border-r border-gray-100 flex items-center justify-center">
+                        <span className="text-sm font-semibold text-green-600">
+                          € {formatCurrency(itemDiscount)}
+                        </span>
+                      </div>
+                      <div className="p-3 flex items-center justify-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRemoveItemIndex(index);
+                          }}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Entfernen"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expanded orders */}
+                    {isExpanded && (
+                      <div className="bg-blue-50/30 border-t border-blue-100">
+                        {itemOrders.map((order, orderIdx) => {
+                          const orderId = order._id || order.id;
+                          const orderEligible = (
+                            order?.items?.filter((i) => i.discountEligible) ||
+                            []
+                          ).reduce(
+                            (s, i) =>
+                              s +
+                              (i.priceSubtotalIncl || i.priceUnit * i.quantity),
+                            0
+                          );
+                          const orderDiscount =
+                            (orderEligible * settings.discountRate) / 100;
+                          const isLastOrder =
+                            orderIdx === itemOrders.length - 1;
+
+                          return (
+                            <div
+                              key={orderId}
+                              className={`grid grid-cols-[60px_1fr_1fr_100px_80px] ml-4 ${
+                                !isLastOrder ? "border-b border-blue-100" : ""
+                              }`}
+                            >
+                              <div className="p-2 flex items-center justify-center border-r border-blue-100">
+                                <span className="text-xs text-gray-400">
+                                  {orderIdx + 1}
+                                </span>
+                              </div>
+                              <div className="p-2 border-r border-blue-100">
+                                <p className="text-sm text-gray-900">
+                                  <span className="font-semibold">
+                                    Bestellnummer
+                                  </span>{" "}
+                                  - {order.posReference || order.orderId}
+                                </p>
+                                <p className="text-sm text-gray-900">
+                                  <span className="font-semibold">
+                                    Bestelldatum
+                                  </span>{" "}
+                                  - {formatDate(order.orderDate)}
+                                </p>
+                                <p className="text-sm mt-1 text-gray-600">
+                                  <span className="font-semibold">
+                                    Rabattfähig:
+                                  </span>{" "}
+                                  € {formatCurrency(orderEligible)}
+                                </p>
+                              </div>
+                              <div className="p-2 border-r border-blue-100">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {(order.items || [])
+                                    .slice(0, 4)
+                                    .map((itm, imgIdx) => (
+                                      <ProductImage
+                                        key={`${orderId}-item-${imgIdx}`}
+                                        src={itm.image}
+                                        size="sm"
+                                      />
+                                    ))}
+                                  {(order.items?.length || 0) > 4 && (
+                                    <span className="text-sm font-medium text-gray-600">
+                                      +{order.items.length - 4}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="p-2 border-r border-blue-100 flex items-center justify-center">
+                                <span className="text-xs text-green-600">
+                                  € {formatCurrency(orderDiscount)}
+                                </span>
+                              </div>
+                              <div className="p-2 flex items-center justify-center">
+                                <button
+                                  onClick={() =>
+                                    setRemoveOrderFromItem({
+                                      itemIndex: index,
+                                      orderId,
+                                    })
+                                  }
+                                  className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                  title="Aus Gruppe entfernen"
+                                >
+                                  <svg
+                                    className="h-3.5 w-3.5"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M6 18L18 6M6 6l12 12"
+                                    />
+                                  </svg>
+                                </button>
                               </div>
                             </div>
-                            <div className="p-2 border-r border-blue-100 flex items-center justify-center">
-                              <span className="text-xs text-green-600">€ {formatCurrency(orderDiscount)}</span>
-                            </div>
-                            <div className="p-2 flex items-center justify-center">
-                              <button
-                                onClick={() => setRemoveOrderFromItem({ itemIndex: index, orderId })}
-                                className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                title="Aus Gruppe entfernen"
-                              >
-                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
@@ -1071,15 +1241,18 @@ const RabattDetail = () => {
                 <div className="flex items-center gap-3">
                   {totalItems === 0 ? (
                     <span className="text-sm text-gray-500">
-                      Wählen Sie genau {MANUAL_MIN_ORDERS} Bestellungen oder Gruppen
+                      Wählen Sie genau {MANUAL_MIN_ORDERS} Bestellungen oder
+                      Gruppen
                     </span>
                   ) : isTooMany ? (
                     <>
                       <span className="text-sm font-medium text-red-700">
-                        {totalItems} Bestellungen/Gruppen sind für einen Rabatt erforderlich!{totalItems > 1 ? "en" : ""}
+                        {totalItems} Bestellungen/Gruppen sind für einen Rabatt
+                        erforderlich!{totalItems > 1 ? "en" : ""}
                       </span>
                       <span className="text-sm text-red-600 font-medium">
-                        • {MANUAL_MIN_ORDERS} Ausgewählte Bestellungen, die für Gruppenbestellungen in Frage kommen
+                        • {MANUAL_MIN_ORDERS} Ausgewählte Bestellungen, die für
+                        Gruppenbestellungen in Frage kommen
                       </span>
                       {hasSelectedOrders && (
                         <span className="text-xs text-red-500">
@@ -1088,7 +1261,8 @@ const RabattDetail = () => {
                       )}
                       {hasSelectedItems && (
                         <span className="text-xs text-red-500">
-                          ({selectedItemsCount} Gruppe{selectedItemsCount > 1 ? "n" : ""})
+                          ({selectedItemsCount} Gruppe
+                          {selectedItemsCount > 1 ? "n" : ""})
                         </span>
                       )}
                     </>
@@ -1133,7 +1307,7 @@ const RabattDetail = () => {
               <div className="flex items-center gap-2">
                 {hasSelectedOrders && (
                   <>
-                    {selectedOrders.length > 1 && (
+                    {selectedOrders.length > 1 && !hasSelectedItems && (
                       <button
                         onClick={() => setShowGroupConfirm(true)}
                         className={`px-3 py-1.5 text-white rounded-lg text-sm font-medium transition-colors ${
@@ -1147,7 +1321,12 @@ const RabattDetail = () => {
                       </button>
                     )}
                     <button
-                      onClick={handleCreateDirectDiscountGroup}
+                      onClick={() =>
+                        setCreateGroupConfirm({
+                          open: true,
+                          mode: "direct",
+                        })
+                      }
                       disabled={creatingGroup || !isReadyForManual || isTooMany}
                       className={`px-4 py-1.5 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
                         isReadyForManual && !isTooMany
@@ -1161,7 +1340,11 @@ const RabattDetail = () => {
                     </button>
                     <button
                       onClick={() => setSelectedOrders([])}
-                      className={`px-2 py-1.5 text-sm ${isTooMany ? "text-red-500 hover:text-red-700" : "text-gray-500 hover:text-gray-700"}`}
+                      className={`px-2 py-1.5 text-sm ${
+                        isTooMany
+                          ? "text-red-500 hover:text-red-700"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
                     >
                       ✕
                     </button>
@@ -1169,8 +1352,21 @@ const RabattDetail = () => {
                 )}
                 {hasSelectedItems && !hasSelectedOrders && (
                   <>
+                    {editingGroup && (
+                      <button
+                        onClick={handleCancelEdit}
+                        className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+                      >
+                        Zurück
+                      </button>
+                    )}
                     <button
-                      onClick={handleCreateDiscountGroup}
+                      onClick={() =>
+                        setCreateGroupConfirm({
+                          open: true,
+                          mode: "selected",
+                        })
+                      }
                       disabled={creatingGroup || !isReadyForManual || isTooMany}
                       className={`px-4 py-1.5 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
                         isReadyForManual && !isTooMany
@@ -1186,15 +1382,19 @@ const RabattDetail = () => {
                         ? "Aktualisieren"
                         : "Rabattgruppe erstellen"}
                     </button>
-                    <button
+                    {/* <button
                       onClick={() => {
                         setSelectedDiscountItems([]);
                         setSelectedOrders([]);
                       }}
-                      className={`px-2 py-1.5 text-sm ${isTooMany ? "text-red-500 hover:text-red-700" : "text-gray-500 hover:text-gray-700"}`}
+                      className={`px-2 py-1.5 text-sm ${
+                        isTooMany
+                          ? "text-red-500 hover:text-red-700"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
                     >
                       ✕
-                    </button>
+                    </button> */}
                   </>
                 )}
               </div>
@@ -1259,13 +1459,15 @@ const RabattDetail = () => {
                   const groupTotalEligible = groupOrders.reduce(
                     (total, order) => {
                       const eligible =
-                        order.items?.filter((item) => item.discountEligible) || [];
+                        order.items?.filter((item) => item.discountEligible) ||
+                        [];
                       return (
                         total +
                         eligible.reduce(
                           (sum, item) =>
                             sum +
-                            (item.priceSubtotalIncl || item.priceUnit * item.quantity),
+                            (item.priceSubtotalIncl ||
+                              item.priceUnit * item.quantity),
                           0
                         )
                       );
@@ -1305,12 +1507,15 @@ const RabattDetail = () => {
                           </div>
                           <div className="p-4 border-r border-gray-100">
                             <div className="flex items-center gap-2">
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                isRedeemed
-                                  ? "bg-gray-100 text-gray-600"
-                                  : "bg-green-100 text-green-700"
-                              }`}>
-                                Gruppenbestellung - {groupOrders.length} Bestellungen
+                              <span
+                                className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  isRedeemed
+                                    ? "bg-gray-100 text-gray-600"
+                                    : "bg-green-100 text-green-700"
+                                }`}
+                              >
+                                Gruppenbestellung - {groupOrders.length}{" "}
+                                Bestellungen
                               </span>
                               <svg
                                 className={`h-4 w-4 text-gray-500 transition-transform ${
@@ -1329,7 +1534,9 @@ const RabattDetail = () => {
                               </svg>
                             </div>
                             <p className="text-sm mt-1 text-gray-600">
-                              <span className="font-semibold">Rabattfähig:</span>{" "}
+                              <span className="font-semibold">
+                                Rabattfähig:
+                              </span>{" "}
                               € {formatCurrency(groupTotalEligible)}
                             </p>
                             <p className="text-xs text-gray-400 mt-0.5">
@@ -1348,24 +1555,62 @@ const RabattDetail = () => {
                                     size="sm"
                                   />
                                 ))}
-                              {groupOrders.flatMap((o) => o.items || []).length > 6 && (
+                              {groupOrders.flatMap((o) => o.items || [])
+                                .length > 6 && (
                                 <span className="text-sm font-medium text-gray-600">
-                                  +{groupOrders.flatMap((o) => o.items || []).length - 6}
+                                  +
+                                  {groupOrders.flatMap((o) => o.items || [])
+                                    .length - 6}
                                 </span>
                               )}
                             </div>
                           </div>
                           <div className="p-4 flex items-center justify-center">
                             <svg
-                              className={`h-7 w-7 ${isRedeemed ? "text-gray-400" : "text-green-500"}`}
+                              className={`h-7 w-7 ${
+                                isRedeemed ? "text-gray-400" : "text-green-500"
+                              }`}
                               viewBox="0 0 24 24"
                               fill="none"
                               stroke="currentColor"
                               strokeWidth="1.5"
                             >
-                              <rect x="6" y="2" width="14" height="16" rx="2" className={isRedeemed ? "fill-gray-100 stroke-gray-400" : "fill-green-100 stroke-green-500"} />
-                              <rect x="4" y="4" width="14" height="16" rx="2" className={isRedeemed ? "fill-gray-50 stroke-gray-300" : "fill-green-50 stroke-green-400"} />
-                              <rect x="2" y="6" width="14" height="16" rx="2" className={isRedeemed ? "fill-white stroke-gray-400" : "fill-white stroke-green-500"} />
+                              <rect
+                                x="6"
+                                y="2"
+                                width="14"
+                                height="16"
+                                rx="2"
+                                className={
+                                  isRedeemed
+                                    ? "fill-gray-100 stroke-gray-400"
+                                    : "fill-green-100 stroke-green-500"
+                                }
+                              />
+                              <rect
+                                x="4"
+                                y="4"
+                                width="14"
+                                height="16"
+                                rx="2"
+                                className={
+                                  isRedeemed
+                                    ? "fill-gray-50 stroke-gray-300"
+                                    : "fill-green-50 stroke-green-400"
+                                }
+                              />
+                              <rect
+                                x="2"
+                                y="6"
+                                width="14"
+                                height="16"
+                                rx="2"
+                                className={
+                                  isRedeemed
+                                    ? "fill-white stroke-gray-400"
+                                    : "fill-white stroke-green-500"
+                                }
+                              />
                             </svg>
                           </div>
                         </div>
@@ -1383,104 +1628,164 @@ const RabattDetail = () => {
                                   bundleMap[bundleIdx] = [];
                                 }
                                 const orderData = orders.find(
-                                  (ord) => (ord._id || ord.id)?.toString() === (o.orderId?._id || o.orderId)?.toString()
+                                  (ord) =>
+                                    (ord._id || ord.id)?.toString() ===
+                                    (o.orderId?._id || o.orderId)?.toString()
                                 );
                                 if (orderData) {
-                                  bundleMap[bundleIdx].push({ ...orderData, discountAmount: o.discountAmount });
+                                  bundleMap[bundleIdx].push({
+                                    ...orderData,
+                                    discountAmount: o.discountAmount,
+                                  });
                                 }
                               });
 
                               // Sort by bundleIndex to maintain order
-                              const bundles = Object.entries(bundleMap).sort(([a], [b]) => Number(a) - Number(b));
+                              const bundles = Object.entries(bundleMap).sort(
+                                ([a], [b]) => Number(a) - Number(b)
+                              );
 
-                              return bundles.map(([bundleIdx, bundleOrders], bundleIndex) => {
-                                const isBundle = bundleOrders.length > 1;
-                                const isLastBundle = bundleIndex === bundles.length - 1;
+                              let orderCounter = 0;
+                              return bundles.map(
+                                ([bundleIdx, bundleOrders], bundleIndex) => {
+                                  const isBundle = bundleOrders.length > 1;
+                                  const isLastBundle =
+                                    bundleIndex === bundles.length - 1;
 
-                                // Calculate bundle total eligible
-                                const bundleEligible = bundleOrders.reduce((sum, order) => {
-                                  const eligible = order.items?.filter((i) => i.discountEligible) || [];
-                                  return sum + eligible.reduce((s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity), 0);
-                                }, 0);
-
-                                return (
-                                  <div
-                                    key={`bundle-${bundleIdx}`}
-                                    className={`${!isLastBundle ? "border-b-2 border-green-200" : ""}`}
-                                  >
-                                    {/* Bundle header if multiple orders */}
-                                    {isBundle && (
-                                      <div className="bg-blue-50 px-4 py-2 ml-4 border-b border-blue-100">
-                                        <div className="flex items-center gap-2">
-                                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                                            Gruppenbestellung - {bundleOrders.length} Bestellungen
-                                          </span>
-                                          <span className="text-xs text-gray-500">
-                                            Rabattfähig: € {formatCurrency(bundleEligible)}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Orders in this bundle */}
-                                    {bundleOrders.map((order, orderIdx) => {
-                                      const orderId = order._id || order.id;
-                                      const discountEligibleItems =
-                                        order.items?.filter((item) => item.discountEligible) || [];
-                                      const discountEligibleAmount = discountEligibleItems.reduce(
-                                        (sum, item) =>
-                                          sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
-                                        0
-                                      );
-                                      const isLastOrder = orderIdx === bundleOrders.length - 1;
-
+                                  // Calculate bundle total eligible
+                                  const bundleEligible = bundleOrders.reduce(
+                                    (sum, order) => {
+                                      const eligible =
+                                        order.items?.filter(
+                                          (i) => i.discountEligible
+                                        ) || [];
                                       return (
-                                        <div
-                                          key={orderId}
-                                          className={`grid grid-cols-[60px_1fr_1fr_100px] ${isBundle ? "ml-8" : "ml-4"} ${
-                                            !isLastOrder ? "border-b border-green-100" : ""
-                                          }`}
-                                        >
-                                          <div className="p-3 flex items-center justify-center border-r border-green-100">
-                                            <span className="text-xs text-gray-400">{orderIdx + 1}</span>
-                                          </div>
-                                          <div className="p-3 border-r border-green-100">
-                                            <p className="text-sm text-gray-900">
-                                              <span className="font-semibold">Bestellnummer</span> -{" "}
-                                              {order.posReference || order.orderId}
-                                            </p>
-                                            <p className="text-sm text-gray-900">
-                                              <span className="font-semibold">Bestelldatum</span> -{" "}
-                                              {formatDate(order.orderDate)}
-                                            </p>
-                                            <p className="text-sm mt-1 text-gray-600">
-                                              <span className="font-semibold">Rabattfähig:</span> €{" "}
-                                              {formatCurrency(discountEligibleAmount)}
-                                            </p>
-                                          </div>
-                                          <div className="p-3 border-r border-green-100">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                              {(order.items || []).slice(0, 4).map((item, imgIdx) => (
-                                                <ProductImage
-                                                  key={`${orderId}-item-${imgIdx}`}
-                                                  src={item.image}
-                                                  size="sm"
-                                                />
-                                              ))}
-                                              {(order.items?.length || 0) > 4 && (
-                                                <span className="text-sm font-medium text-gray-600">
-                                                  +{order.items.length - 4}
-                                                </span>
-                                              )}
-                                            </div>
-                                          </div>
-                                          <div className="p-3"></div>
-                                        </div>
+                                        sum +
+                                        eligible.reduce(
+                                          (s, i) =>
+                                            s +
+                                            (i.priceSubtotalIncl ||
+                                              i.priceUnit * i.quantity),
+                                          0
+                                        )
                                       );
-                                    })}
-                                  </div>
-                                );
-                              });
+                                    },
+                                    0
+                                  );
+
+                                  return (
+                                    <div
+                                      key={`bundle-${bundleIdx}`}
+                                      className={`${
+                                        !isLastBundle
+                                          ? "border-b-2 border-green-200"
+                                          : ""
+                                      }`}
+                                    >
+                                      {/* Bundle header if multiple orders */}
+                                      {isBundle && (
+                                        <div className="bg-blue-50 px-4 py-2  border-b border-blue-100">
+                                          <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                                              Gruppenbestellung -{" "}
+                                              {bundleOrders.length} Bestellungen
+                                            </span>
+                                            <span className="text-xs text-gray-500">
+                                              Rabattfähig: €{" "}
+                                              {formatCurrency(bundleEligible)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Orders in this bundle */}
+                                      {bundleOrders.map((order, orderIdx) => {
+                                        const orderId = order._id || order.id;
+                                        const orderNumber = orderCounter + 1;
+                                        orderCounter += 1;
+                                        const discountEligibleItems =
+                                          order.items?.filter(
+                                            (item) => item.discountEligible
+                                          ) || [];
+                                        const discountEligibleAmount =
+                                          discountEligibleItems.reduce(
+                                            (sum, item) =>
+                                              sum +
+                                              (item.priceSubtotalIncl ||
+                                                item.priceUnit * item.quantity),
+                                            0
+                                          );
+                                        const isLastOrder =
+                                          orderIdx === bundleOrders.length - 1;
+
+                                        return (
+                                          <div
+                                            key={orderId}
+                                            className={`grid grid-cols-[60px_1fr_1fr_100px] ${
+                                              isBundle ? "ml-8" : "ml-4"
+                                            } ${
+                                              !isLastOrder
+                                                ? "border-b border-green-100"
+                                                : ""
+                                            }`}
+                                          >
+                                            <div className="p-3 flex items-center justify-center border-r border-green-100">
+                                              <span className="text-xs text-gray-400">
+                                                {orderNumber}
+                                              </span>
+                                            </div>
+                                            <div className="p-3 border-r border-green-100">
+                                              <p className="text-sm text-gray-900">
+                                                <span className="font-semibold">
+                                                  Bestellnummer
+                                                </span>{" "}
+                                                -{" "}
+                                                {order.posReference ||
+                                                  order.orderId}
+                                              </p>
+                                              <p className="text-sm text-gray-900">
+                                                <span className="font-semibold">
+                                                  Bestelldatum
+                                                </span>{" "}
+                                                - {formatDate(order.orderDate)}
+                                              </p>
+                                              <p className="text-sm mt-1 text-gray-600">
+                                                <span className="font-semibold">
+                                                  Rabattfähig:
+                                                </span>{" "}
+                                                €{" "}
+                                                {formatCurrency(
+                                                  discountEligibleAmount
+                                                )}
+                                              </p>
+                                            </div>
+                                            <div className="p-3 border-r border-green-100">
+                                              <div className="flex items-center gap-2 flex-wrap">
+                                                {(order.items || [])
+                                                  .slice(0, 4)
+                                                  .map((item, imgIdx) => (
+                                                    <ProductImage
+                                                      key={`${orderId}-item-${imgIdx}`}
+                                                      src={item.image}
+                                                      size="sm"
+                                                    />
+                                                  ))}
+                                                {(order.items?.length || 0) >
+                                                  4 && (
+                                                  <span className="text-sm font-medium text-gray-600">
+                                                    +{order.items.length - 4}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <div className="p-3"></div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                }
+                              );
                             })()}
                           </div>
                         )}
@@ -1498,25 +1803,44 @@ const RabattDetail = () => {
                         ) : (
                           <>
                             <button
-                              onClick={(e) => { e.stopPropagation(); handleRedeemGroup(group._id); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRedeemGroup(group._id);
+                              }}
                               className="w-full px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition-colors font-medium"
                             >
                               Tilgen
                             </button>
                             <div className="flex gap-1 w-full">
                               <button
-                                onClick={(e) => { e.stopPropagation(); handleStartEditGroup(group); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStartEditGroup(group);
+                                }}
                                 className="flex-1 px-2 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-100 transition-colors"
                               >
                                 Bearbeiten
                               </button>
                               <button
-                                onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group._id); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteGroup(group._id);
+                                }}
                                 className="px-2 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs hover:bg-red-50 transition-colors"
                                 title="Rabattgruppe löschen"
                               >
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                <svg
+                                  className="h-4 w-4"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                  />
                                 </svg>
                               </button>
                             </div>
@@ -1535,72 +1859,131 @@ const RabattDetail = () => {
                 const itemKey = `table_pending_${itemIndex}`;
                 const isExpanded = expandedBundles[itemKey];
                 const itemOrders = item.orders
-                  .map((orderId) => orders.find((o) => (o._id || o.id) === orderId))
+                  .map((orderId) =>
+                    orders.find((o) => (o._id || o.id) === orderId)
+                  )
                   .filter(Boolean);
 
                 if (itemOrders.length === 0) return null;
 
                 // Calculate totals
                 const itemEligible = itemOrders.reduce((sum, order) => {
-                  const eligible = order?.items?.filter((i) => i.discountEligible) || [];
-                  return sum + eligible.reduce((s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity), 0);
+                  const eligible =
+                    order?.items?.filter((i) => i.discountEligible) || [];
+                  return (
+                    sum +
+                    eligible.reduce(
+                      (s, i) =>
+                        s + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
+                      0
+                    )
+                  );
                 }, 0);
 
                 // Toggle expansion
                 const togglePendingItem = () => {
-                  setExpandedBundles((prev) => ({ ...prev, [itemKey]: !prev[itemKey] }));
+                  setExpandedBundles((prev) => ({
+                    ...prev,
+                    [itemKey]: !prev[itemKey],
+                  }));
                 };
 
                 // Check if this item is selected
-                const isItemSelected = selectedDiscountItems.includes(itemIndex);
+                const isItemSelected =
+                  selectedDiscountItems.includes(itemIndex);
 
                 // For single orders
                 if (!item.isBundle) {
                   const order = itemOrders[0];
                   const orderId = order._id || order.id;
-                  const discountEligibleItems = order.items?.filter((i) => i.discountEligible) || [];
+                  const discountEligibleItems =
+                    order.items?.filter((i) => i.discountEligible) || [];
                   const discountEligibleAmount = discountEligibleItems.reduce(
-                    (sum, i) => sum + (i.priceSubtotalIncl || i.priceUnit * i.quantity), 0
+                    (sum, i) =>
+                      sum + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
+                    0
                   );
 
                   return (
-                    <div key={itemKey} className={`grid grid-cols-[60px_1fr_1fr_100px_160px] border-b border-gray-100 ${isItemSelected ? "bg-amber-50" : "bg-gray-50"}`}>
+                    <div
+                      key={itemKey}
+                      className={`grid grid-cols-[60px_1fr_1fr_100px_160px] border-b border-gray-100 ${
+                        isItemSelected ? "bg-amber-50" : "bg-gray-50"
+                      }`}
+                    >
                       <div className="p-4 flex items-center justify-center border-r border-gray-100">
                         <input
                           type="checkbox"
                           checked={isItemSelected}
-                          onChange={() => toggleDiscountItemSelection(itemIndex)}
-                          className={`w-5 h-5 rounded border-gray-300 cursor-pointer ${isItemSelected ? "text-amber-500 focus:ring-amber-500" : "text-gray-400 focus:ring-gray-400"}`}
+                          onChange={() =>
+                            toggleDiscountItemSelection(itemIndex)
+                          }
+                          className={`w-5 h-5 rounded border-gray-300 cursor-pointer ${
+                            isItemSelected
+                              ? "text-amber-500 focus:ring-amber-500"
+                              : "text-gray-400 focus:ring-gray-400"
+                          }`}
                         />
                       </div>
                       <div className="p-4 border-r border-gray-100">
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">Bestellnummer</span> - {order.posReference || order.orderId}
+                          <span className="font-semibold">Bestellnummer</span> -{" "}
+                          {order.posReference || order.orderId}
                         </p>
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">Bestelldatum</span> - {formatDate(order.orderDate)}
+                          <span className="font-semibold">Bestelldatum</span> -{" "}
+                          {formatDate(order.orderDate)}
                         </p>
                         <p className="text-sm mt-1 text-gray-600">
-                          <span className="font-semibold">Rabattfähig:</span> € {formatCurrency(discountEligibleAmount)}
+                          <span className="font-semibold">Rabattfähig:</span> €{" "}
+                          {formatCurrency(discountEligibleAmount)}
                         </p>
                       </div>
                       <div className="p-4 border-r border-gray-100">
                         <div className="flex items-center gap-2 flex-wrap">
                           {(order.items || []).slice(0, 4).map((itm, idx) => (
-                            <ProductImage key={`${orderId}-table-${idx}`} src={itm.image} size="md" />
+                            <ProductImage
+                              key={`${orderId}-table-${idx}`}
+                              src={itm.image}
+                              size="md"
+                            />
                           ))}
                           {(order.items?.length || 0) > 4 && (
-                            <span className="text-sm font-medium text-gray-600">+{order.items.length - 4}</span>
+                            <span className="text-sm font-medium text-gray-600">
+                              +{order.items.length - 4}
+                            </span>
                           )}
                         </div>
                       </div>
                       <div className="p-4 border-r border-gray-100 flex items-center justify-center">
-                        <svg className={`h-6 w-6 ${isItemSelected ? "text-amber-500" : "text-gray-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <svg
+                          className={`h-6 w-6 ${
+                            isItemSelected ? "text-amber-500" : "text-gray-400"
+                          }`}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
                         </svg>
                       </div>
-                      <div className={`p-4 flex flex-col items-center justify-center ${isItemSelected ? "bg-amber-100/50" : "bg-gray-100/50"}`}>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${isItemSelected ? "bg-amber-200 text-amber-800" : "bg-gray-200 text-gray-600"}`}>
+                      <div
+                        className={`p-4 flex flex-col items-center justify-center ${
+                          isItemSelected ? "bg-amber-100/50" : "bg-gray-100/50"
+                        }`}
+                      >
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            isItemSelected
+                              ? "bg-amber-200 text-amber-800"
+                              : "bg-gray-200 text-gray-600"
+                          }`}
+                        >
                           {isItemSelected ? "Ausgewählt" : "Nicht ausgewählt"}
                         </span>
                       </div>
@@ -1610,12 +1993,21 @@ const RabattDetail = () => {
 
                 // For bundles (multiple orders grouped with "Als Gruppe")
                 return (
-                  <div key={itemKey} className="border-b border-gray-200 bg-white">
+                  <div
+                    key={itemKey}
+                    className="border-b border-gray-200 bg-white"
+                  >
                     {/* Collapsed bundle header */}
                     <div className="flex">
                       <div
                         className={`flex-1 grid grid-cols-[60px_1fr_1fr_100px] cursor-pointer hover:bg-amber-50 transition-colors ${
-                          isExpanded ? (isItemSelected ? "bg-amber-50" : "bg-gray-100") : (isItemSelected ? "bg-amber-50/50" : "bg-gray-50")
+                          isExpanded
+                            ? isItemSelected
+                              ? "bg-amber-50"
+                              : "bg-gray-100"
+                            : isItemSelected
+                            ? "bg-amber-50/50"
+                            : "bg-gray-50"
                         }`}
                         onClick={togglePendingItem}
                       >
@@ -1623,52 +2015,135 @@ const RabattDetail = () => {
                           <input
                             type="checkbox"
                             checked={isItemSelected}
-                            onChange={(e) => { e.stopPropagation(); toggleDiscountItemSelection(itemIndex); }}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleDiscountItemSelection(itemIndex);
+                            }}
                             onClick={(e) => e.stopPropagation()}
-                            className={`w-5 h-5 rounded border-gray-300 cursor-pointer ${isItemSelected ? "text-amber-500 focus:ring-amber-500" : "text-gray-400 focus:ring-gray-400"}`}
+                            className={`w-5 h-5 rounded border-gray-300 cursor-pointer ${
+                              isItemSelected
+                                ? "text-amber-500 focus:ring-amber-500"
+                                : "text-gray-400 focus:ring-gray-400"
+                            }`}
                           />
                         </div>
                         <div className="p-4 border-r border-gray-100">
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-0.5 bg-amber-200 text-amber-800 rounded text-xs font-medium">
-                              Gruppenbestellung - {item.orders.length} Bestellungen
+                              Gruppenbestellung - {item.orders.length}{" "}
+                              Bestellungen
                             </span>
                             <svg
-                              className={`h-4 w-4 text-gray-500 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                              className={`h-4 w-4 text-gray-500 transition-transform ${
+                                isExpanded ? "rotate-180" : ""
+                              }`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
                             >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 9l-7 7-7-7"
+                              />
                             </svg>
                           </div>
                           <p className="text-sm mt-1 text-gray-600">
-                            <span className="font-semibold">Rabattfähig:</span> € {formatCurrency(itemEligible)}
+                            <span className="font-semibold">Rabattfähig:</span>{" "}
+                            € {formatCurrency(itemEligible)}
                           </p>
-                          <p className="text-xs text-gray-400 mt-0.5">Klicken zum Erweitern</p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            Klicken zum Erweitern
+                          </p>
                         </div>
                         <div className="p-4 border-r border-gray-100">
                           <div className="flex items-center gap-2 flex-wrap">
-                            {itemOrders.flatMap((o) => o.items || []).slice(0, 6).map((itm, imgIdx) => (
-                              <ProductImage key={`pending-table-${itemIndex}-${imgIdx}`} src={itm.image} size="sm" />
-                            ))}
-                            {itemOrders.flatMap((o) => o.items || []).length > 6 && (
+                            {itemOrders
+                              .flatMap((o) => o.items || [])
+                              .slice(0, 6)
+                              .map((itm, imgIdx) => (
+                                <ProductImage
+                                  key={`pending-table-${itemIndex}-${imgIdx}`}
+                                  src={itm.image}
+                                  size="sm"
+                                />
+                              ))}
+                            {itemOrders.flatMap((o) => o.items || []).length >
+                              6 && (
                               <span className="text-sm font-medium text-gray-600">
-                                +{itemOrders.flatMap((o) => o.items || []).length - 6}
+                                +
+                                {itemOrders.flatMap((o) => o.items || [])
+                                  .length - 6}
                               </span>
                             )}
                           </div>
                         </div>
                         <div className="p-4 flex items-center justify-center">
-                          <svg className={`h-7 w-7 ${isItemSelected ? "text-amber-500" : "text-gray-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                            <rect x="6" y="2" width="14" height="16" rx="2" className={isItemSelected ? "fill-amber-100 stroke-amber-500" : "fill-gray-100 stroke-gray-400"} />
-                            <rect x="4" y="4" width="14" height="16" rx="2" className={isItemSelected ? "fill-amber-50 stroke-amber-400" : "fill-gray-50 stroke-gray-300"} />
-                            <rect x="2" y="6" width="14" height="16" rx="2" className={isItemSelected ? "fill-white stroke-amber-500" : "fill-white stroke-gray-400"} />
+                          <svg
+                            className={`h-7 w-7 ${
+                              isItemSelected
+                                ? "text-amber-500"
+                                : "text-gray-400"
+                            }`}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                          >
+                            <rect
+                              x="6"
+                              y="2"
+                              width="14"
+                              height="16"
+                              rx="2"
+                              className={
+                                isItemSelected
+                                  ? "fill-amber-100 stroke-amber-500"
+                                  : "fill-gray-100 stroke-gray-400"
+                              }
+                            />
+                            <rect
+                              x="4"
+                              y="4"
+                              width="14"
+                              height="16"
+                              rx="2"
+                              className={
+                                isItemSelected
+                                  ? "fill-amber-50 stroke-amber-400"
+                                  : "fill-gray-50 stroke-gray-300"
+                              }
+                            />
+                            <rect
+                              x="2"
+                              y="6"
+                              width="14"
+                              height="16"
+                              rx="2"
+                              className={
+                                isItemSelected
+                                  ? "fill-white stroke-amber-500"
+                                  : "fill-white stroke-gray-400"
+                              }
+                            />
                           </svg>
                         </div>
                       </div>
 
                       {/* Status Column */}
-                      <div className={`w-[160px] flex flex-col items-center justify-center gap-2 p-4 border-l border-gray-200 ${isItemSelected ? "bg-amber-100/50" : "bg-gray-100/50"}`}>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${isItemSelected ? "bg-amber-200 text-amber-800" : "bg-gray-200 text-gray-600"}`}>
+                      <div
+                        className={`w-[160px] flex flex-col items-center justify-center gap-2 p-4 border-l border-gray-200 ${
+                          isItemSelected ? "bg-amber-100/50" : "bg-gray-100/50"
+                        }`}
+                      >
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            isItemSelected
+                              ? "bg-amber-200 text-amber-800"
+                              : "bg-gray-200 text-gray-600"
+                          }`}
+                        >
                           {isItemSelected ? "Ausgewählt" : "Nicht ausgewählt"}
                         </span>
                       </div>
@@ -1679,37 +2154,65 @@ const RabattDetail = () => {
                       <div className="bg-amber-50/30 border-t border-amber-100">
                         {itemOrders.map((order, orderIdx) => {
                           const orderId = order._id || order.id;
-                          const orderEligible = (order?.items?.filter((i) => i.discountEligible) || []).reduce(
-                            (s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity), 0
+                          const orderEligible = (
+                            order?.items?.filter((i) => i.discountEligible) ||
+                            []
+                          ).reduce(
+                            (s, i) =>
+                              s +
+                              (i.priceSubtotalIncl || i.priceUnit * i.quantity),
+                            0
                           );
-                          const isLastOrder = orderIdx === itemOrders.length - 1;
+                          const isLastOrder =
+                            orderIdx === itemOrders.length - 1;
 
                           return (
                             <div
                               key={orderId}
-                              className={`grid grid-cols-[60px_1fr_1fr_100px_160px] ml-4 ${!isLastOrder ? "border-b border-amber-100" : ""}`}
+                              className={`grid grid-cols-[60px_1fr_1fr_100px_160px] ml-4 ${
+                                !isLastOrder ? "border-b border-amber-100" : ""
+                              }`}
                             >
                               <div className="p-3 flex items-center justify-center border-r border-amber-100">
-                                <span className="text-xs text-gray-400">{orderIdx + 1}</span>
+                                <span className="text-xs text-gray-400">
+                                  {orderIdx + 1}
+                                </span>
                               </div>
                               <div className="p-3 border-r border-amber-100">
                                 <p className="text-sm text-gray-900">
-                                  <span className="font-semibold">Bestellnummer</span> - {order.posReference || order.orderId}
+                                  <span className="font-semibold">
+                                    Bestellnummer
+                                  </span>{" "}
+                                  - {order.posReference || order.orderId}
                                 </p>
                                 <p className="text-sm text-gray-900">
-                                  <span className="font-semibold">Bestelldatum</span> - {formatDate(order.orderDate)}
+                                  <span className="font-semibold">
+                                    Bestelldatum
+                                  </span>{" "}
+                                  - {formatDate(order.orderDate)}
                                 </p>
                                 <p className="text-sm mt-1 text-gray-600">
-                                  <span className="font-semibold">Rabattfähig:</span> € {formatCurrency(orderEligible)}
+                                  <span className="font-semibold">
+                                    Rabattfähig:
+                                  </span>{" "}
+                                  € {formatCurrency(orderEligible)}
                                 </p>
                               </div>
                               <div className="p-3 border-r border-amber-100">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  {(order.items || []).slice(0, 4).map((itm, imgIdx) => (
-                                    <ProductImage key={`${orderId}-expanded-${imgIdx}`} src={itm.image} size="sm" />
-                                  ))}
+                                  {(order.items || [])
+                                    .slice(0, 4)
+                                    .map((itm, imgIdx) => (
+                                      <ProductImage
+                                        key={`${orderId}-expanded-${imgIdx}`}
+                                        src={itm.image}
+                                        size="sm"
+                                      />
+                                    ))}
                                   {(order.items?.length || 0) > 4 && (
-                                    <span className="text-sm font-medium text-gray-600">+{order.items.length - 4}</span>
+                                    <span className="text-sm font-medium text-gray-600">
+                                      +{order.items.length - 4}
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -1743,7 +2246,8 @@ const RabattDetail = () => {
                   if (orderStatus.inGroup && !isInEditingGroup) return null;
 
                   // Check if order is already in discount items - SKIP these as they are shown above
-                  const isInDiscountItems = getOrdersInItems().includes(orderId);
+                  const isInDiscountItems =
+                    getOrdersInItems().includes(orderId);
                   if (isInDiscountItems) return null;
 
                   const canSelect =
@@ -1901,6 +2405,24 @@ const RabattDetail = () => {
         cancelText="Abbrechen"
       />
 
+      {/* Create Discount Group Confirmation Modal */}
+      <ConfirmModal
+        isOpen={createGroupConfirm.open}
+        onClose={() => setCreateGroupConfirm({ open: false, mode: null })}
+        onConfirm={() => {
+          if (createGroupConfirm.mode === "direct") {
+            handleCreateDirectDiscountGroup();
+          } else if (createGroupConfirm.mode === "selected") {
+            handleCreateDiscountGroup();
+          }
+          setCreateGroupConfirm({ open: false, mode: null });
+        }}
+        title="RABATTGRUPPE ERSTELLEN"
+        message="Möchten Sie diese Rabattgruppe erstellen?"
+        confirmText="Ja, erstellen"
+        cancelText="Abbrechen"
+      />
+
       {/* Remove Item Confirmation Modal */}
       <ConfirmModal
         isOpen={removeItemIndex !== null}
@@ -1920,7 +2442,10 @@ const RabattDetail = () => {
         isOpen={removeOrderFromItem !== null}
         onClose={() => setRemoveOrderFromItem(null)}
         onConfirm={() => {
-          handleRemoveOrderFromItem(removeOrderFromItem.itemIndex, removeOrderFromItem.orderId);
+          handleRemoveOrderFromItem(
+            removeOrderFromItem.itemIndex,
+            removeOrderFromItem.orderId
+          );
           setRemoveOrderFromItem(null);
         }}
         title="AUS GRUPPE ENTFERNEN"

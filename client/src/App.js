@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
@@ -16,6 +17,31 @@ function App() {
   return (
     <AuthProvider>
       <Router>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 3500,
+            style: {
+              background: "#111827",
+              color: "#F9FAFB",
+              borderRadius: "12px",
+              padding: "12px 16px",
+              fontSize: "13px",
+            },
+            success: {
+              style: {
+                background: "#16A34A",
+                color: "#F9FAFB",
+              },
+            },
+            error: {
+              style: {
+                background: "#DC2626",
+                color: "#F9FAFB",
+              },
+            },
+          }}
+        />
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
