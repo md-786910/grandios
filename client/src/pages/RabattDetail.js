@@ -1033,7 +1033,7 @@ const RabattDetail = () => {
 
         return (
           <div
-            className={`rounded-xl border p-4 mb-6 transition-colors ${
+            className={`rounded-xl border p-4 mb-6 transition-colors overflow-hidden sticky top-[120px] z-30 ${
               isTooMany
                 ? "bg-red-50 border-red-200"
                 : isReadyForManual
