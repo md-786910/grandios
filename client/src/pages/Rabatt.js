@@ -225,7 +225,7 @@ const Rabatt = () => {
               </div>
 
               {/* Action Button */}
-              <div className="flex flex-col items-end gap-1">
+              <div className="flex flex-col items-center gap-1">
                 <button
                   onClick={() =>
                     handleViewCustomer(

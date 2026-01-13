@@ -1853,7 +1853,7 @@ const RabattDetail = () => {
                                   e.stopPropagation();
                                   handleStartEditGroup(group);
                                 }}
-                                className="flex-1 px-2 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-gray-100 transition-colors"
+                                className="flex-1 px-2 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-[#22c55e] hover:text-white hover:border-none transition-all ease-in-out duration-300 font-medium"
                               >
                                 Bearbeiten
                               </button>

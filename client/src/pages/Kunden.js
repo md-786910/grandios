@@ -231,7 +231,7 @@ const Kunden = () => {
                           state: { customerName: customer.name },
                         })
                       }
-                      className="text-sm text-gray-500 hover:text-gray-900 hover:underline"
+                      className="px-4 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm"
                     >
                       Anzeigen
                     </button>
