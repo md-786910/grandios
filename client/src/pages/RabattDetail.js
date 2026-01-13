@@ -1211,12 +1211,13 @@ const RabattDetail = () => {
                 : totalItems > 0
                 ? "bg-blue-50 border-blue-200"
                 : "bg-white border-gray-200"
-            } ${discountItems.length > 0
-                  ? pendingSectionCollapsed
+            } ${
+              discountItems.length > 0
+                ? pendingSectionCollapsed
                   ? "top-[120px]"
                   : "top-[210px]"
-                  : "top-[64px]"}`
-                }
+                : "top-[64px]"
+            }`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -1439,8 +1440,9 @@ const RabattDetail = () => {
             </div>
 
             <div>
-              {/* Render discount groups - each group as single collapsed row with dropdown */}
-              {[...discountGroups]
+              {/* Render ACTIVE discount groups first */}
+              {discountGroups
+                .filter(group => group.status !== 'redeemed')
                 .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
                 .map((group) => {
                   const isRedeemed = group.status === "redeemed";
@@ -1519,8 +1521,7 @@ const RabattDetail = () => {
                                     : "bg-green-100 text-green-700"
                                 }`}
                               >
-                                Gruppenbestellung - {groupOrders.length}{" "}
-                                Bestellungen
+                                Rabattgruppe
                               </span>
                               <svg
                                 className={`h-4 w-4 text-gray-500 transition-transform ${
@@ -1650,12 +1651,18 @@ const RabattDetail = () => {
                                 ([a], [b]) => Number(a) - Number(b)
                               );
 
-                              let orderCounter = 0;
                               return bundles.map(
                                 ([bundleIdx, bundleOrders], bundleIndex) => {
                                   const isBundle = bundleOrders.length > 1;
                                   const isLastBundle =
                                     bundleIndex === bundles.length - 1;
+                                  const groupNumber = bundleIndex + 1;
+                                  const getSubIndex = (index) => {
+                                    if (index < 0 || index > 25) {
+                                      return String(index + 1);
+                                    }
+                                    return String.fromCharCode(97 + index);
+                                  };
 
                                   // Calculate bundle total eligible
                                   const bundleEligible = bundleOrders.reduce(
@@ -1704,89 +1711,113 @@ const RabattDetail = () => {
                                       )}
 
                                       {/* Orders in this bundle */}
-                                      {bundleOrders.map((order, orderIdx) => {
-                                        const orderId = order._id || order.id;
-                                        const orderNumber = orderCounter + 1;
-                                        orderCounter += 1;
-                                        const discountEligibleItems =
-                                          order.items?.filter(
-                                            (item) => item.discountEligible
-                                          ) || [];
-                                        const discountEligibleAmount =
-                                          discountEligibleItems.reduce(
-                                            (sum, item) =>
-                                              sum +
-                                              (item.priceSubtotalIncl ||
-                                                item.priceUnit * item.quantity),
-                                            0
-                                          );
-                                        const isLastOrder =
-                                          orderIdx === bundleOrders.length - 1;
+                                      <div className="ml-8 relative">
+                                        {/* Group number - centered and spanning all rows (for both bundles and single orders) */}
+                                        <div className="absolute left-0 top-0 bottom-0 w-[60px] flex items-center justify-center border-r border-green-100 bg-green-50/30 z-10">
+                                          <span className="text-base font-semibold text-gray-600">
+                                            {groupNumber}
+                                          </span>
+                                        </div>
 
-                                        return (
-                                          <div
-                                            key={orderId}
-                                            className={`grid grid-cols-[60px_1fr_1fr_100px] ${
-                                              isBundle ? "ml-8" : "ml-4"
-                                            } ${
-                                              !isLastOrder
-                                                ? "border-b border-green-100"
-                                                : ""
-                                            }`}
-                                          >
-                                            <div className="p-3 flex items-center justify-center border-r border-green-100">
-                                              <span className="text-xs text-gray-400">
-                                                {orderNumber}
-                                              </span>
-                                            </div>
-                                            <div className="p-3 border-r border-green-100">
-                                              <p className="text-sm text-gray-900">
-                                                <span className="font-semibold">
-                                                  Bestellnummer
-                                                </span>{" "}
-                                                -{" "}
-                                                {order.posReference ||
-                                                  order.orderId}
-                                              </p>
-                                              <p className="text-sm text-gray-900">
-                                                <span className="font-semibold">
-                                                  Bestelldatum
-                                                </span>{" "}
-                                                - {formatDate(order.orderDate)}
-                                              </p>
-                                              <p className="text-sm mt-1 text-gray-600">
-                                                <span className="font-semibold">
-                                                  Rabattfähig:
-                                                </span>{" "}
-                                                €{" "}
-                                                {formatCurrency(
-                                                  discountEligibleAmount
-                                                )}
-                                              </p>
-                                            </div>
-                                            <div className="p-3 border-r border-green-100">
-                                              <div className="flex items-center gap-2 flex-wrap">
-                                                {(order.items || [])
-                                                  .slice(0, 4)
-                                                  .map((item, imgIdx) => (
-                                                    <ProductImage
-                                                      key={`${orderId}-item-${imgIdx}`}
-                                                      src={item.image}
-                                                      size="sm"
-                                                    />
-                                                  ))}
-                                                {(order.items?.length || 0) >
-                                                  4 && (
+                                        {bundleOrders.map((order, orderIdx) => {
+                                          const orderId = order._id || order.id;
+                                          const orderSubLabel = isBundle
+                                            ? getSubIndex(orderIdx)
+                                            : "";
+                                          const discountEligibleItems =
+                                            order.items?.filter(
+                                              (item) => item.discountEligible
+                                            ) || [];
+                                          const discountEligibleAmount =
+                                            discountEligibleItems.reduce(
+                                              (sum, item) =>
+                                                sum +
+                                                (item.priceSubtotalIncl ||
+                                                  item.priceUnit *
+                                                    item.quantity),
+                                              0
+                                            );
+                                          const isLastOrder =
+                                            orderIdx ===
+                                            bundleOrders.length - 1;
+
+                                          return (
+                                            <div
+                                              key={orderId}
+                                              className={`grid ${
+                                                isBundle
+                                                  ? "grid-cols-[60px_40px_1fr_1fr_100px]"
+                                                  : "grid-cols-[60px_1fr_1fr_100px]"
+                                              } ${
+                                                !isLastOrder
+                                                  ? "border-b border-green-100"
+                                                  : ""
+                                              }`}
+                                            >
+                                              {/* First column - empty spacer (group number is absolutely positioned) */}
+                                              <div className="p-3 border-r border-transparent"></div>
+
+                                              {/* Sub-label column (only for bundles) */}
+                                              {isBundle && (
+                                                <div className="p-3 flex items-center justify-center border-r border-green-100">
                                                   <span className="text-sm font-medium text-gray-600">
-                                                    +{order.items.length - 4}
+                                                    {orderSubLabel}
                                                   </span>
-                                                )}
+                                                </div>
+                                              )}
+
+                                              {/* Order details */}
+                                              <div className="p-3 border-r border-green-100">
+                                                <p className="text-sm text-gray-900">
+                                                  <span className="font-semibold">
+                                                    Bestellnummer
+                                                  </span>{" "}
+                                                  -{" "}
+                                                  {order.posReference ||
+                                                    order.orderId}
+                                                </p>
+                                                <p className="text-sm text-gray-900">
+                                                  <span className="font-semibold">
+                                                    Bestelldatum
+                                                  </span>{" "}
+                                                  -{" "}
+                                                  {formatDate(order.orderDate)}
+                                                </p>
+                                                <p className="text-sm mt-1 text-gray-600">
+                                                  <span className="font-semibold">
+                                                    Rabattfähig:
+                                                  </span>{" "}
+                                                  €{" "}
+                                                  {formatCurrency(
+                                                    discountEligibleAmount
+                                                  )}
+                                                </p>
                                               </div>
+                                              <div className="p-3 border-r border-green-100">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                  {(order.items || [])
+                                                    .slice(0, 4)
+                                                    .map((item, imgIdx) => (
+                                                      <ProductImage
+                                                        key={`${orderId}-item-${imgIdx}`}
+                                                        src={item.image}
+                                                        size="sm"
+                                                      />
+                                                    ))}
+                                                  {(order.items?.length || 0) >
+                                                    4 && (
+                                                    <span className="text-sm font-medium text-gray-600">
+                                                      +{order.items.length - 4}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              {/* Empty column for discount amount placeholder */}
+                                              <div className="p-3"></div>
                                             </div>
-                                            <div className="p-3"></div>
-                                          </div>
-                                        );
-                                      })}
+                                          );
+                                        })}
+                                      </div>
                                     </div>
                                   );
                                 }
@@ -2361,6 +2392,378 @@ const RabattDetail = () => {
                             Kein Rabatt
                           </span>
                         )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {/* Render REDEEMED discount groups at bottom */}
+              {discountGroups
+                .filter((group) => group.status === "redeemed")
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                .map((group) => {
+                  const isBeingEdited = editingGroup?._id === group._id;
+                  const groupKey = group._id || group.id;
+                  const isExpanded = expandedBundles[groupKey];
+
+                  // Get orders that belong to this group
+                  const groupOrderIds =
+                    group.orders?.map((o) =>
+                      (o.orderId?._id || o.orderId)?.toString()
+                    ) || [];
+                  const groupOrders = orders.filter((order) =>
+                    groupOrderIds.includes((order._id || order.id)?.toString())
+                  );
+
+                  // If editing this group, don't show it here
+                  if (isBeingEdited) return null;
+
+                  // Calculate total eligible amount for entire group
+                  const groupTotalEligible = groupOrders.reduce(
+                    (total, order) => {
+                      const eligible =
+                        order.items?.filter((item) => item.discountEligible) ||
+                        [];
+                      return (
+                        total +
+                        eligible.reduce(
+                          (sum, item) =>
+                            sum +
+                            (item.priceSubtotalIncl ||
+                              item.priceUnit * item.quantity),
+                          0
+                        )
+                      );
+                    },
+                    0
+                  );
+
+                  // Toggle group expansion
+                  const toggleGroup = () => {
+                    setExpandedBundles((prev) => ({
+                      ...prev,
+                      [groupKey]: !prev[groupKey],
+                    }));
+                  };
+
+                  return (
+                    <div
+                      key={groupKey}
+                      className="border-b border-gray-200 bg-white flex"
+                    >
+                      {/* Left side - Header and Expanded content */}
+                      <div className="flex-1">
+                        {/* Collapsed Group Header */}
+                        <div
+                          className={`grid grid-cols-[60px_1fr_1fr_100px] cursor-pointer hover:bg-gray-50 transition-colors ${
+                            isExpanded ? "bg-green-50" : ""
+                          }`}
+                          onClick={toggleGroup}
+                        >
+                          <div className="p-4 flex items-center justify-center border-r border-gray-100">
+                            <input
+                              type="checkbox"
+                              checked={false}
+                              disabled
+                              className="w-5 h-5 rounded border-gray-300 cursor-not-allowed"
+                            />
+                          </div>
+                          <div className="p-4 border-r border-gray-100">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                                Rabattgruppe
+                              </span>
+                              <svg
+                                className={`h-4 w-4 text-gray-500 transition-transform ${
+                                  isExpanded ? "rotate-180" : ""
+                                }`}
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 9l-7 7-7-7"
+                                />
+                              </svg>
+                            </div>
+                            <p className="text-sm mt-1 text-gray-600">
+                              <span className="font-semibold">
+                                Rabattfähig:
+                              </span>{" "}
+                              € {formatCurrency(groupTotalEligible)}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              Klicken zum Erweitern
+                            </p>
+                          </div>
+                          <div className="p-4 border-r border-gray-100">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {groupOrders
+                                .flatMap((o) => o.items || [])
+                                .slice(0, 6)
+                                .map((item, imgIdx) => (
+                                  <ProductImage
+                                    key={`group-${groupKey}-item-${imgIdx}`}
+                                    src={item.image}
+                                    size="sm"
+                                  />
+                                ))}
+                              {groupOrders.flatMap((o) => o.items || [])
+                                .length > 6 && (
+                                <span className="text-sm font-medium text-gray-600">
+                                  +
+                                  {groupOrders.flatMap((o) => o.items || [])
+                                    .length - 6}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="p-4 flex items-center justify-center">
+                            <svg
+                              className="h-7 w-7 text-gray-400"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                            >
+                              <rect
+                                x="6"
+                                y="2"
+                                width="14"
+                                height="16"
+                                rx="2"
+                                className="fill-gray-100 stroke-gray-400"
+                              />
+                              <rect
+                                x="4"
+                                y="4"
+                                width="14"
+                                height="16"
+                                rx="2"
+                                className="fill-gray-50 stroke-gray-300"
+                              />
+                              <rect
+                                x="2"
+                                y="6"
+                                width="14"
+                                height="16"
+                                rx="2"
+                                className="fill-white stroke-gray-400"
+                              />
+                            </svg>
+                          </div>
+                        </div>
+
+                        {/* Expanded - Show orders grouped by bundleIndex */}
+                        {isExpanded && (
+                          <div className="bg-green-50/30 border-t border-green-100">
+                            {(() => {
+                              // Group orders by bundleIndex
+                              const bundleMap = {};
+                              group.orders?.forEach((o) => {
+                                const bundleIdx = Number(o.bundleIndex ?? 0);
+                                if (!bundleMap[bundleIdx]) {
+                                  bundleMap[bundleIdx] = [];
+                                }
+                                const orderData = orders.find(
+                                  (ord) =>
+                                    (ord._id || ord.id)?.toString() ===
+                                    (o.orderId?._id || o.orderId)?.toString()
+                                );
+                                if (orderData) {
+                                  bundleMap[bundleIdx].push({
+                                    ...orderData,
+                                    discountAmount: o.discountAmount,
+                                  });
+                                }
+                              });
+
+                              const bundles = Object.entries(bundleMap).sort(
+                                ([a], [b]) => Number(a) - Number(b)
+                              );
+
+                              return bundles.map(
+                                ([bundleIdx, bundleOrders], bundleIndex) => {
+                                  const isBundle = bundleOrders.length > 1;
+                                  const isLastBundle =
+                                    bundleIndex === bundles.length - 1;
+                                  const groupNumber = bundleIndex + 1;
+                                  const getSubIndex = (index) => {
+                                    if (index < 0 || index > 25) {
+                                      return String(index + 1);
+                                    }
+                                    return String.fromCharCode(97 + index);
+                                  };
+
+                                  const bundleEligible = bundleOrders.reduce(
+                                    (sum, order) => {
+                                      const eligible =
+                                        order.items?.filter(
+                                          (i) => i.discountEligible
+                                        ) || [];
+                                      return (
+                                        sum +
+                                        eligible.reduce(
+                                          (s, i) =>
+                                            s +
+                                            (i.priceSubtotalIncl ||
+                                              i.priceUnit * i.quantity),
+                                          0
+                                        )
+                                      );
+                                    },
+                                    0
+                                  );
+
+                                  return (
+                                    <div
+                                      key={`bundle-${bundleIdx}`}
+                                      className={`${
+                                        !isLastBundle
+                                          ? "border-b-2 border-green-200"
+                                          : ""
+                                      }`}
+                                    >
+                                      {isBundle && (
+                                        <div className="bg-blue-50 px-4 py-2 border-b border-blue-100">
+                                          <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                                              Gruppenbestellung -{" "}
+                                              {bundleOrders.length} Bestellungen
+                                            </span>
+                                            <span className="text-xs text-gray-500">
+                                              Rabattfähig: €{" "}
+                                              {formatCurrency(bundleEligible)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      <div className="ml-8 relative">
+                                        <div className="absolute left-0 top-0 bottom-0 w-[60px] flex items-center justify-center border-r border-green-100 bg-green-50/30 z-10">
+                                          <span className="text-base font-semibold text-gray-600">
+                                            {groupNumber}
+                                          </span>
+                                        </div>
+
+                                        {bundleOrders.map((order, orderIdx) => {
+                                          const orderId = order._id || order.id;
+                                          const orderSubLabel = isBundle
+                                            ? getSubIndex(orderIdx)
+                                            : "";
+                                          const discountEligibleItems =
+                                            order.items?.filter(
+                                              (item) => item.discountEligible
+                                            ) || [];
+                                          const discountEligibleAmount =
+                                            discountEligibleItems.reduce(
+                                              (sum, item) =>
+                                                sum +
+                                                (item.priceSubtotalIncl ||
+                                                  item.priceUnit *
+                                                    item.quantity),
+                                              0
+                                            );
+                                          const isLastOrder =
+                                            orderIdx ===
+                                            bundleOrders.length - 1;
+
+                                          return (
+                                            <div
+                                              key={orderId}
+                                              className={`grid ${
+                                                isBundle
+                                                  ? "grid-cols-[60px_40px_1fr_1fr_100px]"
+                                                  : "grid-cols-[60px_1fr_1fr_100px]"
+                                              } ${
+                                                !isLastOrder
+                                                  ? "border-b border-green-100"
+                                                  : ""
+                                              }`}
+                                            >
+                                              <div className="p-3 border-r border-transparent"></div>
+
+                                              {isBundle && (
+                                                <div className="p-3 flex items-center justify-center border-r border-green-100">
+                                                  <span className="text-sm font-medium text-gray-600">
+                                                    {orderSubLabel}
+                                                  </span>
+                                                </div>
+                                              )}
+
+                                              <div className="p-3 border-r border-green-100">
+                                                <p className="text-sm text-gray-900">
+                                                  <span className="font-semibold">
+                                                    Bestellnummer
+                                                  </span>{" "}
+                                                  -{" "}
+                                                  {order.posReference ||
+                                                    order.orderId}
+                                                </p>
+                                                <p className="text-sm text-gray-900">
+                                                  <span className="font-semibold">
+                                                    Bestelldatum
+                                                  </span>{" "}
+                                                  -{" "}
+                                                  {formatDate(order.orderDate)}
+                                                </p>
+                                                <p className="text-sm mt-1 text-gray-600">
+                                                  <span className="font-semibold">
+                                                    Rabattfähig:
+                                                  </span>{" "}
+                                                  €{" "}
+                                                  {formatCurrency(
+                                                    discountEligibleAmount
+                                                  )}
+                                                </p>
+                                              </div>
+                                              <div className="p-3 border-r border-green-100">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                  {(order.items || [])
+                                                    .slice(0, 4)
+                                                    .map((item, imgIdx) => (
+                                                      <ProductImage
+                                                        key={`${orderId}-item-${imgIdx}`}
+                                                        src={item.image}
+                                                        size="sm"
+                                                      />
+                                                    ))}
+                                                  {(order.items?.length || 0) >
+                                                    4 && (
+                                                    <span className="text-sm font-medium text-gray-600">
+                                                      +{order.items.length - 4}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              <div className="p-3"></div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Column */}
+                      <div className="w-[160px] flex flex-col items-center justify-center gap-2 p-4 border-l border-gray-200 bg-gray-50">
+                        <button
+                          disabled
+                          className="w-full px-4 py-2 bg-gray-400 text-white rounded-lg text-sm cursor-not-allowed"
+                        >
+                          Eingelöst
+                        </button>
+                        <span className="text-xs text-green-600 font-medium">
+                          € {formatCurrency(group.totalDiscount)}
+                        </span>
                       </div>
                     </div>
                   );
