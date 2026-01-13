@@ -63,6 +63,7 @@ const RabattDetail = () => {
   const [draftItemsLoaded, setDraftItemsLoaded] = useState(false); // Track if draft items have been loaded from DB
   const [selectedDiscountItems, setSelectedDiscountItems] = useState([]); // Track which discount items are selected (by index)
   const [pendingSectionCollapsed, setPendingSectionCollapsed] = useState(true); // Track if pending discount section is collapsed
+  const [clearAllConfirm, setClearAllConfirm] = useState(false); // Confirmation for clearing all discount items
 
   // Save discountItems to database whenever it changes (after initial load)
   useEffect(() => {
@@ -686,8 +687,7 @@ const RabattDetail = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setDiscountItems([]);
-                  setSelectedDiscountItems([]);
+                  setClearAllConfirm(true);
                 }}
                 className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
               >
@@ -2456,6 +2456,21 @@ const RabattDetail = () => {
         title="AUS GRUPPE ENTFERNEN"
         message="Möchten Sie diese Bestellung wirklich aus der Gruppe entfernen?"
         confirmText="Ja, entfernen"
+        cancelText="Abbrechen"
+      />
+
+      {/* Clear All Confirmation Modal */}
+      <ConfirmModal
+        isOpen={clearAllConfirm}
+        onClose={() => setClearAllConfirm(false)}
+        onConfirm={() => {
+          setDiscountItems([]);
+          setSelectedDiscountItems([]);
+          setClearAllConfirm(false);
+        }}
+        title="ALLE LÖSCHEN"
+        message="Möchten Sie wirklich alle Rabatt-Positionen entfernen? Diese Aktion kann nicht rückgängig gemacht werden."
+        confirmText="Ja, löschen"
         cancelText="Abbrechen"
       />
     </Layout>
