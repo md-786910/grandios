@@ -681,9 +681,9 @@ const RabattDetail = () => {
               </svg>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm font-bold text-amber-900">
+              {/* <span className="text-sm font-bold text-amber-900">
                 € {formatCurrency(itemsDiscount)}
-              </span>
+              </span> */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1442,7 +1442,7 @@ const RabattDetail = () => {
             <div>
               {/* Render ACTIVE discount groups first */}
               {discountGroups
-                .filter(group => group.status !== 'redeemed')
+                .filter((group) => group.status !== "redeemed")
                 .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
                 .map((group) => {
                   const isRedeemed = group.status === "redeemed";

@@ -21,13 +21,13 @@ const Dashboard = () => {
     },
     {
       label: "Anzahl der verkauften Artikel",
-      value: "0",
+      value: "€ 0,00",
       bgColor: "bg-green-100",
       labelColor: "text-green-500",
     },
     {
       label: "Gesamtzahl Der Kunden",
-      value: "0",
+      value: "€ 0,00",
       bgColor: "bg-red-100",
       labelColor: "text-red-500",
     },
@@ -55,13 +55,13 @@ const Dashboard = () => {
             },
             {
               label: "Anzahl der verkauften Artikel",
-              value: data.totalItemsSold.toString(),
+              value: `€ ${formatCurrency(data.totalItemsSold)}`,
               bgColor: "bg-green-100",
               labelColor: "text-green-500",
             },
             {
               label: "Gesamtzahl Der Kunden",
-              value: data.totalCustomers.toString(),
+              value: `${formatCurrency(data.totalCustomers)}`,
               bgColor: "bg-red-100",
               labelColor: "text-red-500",
             },

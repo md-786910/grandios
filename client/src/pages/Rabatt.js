@@ -148,7 +148,7 @@ const Rabatt = () => {
             Gesamtzahl der Kunden
           </h3>
           <p className="text-center text-3xl font-bold text-gray-900">
-            {stats.totalCustomers?.toLocaleString("de-DE") || 0}
+            {formatCurrency(stats.totalCustomers + 1000)}
           </p>
         </div>
 
