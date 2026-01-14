@@ -244,7 +244,7 @@ exports.generateCompleteTestData = async (req, res, next) => {
         const orderTimestamp = timestamp + o + 1000;
 
         const orderDate = new Date();
-        orderDate.setDate(orderDate.getDate() - randomBetween(0, 60));
+        // orderDate.setDate(orderDate.getDate() - randomBetween(0, 60));
 
         const order = await Order.create({
           orderId: orderTimestamp,
