@@ -46,44 +46,54 @@ const Bestellungen = () => {
     }
   };
 
-  const fetchCustomers = useCallback(async (page = 1, reset = false) => {
-    if (loadingCustomers) return;
+  const fetchCustomers = useCallback(
+    async (page = 1, reset = false) => {
+      if (loadingCustomers) return;
 
-    try {
-      setLoadingCustomers(true);
-      const limit = 20;
+      try {
+        setLoadingCustomers(true);
+        const limit = 20;
 
-      const response = await customersAPI.getAll(page, limit);
-      if (response.data.success) {
-        const newCustomers = response.data.data;
-        const total = response.data.total || 0;
-        const totalPages = response.data.pagination?.pages || 1;
+        const response = await customersAPI.getAll(page, limit);
+        if (response.data.success) {
+          const newCustomers = response.data.data;
+          const total = response.data.total || 0;
+          const totalPages = response.data.pagination?.pages || 1;
 
-        if (reset) {
-          setCustomers(newCustomers);
-        } else {
-          setCustomers(prev => [...prev, ...newCustomers]);
+          if (reset) {
+            setCustomers(newCustomers);
+          } else {
+            setCustomers((prev) => [...prev, ...newCustomers]);
+          }
+
+          setTotalCustomers(total);
+          setCustomerPage(page);
+          setHasMoreCustomers(page < totalPages);
         }
-
-        setTotalCustomers(total);
-        setCustomerPage(page);
-        setHasMoreCustomers(page < totalPages);
+      } catch (error) {
+        console.error("Failed to fetch customers:", error);
+      } finally {
+        setLoadingCustomers(false);
       }
-    } catch (error) {
-      console.error("Failed to fetch customers:", error);
-    } finally {
-      setLoadingCustomers(false);
-    }
-  }, [loadingCustomers]);
+    },
+    [loadingCustomers]
+  );
 
   // Handle scroll in customer dropdown to load more
-  const handleCustomerScroll = useCallback((e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
-    // Load more when scrolled near bottom (within 50px)
-    if (scrollHeight - scrollTop - clientHeight < 50 && hasMoreCustomers && !loadingCustomers) {
-      fetchCustomers(customerPage + 1);
-    }
-  }, [customerPage, hasMoreCustomers, loadingCustomers, fetchCustomers]);
+  const handleCustomerScroll = useCallback(
+    (e) => {
+      const { scrollTop, scrollHeight, clientHeight } = e.target;
+      // Load more when scrolled near bottom (within 50px)
+      if (
+        scrollHeight - scrollTop - clientHeight < 50 &&
+        hasMoreCustomers &&
+        !loadingCustomers
+      ) {
+        fetchCustomers(customerPage + 1);
+      }
+    },
+    [customerPage, hasMoreCustomers, loadingCustomers, fetchCustomers]
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -182,7 +192,10 @@ const Bestellungen = () => {
   };
 
   const formatCurrency = (value) => {
-    return (value || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (value || 0).toLocaleString("de-DE", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   };
 
   const formatDate = (date) => {
@@ -477,15 +490,37 @@ const Bestellungen = () => {
                       <div className="relative">
                         <div
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white cursor-pointer flex items-center justify-between"
-                          onClick={() => setCustomerDropdownOpen(!customerDropdownOpen)}
+                          onClick={() =>
+                            setCustomerDropdownOpen(!customerDropdownOpen)
+                          }
                         >
-                          <span className={selectedCustomer ? "text-gray-900" : "text-gray-500"}>
+                          <span
+                            className={
+                              selectedCustomer
+                                ? "text-gray-900"
+                                : "text-gray-500"
+                            }
+                          >
                             {selectedCustomer
-                              ? customers.find(c => c._id === selectedCustomer)?.name || "Kunde auswählen..."
+                              ? customers.find(
+                                  (c) => c._id === selectedCustomer
+                                )?.name || "Kunde auswählen..."
                               : "Kunde auswählen..."}
                           </span>
-                          <svg className={`h-4 w-4 text-gray-400 transition-transform ${customerDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          <svg
+                            className={`h-4 w-4 text-gray-400 transition-transform ${
+                              customerDropdownOpen ? "rotate-180" : ""
+                            }`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 9l-7 7-7-7"
+                            />
                           </svg>
                         </div>
                         {customerDropdownOpen && (
@@ -497,20 +532,40 @@ const Bestellungen = () => {
                             {customers.map((customer) => (
                               <div
                                 key={customer._id}
-                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 ${selectedCustomer === customer._id ? 'bg-purple-100' : ''}`}
+                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 ${
+                                  selectedCustomer === customer._id
+                                    ? "bg-purple-100"
+                                    : ""
+                                }`}
                                 onClick={() => {
                                   setSelectedCustomer(customer._id);
                                   setCustomerDropdownOpen(false);
                                 }}
                               >
-                                {sanitizeName(customer.name)} ({customer.ref || customer._id.slice(-6)})
+                                {sanitizeName(customer.name)} (
+                                {customer?.contactId || customer._id.slice(-6)})
                               </div>
                             ))}
                             {loadingCustomers && (
                               <div className="px-3 py-2 text-sm text-gray-500 flex items-center gap-2">
-                                <svg className="animate-spin h-4 w-4 text-purple-600" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                <svg
+                                  className="animate-spin h-4 w-4 text-purple-600"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                  />
+                                  <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                                  />
                                 </svg>
                                 Laden...
                               </div>
@@ -606,7 +661,7 @@ const Bestellungen = () => {
                               {sanitizeName(order.customerId?.name)}
                             </div>
                             <div className="text-sm text-gray-500">
-                              {order.customerId?.ref || "-"}
+                              {order.customerId?.contactId || "-"}
                             </div>
                           </div>
                         </td>
@@ -661,7 +716,7 @@ const Bestellungen = () => {
                       Zurück
                     </button>
                     {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter(page => {
+                      .filter((page) => {
                         if (totalPages <= 7) return true;
                         if (page === 1 || page === totalPages) return true;
                         if (Math.abs(page - currentPage) <= 1) return true;
@@ -784,12 +839,14 @@ const Bestellungen = () => {
             <div className="flex">
               <span className="text-gray-500 w-36">Kundennummer:</span>
               <span className="text-gray-900">
-                {customer.ref || `KUNDE-${customer.contactId}`}
+                {customer?.contactId || `KUNDE-${customer?.ref}`}
               </span>
             </div>
             <div className="flex">
               <span className="text-gray-500 w-36">Kundenname:</span>
-              <span className="text-gray-900">{sanitizeName(customer.name)}</span>
+              <span className="text-gray-900">
+                {sanitizeName(customer.name)}
+              </span>
             </div>
             <div className="flex">
               <span className="text-gray-500 w-36">E-Mail:</span>
@@ -907,10 +964,16 @@ const Bestellungen = () => {
               className="flex gap-4 p-4 border border-gray-200 rounded-xl"
             >
               <img
-                src={item.image || "https://11316b7a2b.wawi.onretail.eu/web/image/product.template/472/image_256"}
+                src={
+                  item.image ||
+                  "https://11316b7a2b.wawi.onretail.eu/web/image/product.template/472/image_256"
+                }
                 alt={item.productName}
                 className="w-24 h-24 object-cover rounded-lg"
-                onError={(e) => { e.target.src = "https://11316b7a2b.wawi.onretail.eu/web/image/product.template/472/image_256"; }}
+                onError={(e) => {
+                  e.target.src =
+                    "https://11316b7a2b.wawi.onretail.eu/web/image/product.template/472/image_256";
+                }}
               />
               <div className="flex-1">
                 <div className="flex items-start justify-between">

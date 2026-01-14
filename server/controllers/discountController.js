@@ -1,22 +1,23 @@
-const DiscountOrder = require('../models/DiscountOrder');
-const Discount = require('../models/Discount');
-const Customer = require('../models/Customer');
-const Order = require('../models/Order');
-const OrderLine = require('../models/OrderLine');
-const Product = require('../models/Product');
-const OrderCustomerQueue = require('../models/OrderCustomerQueue');
-const AppSettings = require('../models/AppSettings');
+const DiscountOrder = require("../models/DiscountOrder");
+const Discount = require("../models/Discount");
+const Customer = require("../models/Customer");
+const Order = require("../models/Order");
+const OrderLine = require("../models/OrderLine");
+const Product = require("../models/Product");
+const OrderCustomerQueue = require("../models/OrderCustomerQueue");
+const AppSettings = require("../models/AppSettings");
 
 // Helper to get order items from either orderLines (WAWI) or items (legacy)
 function getOrderItems(order) {
   // If order has populated orderLines, use them
   if (order.orderLines && order.orderLines.length > 0) {
-    return order.orderLines.map(line => ({
+    return order.orderLines.map((line) => ({
       orderLineId: line.orderLineId || line._id,
       productId: line.productId,
       productName: line.fullProductName || line.productName,
       priceUnit: line.priceUnit || 0,
-      priceSubtotalIncl: line.priceSubtotalIncl || (line.priceUnit * (line.quantity || 1)),
+      priceSubtotalIncl:
+        line.priceSubtotalIncl || line.priceUnit * (line.quantity || 1),
       quantity: line.quantity || 1,
       discount: line.discount || 0,
       discountEligible: line.discountEligible !== false,
@@ -35,23 +36,25 @@ exports.getDiscounts = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
-    const search = req.query.search || '';
+    const search = req.query.search || "";
     const startIndex = (page - 1) * limit;
     const settings = await AppSettings.getSettings();
 
     // Get unique customer IDs that have at least one discount group
-    const customersWithDiscountGroups = await DiscountOrder.distinct('customerId');
+    const customersWithDiscountGroups = await DiscountOrder.distinct(
+      "customerId"
+    );
 
     // Build query filter
     const query = { _id: { $in: customersWithDiscountGroups } };
 
     // Add search filter if provided
     if (search) {
-      const searchRegex = new RegExp(search, 'i');
+      const searchRegex = new RegExp(search, "i");
       query.$or = [
         { name: searchRegex },
         { email: searchRegex },
-        { ref: searchRegex },
+        // { ref: searchRegex },
       ];
       // Also search by contactId (numeric)
       const numericSearch = parseInt(search, 10);
@@ -74,11 +77,20 @@ exports.getDiscounts = async (req, res, next) => {
       customers.map(async (customer) => {
         const orders = await Order.find({ customerId: customer._id });
         const discount = await Discount.findOne({ customerId: customer._id });
-        const discountOrders = await DiscountOrder.find({ customerId: customer._id });
-        const queue = await OrderCustomerQueue.findOne({ customerId: customer._id });
+        const discountOrders = await DiscountOrder.find({
+          customerId: customer._id,
+        });
+        const queue = await OrderCustomerQueue.findOne({
+          customerId: customer._id,
+        });
 
-        const totalOrderValue = orders.reduce((sum, order) => sum + order.amountTotal, 0);
-        const availableGroups = discountOrders.filter(d => d.status === 'available');
+        const totalOrderValue = orders.reduce(
+          (sum, order) => sum + order.amountTotal,
+          0
+        );
+        const availableGroups = discountOrders.filter(
+          (d) => d.status === "available"
+        );
 
         return {
           id: customer._id,
@@ -94,29 +106,45 @@ exports.getDiscounts = async (req, res, next) => {
           discountGroupCount: discountOrders.length,
           // Queue information
           queueCount: queue ? queue.orderCount : 0,
-          queueStatus: queue ? queue.status : 'pending',
-          readyForDiscount: queue ? queue.orderCount >= settings.ordersRequiredForDiscount : false,
-          ordersRequiredForDiscount: settings.ordersRequiredForDiscount
+          queueStatus: queue ? queue.status : "pending",
+          readyForDiscount: queue
+            ? queue.orderCount >= settings.ordersRequiredForDiscount
+            : false,
+          ordersRequiredForDiscount: settings.ordersRequiredForDiscount,
         };
       })
     );
 
     // Calculate overall stats (only for customers with discount groups)
-    const allDiscounts = await Discount.find({ customerId: { $in: customersWithDiscountGroups } });
-    const allOrders = await Order.find({ customerId: { $in: customersWithDiscountGroups } });
-    const allQueues = await OrderCustomerQueue.find({ customerId: { $in: customersWithDiscountGroups } });
+    const allDiscounts = await Discount.find({
+      customerId: { $in: customersWithDiscountGroups },
+    });
+    const allOrders = await Order.find({
+      customerId: { $in: customersWithDiscountGroups },
+    });
+    const allQueues = await OrderCustomerQueue.find({
+      customerId: { $in: customersWithDiscountGroups },
+    });
     const allDiscountOrders = await DiscountOrder.find();
 
     const stats = {
       totalCustomers: total,
-      totalOrderValue: allOrders.reduce((sum, order) => sum + order.amountTotal, 0),
-      totalDiscountGranted: allDiscounts.reduce((sum, d) => sum + d.totalGranted, 0),
+      totalOrderValue: allOrders.reduce(
+        (sum, order) => sum + order.amountTotal,
+        0
+      ),
+      totalDiscountGranted: allDiscounts.reduce(
+        (sum, d) => sum + d.totalGranted,
+        0
+      ),
       totalDiscountGroups: allDiscountOrders.length,
       // Queue stats
       totalInQueue: allQueues.reduce((sum, q) => sum + q.orderCount, 0),
-      customersReadyForDiscount: allQueues.filter(q => q.orderCount >= settings.ordersRequiredForDiscount).length,
+      customersReadyForDiscount: allQueues.filter(
+        (q) => q.orderCount >= settings.ordersRequiredForDiscount
+      ).length,
       ordersRequiredForDiscount: settings.ordersRequiredForDiscount,
-      discountRate: settings.discountRate
+      discountRate: settings.discountRate,
     };
 
     res.status(200).json({
@@ -127,9 +155,9 @@ exports.getDiscounts = async (req, res, next) => {
       pagination: {
         page,
         limit,
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(total / limit),
       },
-      data: customersWithStats
+      data: customersWithStats,
     });
   } catch (err) {
     next(err);
@@ -146,7 +174,7 @@ exports.getCustomerDiscount = async (req, res, next) => {
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: 'Customer not found'
+        message: "Customer not found",
       });
     }
 
@@ -155,16 +183,16 @@ exports.getCustomerDiscount = async (req, res, next) => {
     // Get customer orders with orderLines populated
     const orders = await Order.find({ customerId: customer._id })
       .populate({
-        path: 'orderLines',
+        path: "orderLines",
         populate: {
-          path: 'productRef',
-          select: 'name image listPrice defaultCode',
+          path: "productRef",
+          select: "name image listPrice defaultCode",
         },
       })
       .sort({ orderDate: -1 });
 
     // Transform orders to include items from orderLines
-    const ordersWithItems = orders.map(order => {
+    const ordersWithItems = orders.map((order) => {
       const orderObj = order.toObject();
       // Add items array from orderLines for frontend compatibility
       orderObj.items = getOrderItems(order);
@@ -175,17 +203,26 @@ exports.getCustomerDiscount = async (req, res, next) => {
     const discount = await Discount.findOne({ customerId: customer._id });
 
     // Get discount order groups
-    const discountOrders = await DiscountOrder.find({ customerId: customer._id })
-      .populate('orders.orderId')
+    const discountOrders = await DiscountOrder.find({
+      customerId: customer._id,
+    })
+      .populate("orders.orderId")
       .sort({ createdAt: -1 });
 
     // Get queue information
-    const queue = await OrderCustomerQueue.findOne({ customerId: customer._id })
-      .populate('orders.orderId', 'posReference orderDate amountTotal items');
+    const queue = await OrderCustomerQueue.findOne({
+      customerId: customer._id,
+    }).populate("orders.orderId", "posReference orderDate amountTotal items");
 
     // Calculate stats
-    const totalOrderValue = orders.reduce((sum, order) => sum + order.amountTotal, 0);
-    const totalItems = ordersWithItems.reduce((sum, order) => sum + (order.items?.length || 0), 0);
+    const totalOrderValue = orders.reduce(
+      (sum, order) => sum + order.amountTotal,
+      0
+    );
+    const totalItems = ordersWithItems.reduce(
+      (sum, order) => sum + (order.items?.length || 0),
+      0
+    );
 
     res.status(200).json({
       success: true,
@@ -197,36 +234,39 @@ exports.getCustomerDiscount = async (req, res, next) => {
           customerName: customer.name,
           email: customer.email,
           phone: customer.phone || customer.mobile,
-          address: customer.address
+          address: customer.address,
         },
         stats: {
           totalOrderValue,
           totalDiscountGranted: discount ? discount.totalGranted : 0,
           discountBalance: discount ? discount.balance : 0,
           orderCount: orders.length,
-          itemCount: totalItems
+          itemCount: totalItems,
         },
         orders: ordersWithItems,
         discountGroups: discountOrders,
-        notes: customer.notes || '',
+        notes: customer.notes || "",
         // Queue information
-        queue: queue ? {
-          orderCount: queue.orderCount,
-          status: queue.status,
-          orders: queue.orders,
-          readyForDiscount: queue.orderCount >= settings.ordersRequiredForDiscount
-        } : {
-          orderCount: 0,
-          status: 'pending',
-          orders: [],
-          readyForDiscount: false
-        },
+        queue: queue
+          ? {
+              orderCount: queue.orderCount,
+              status: queue.status,
+              orders: queue.orders,
+              readyForDiscount:
+                queue.orderCount >= settings.ordersRequiredForDiscount,
+            }
+          : {
+              orderCount: 0,
+              status: "pending",
+              orders: [],
+              readyForDiscount: false,
+            },
         settings: {
           discountRate: settings.discountRate,
-          ordersRequiredForDiscount: settings.ordersRequiredForDiscount
+          ordersRequiredForDiscount: settings.ordersRequiredForDiscount,
         },
-        draftDiscountItems: customer.draftDiscountItems || []
-      }
+        draftDiscountItems: customer.draftDiscountItems || [],
+      },
     });
   } catch (err) {
     next(err);
@@ -247,44 +287,51 @@ exports.createDiscountGroup = async (req, res, next) => {
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: 'Customer not found'
+        message: "Customer not found",
       });
     }
 
     // Handle both old format (array of IDs) and new format (array of {orderId, bundleIndex})
     let ordersWithBundles;
-    if (orderIds.length > 0 && typeof orderIds[0] === 'object') {
+    if (orderIds.length > 0 && typeof orderIds[0] === "object") {
       // New format: [{orderId, bundleIndex}, ...]
       ordersWithBundles = orderIds;
     } else {
       // Old format: [id1, id2, id3] - each order is its own bundle
-      ordersWithBundles = orderIds.map((id, index) => ({ orderId: id, bundleIndex: index }));
+      ordersWithBundles = orderIds.map((id, index) => ({
+        orderId: id,
+        bundleIndex: index,
+      }));
     }
 
     // Validate at least one order is provided (manual creation allows any number)
     if (ordersWithBundles.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'At least one order is required'
+        message: "At least one order is required",
       });
     }
 
     // Get all order IDs
-    const allOrderIds = ordersWithBundles.map(o => o.orderId);
+    const allOrderIds = ordersWithBundles.map((o) => o.orderId);
 
     // Check if any orders are already in a discount group
-    const existingGroups = await DiscountOrder.find({ customerId: customer._id });
+    const existingGroups = await DiscountOrder.find({
+      customerId: customer._id,
+    });
     const usedOrderIds = new Set();
     const orderToGroupMap = new Map(); // Map orderId to group for removal
-    existingGroups.forEach(group => {
-      group.orders.forEach(o => {
+    existingGroups.forEach((group) => {
+      group.orders.forEach((o) => {
         const orderIdStr = o.orderId.toString();
         usedOrderIds.add(orderIdStr);
         orderToGroupMap.set(orderIdStr, group);
       });
     });
 
-    const alreadyUsedOrders = allOrderIds.filter(id => usedOrderIds.has(id.toString()));
+    const alreadyUsedOrders = allOrderIds.filter((id) =>
+      usedOrderIds.has(id.toString())
+    );
 
     if (alreadyUsedOrders.length > 0) {
       // If manual override is enabled, remove orders from existing groups
@@ -293,18 +340,23 @@ exports.createDiscountGroup = async (req, res, next) => {
         const groupsToUpdate = new Map();
         for (const orderId of alreadyUsedOrders) {
           const group = orderToGroupMap.get(orderId.toString());
-          if (group && group.status !== 'redeemed') {
+          if (group && group.status !== "redeemed") {
             if (!groupsToUpdate.has(group._id.toString())) {
-              groupsToUpdate.set(group._id.toString(), { group, orderIdsToRemove: [] });
+              groupsToUpdate.set(group._id.toString(), {
+                group,
+                orderIdsToRemove: [],
+              });
             }
-            groupsToUpdate.get(group._id.toString()).orderIdsToRemove.push(orderId.toString());
+            groupsToUpdate
+              .get(group._id.toString())
+              .orderIdsToRemove.push(orderId.toString());
           }
         }
 
         // Update or delete existing groups
         for (const [, { group, orderIdsToRemove }] of groupsToUpdate) {
           const remainingOrders = group.orders.filter(
-            o => !orderIdsToRemove.includes(o.orderId.toString())
+            (o) => !orderIdsToRemove.includes(o.orderId.toString())
           );
 
           if (remainingOrders.length === 0) {
@@ -312,50 +364,56 @@ exports.createDiscountGroup = async (req, res, next) => {
             await DiscountOrder.findByIdAndDelete(group._id);
           } else {
             // Update group with remaining orders and recalculate discount
-            const newTotalDiscount = remainingOrders.reduce((sum, o) => sum + (o.discountAmount || 0), 0);
+            const newTotalDiscount = remainingOrders.reduce(
+              (sum, o) => sum + (o.discountAmount || 0),
+              0
+            );
             await DiscountOrder.findByIdAndUpdate(group._id, {
               orders: remainingOrders,
-              totalDiscount: newTotalDiscount
+              totalDiscount: newTotalDiscount,
             });
           }
         }
       } else {
         return res.status(400).json({
           success: false,
-          message: 'Some orders are already in a discount group'
+          message: "Some orders are already in a discount group",
         });
       }
     }
 
     // Get orders with orderLines populated
-    const orders = await Order.find({ _id: { $in: allOrderIds } })
-      .populate({
-        path: 'orderLines',
-        populate: {
-          path: 'productRef',
-          select: 'name image listPrice',
-        },
-      });
+    const orders = await Order.find({ _id: { $in: allOrderIds } }).populate({
+      path: "orderLines",
+      populate: {
+        path: "productRef",
+        select: "name image listPrice",
+      },
+    });
 
     if (orders.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'No valid orders found'
+        message: "No valid orders found",
       });
     }
 
     // Create a map of orderId -> bundleIndex
     const bundleMap = {};
-    ordersWithBundles.forEach(o => {
+    ordersWithBundles.forEach((o) => {
       bundleMap[o.orderId.toString()] = o.bundleIndex;
     });
 
     // Calculate discount for each order
-    const orderItems = orders.map(order => {
+    const orderItems = orders.map((order) => {
       const items = getOrderItems(order);
       const eligibleAmount = items
-        .filter(item => item.discountEligible)
-        .reduce((sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0);
+        .filter((item) => item.discountEligible)
+        .reduce(
+          (sum, item) =>
+            sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
+          0
+        );
 
       const discountAmount = (eligibleAmount * effectiveDiscountRate) / 100;
 
@@ -365,7 +423,7 @@ exports.createDiscountGroup = async (req, res, next) => {
         amount: eligibleAmount,
         discountRate: effectiveDiscountRate,
         discountAmount,
-        bundleIndex: bundleMap[order._id.toString()] || 0
+        bundleIndex: bundleMap[order._id.toString()] || 0,
       };
     });
 
@@ -374,7 +432,7 @@ exports.createDiscountGroup = async (req, res, next) => {
       customerId: customer._id,
       partnerId: customer.contactId,
       orders: orderItems,
-      status: 'available'
+      status: "available",
     });
 
     // Update customer's discount wallet
@@ -383,20 +441,21 @@ exports.createDiscountGroup = async (req, res, next) => {
     if (!discount) {
       discount = await Discount.create({
         customerId: customer._id,
-        partnerId: customer.contactId
+        partnerId: customer.contactId,
       });
     }
 
     await discount.addDiscount(discountOrder.totalDiscount);
 
     // Update customer's total discount granted and clear draft items
-    customer.totalDiscountGranted = (customer.totalDiscountGranted || 0) + discountOrder.totalDiscount;
+    customer.totalDiscountGranted =
+      (customer.totalDiscountGranted || 0) + discountOrder.totalDiscount;
     customer.draftDiscountItems = []; // Clear draft items after creating group
     await customer.save();
 
     res.status(201).json({
       success: true,
-      data: discountOrder
+      data: discountOrder,
     });
   } catch (err) {
     next(err);
@@ -417,15 +476,15 @@ exports.updateDiscountGroup = async (req, res, next) => {
     if (!discountOrder) {
       return res.status(404).json({
         success: false,
-        message: 'Discount group not found'
+        message: "Discount group not found",
       });
     }
 
     // Cannot edit redeemed groups
-    if (discountOrder.status === 'redeemed') {
+    if (discountOrder.status === "redeemed") {
       return res.status(400).json({
         success: false,
-        message: 'Cannot edit a redeemed discount group'
+        message: "Cannot edit a redeemed discount group",
       });
     }
 
@@ -434,51 +493,58 @@ exports.updateDiscountGroup = async (req, res, next) => {
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: 'Customer not found'
+        message: "Customer not found",
       });
     }
 
     // Handle both old format (array of IDs) and new format (array of {orderId, bundleIndex})
     let ordersWithBundles;
-    if (orderIds.length > 0 && typeof orderIds[0] === 'object') {
+    if (orderIds.length > 0 && typeof orderIds[0] === "object") {
       // New format: [{orderId, bundleIndex}, ...]
       ordersWithBundles = orderIds;
     } else {
       // Old format: [id1, id2, id3] - each order is its own bundle
-      ordersWithBundles = orderIds.map((id, index) => ({ orderId: id, bundleIndex: index }));
+      ordersWithBundles = orderIds.map((id, index) => ({
+        orderId: id,
+        bundleIndex: index,
+      }));
     }
 
     // Validate at least one order is provided (manual editing allows any number)
     if (ordersWithBundles.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'At least one order is required'
+        message: "At least one order is required",
       });
     }
 
     // Get all order IDs
-    const allOrderIds = ordersWithBundles.map(o => o.orderId);
+    const allOrderIds = ordersWithBundles.map((o) => o.orderId);
 
     // Get current orders in this group
-    const currentOrderIds = discountOrder.orders.map(o => o.orderId.toString());
+    const currentOrderIds = discountOrder.orders.map((o) =>
+      o.orderId.toString()
+    );
 
     // Check if any of the new orders are already in OTHER discount groups
     const otherGroups = await DiscountOrder.find({
       customerId: customer._id,
-      _id: { $ne: discountOrder._id }
+      _id: { $ne: discountOrder._id },
     });
     const usedOrderIds = new Set();
-    otherGroups.forEach(group => {
-      group.orders.forEach(o => {
+    otherGroups.forEach((group) => {
+      group.orders.forEach((o) => {
         usedOrderIds.add(o.orderId.toString());
       });
     });
 
-    const alreadyUsedOrders = allOrderIds.filter(id => usedOrderIds.has(id.toString()));
+    const alreadyUsedOrders = allOrderIds.filter((id) =>
+      usedOrderIds.has(id.toString())
+    );
     if (alreadyUsedOrders.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Some orders are already in another discount group'
+        message: "Some orders are already in another discount group",
       });
     }
 
@@ -486,34 +552,37 @@ exports.updateDiscountGroup = async (req, res, next) => {
     const oldTotalDiscount = discountOrder.totalDiscount;
 
     // Get new orders with orderLines populated
-    const orders = await Order.find({ _id: { $in: allOrderIds } })
-      .populate({
-        path: 'orderLines',
-        populate: {
-          path: 'productRef',
-          select: 'name image listPrice',
-        },
-      });
+    const orders = await Order.find({ _id: { $in: allOrderIds } }).populate({
+      path: "orderLines",
+      populate: {
+        path: "productRef",
+        select: "name image listPrice",
+      },
+    });
 
     if (orders.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'No valid orders found'
+        message: "No valid orders found",
       });
     }
 
     // Create a map of orderId -> bundleIndex
     const bundleMap = {};
-    ordersWithBundles.forEach(o => {
+    ordersWithBundles.forEach((o) => {
       bundleMap[o.orderId.toString()] = o.bundleIndex;
     });
 
     // Calculate discount for each order
-    const orderItems = orders.map(order => {
+    const orderItems = orders.map((order) => {
       const items = getOrderItems(order);
       const eligibleAmount = items
-        .filter(item => item.discountEligible)
-        .reduce((sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0);
+        .filter((item) => item.discountEligible)
+        .reduce(
+          (sum, item) =>
+            sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
+          0
+        );
 
       const discountAmount = (eligibleAmount * effectiveDiscountRate) / 100;
 
@@ -523,7 +592,7 @@ exports.updateDiscountGroup = async (req, res, next) => {
         amount: eligibleAmount,
         discountRate: effectiveDiscountRate,
         discountAmount,
-        bundleIndex: bundleMap[order._id.toString()] || 0
+        bundleIndex: bundleMap[order._id.toString()] || 0,
       };
     });
 
@@ -546,13 +615,14 @@ exports.updateDiscountGroup = async (req, res, next) => {
 
     // Update customer's total discount granted
     if (discountDifference !== 0) {
-      customer.totalDiscountGranted = (customer.totalDiscountGranted || 0) + discountDifference;
+      customer.totalDiscountGranted =
+        (customer.totalDiscountGranted || 0) + discountDifference;
       await customer.save();
     }
 
     res.status(200).json({
       success: true,
-      data: discountOrder
+      data: discountOrder,
     });
   } catch (err) {
     next(err);
@@ -569,24 +639,26 @@ exports.redeemDiscountGroup = async (req, res, next) => {
     if (!discountOrder) {
       return res.status(404).json({
         success: false,
-        message: 'Discount group not found'
+        message: "Discount group not found",
       });
     }
 
-    if (discountOrder.status === 'redeemed') {
+    if (discountOrder.status === "redeemed") {
       return res.status(400).json({
         success: false,
-        message: 'Discount already redeemed'
+        message: "Discount already redeemed",
       });
     }
 
     // Update status to redeemed
-    discountOrder.status = 'redeemed';
+    discountOrder.status = "redeemed";
     discountOrder.redeemedAt = new Date();
     await discountOrder.save();
 
     // Update customer wallet
-    const discount = await Discount.findOne({ customerId: discountOrder.customerId });
+    const discount = await Discount.findOne({
+      customerId: discountOrder.customerId,
+    });
 
     if (discount) {
       await discount.redeemDiscount(discountOrder.totalDiscount);
@@ -598,13 +670,14 @@ exports.redeemDiscountGroup = async (req, res, next) => {
       // Add redeemed discount to customer wallet
       customer.wallet = (customer.wallet || 0) + discountOrder.totalDiscount;
       // Track total redeemed amount
-      customer.totalDiscountRedeemed = (customer.totalDiscountRedeemed || 0) + discountOrder.totalDiscount;
+      customer.totalDiscountRedeemed =
+        (customer.totalDiscountRedeemed || 0) + discountOrder.totalDiscount;
       await customer.save();
     }
 
     res.status(200).json({
       success: true,
-      data: discountOrder
+      data: discountOrder,
     });
   } catch (err) {
     next(err);
@@ -628,13 +701,13 @@ exports.updateNotes = async (req, res, next) => {
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: 'Customer not found'
+        message: "Customer not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: { notes: customer.notes }
+      data: { notes: customer.notes },
     });
   } catch (err) {
     next(err);
@@ -651,13 +724,15 @@ exports.deleteDiscountGroup = async (req, res, next) => {
     if (!discountOrder) {
       return res.status(404).json({
         success: false,
-        message: 'Discount group not found'
+        message: "Discount group not found",
       });
     }
 
     // If not yet redeemed, remove from wallet
-    if (discountOrder.status === 'available') {
-      const discount = await Discount.findOne({ customerId: discountOrder.customerId });
+    if (discountOrder.status === "available") {
+      const discount = await Discount.findOne({
+        customerId: discountOrder.customerId,
+      });
 
       if (discount) {
         discount.balance -= discountOrder.totalDiscount;
@@ -670,7 +745,7 @@ exports.deleteDiscountGroup = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: {}
+      data: {},
     });
   } catch (err) {
     next(err);
@@ -687,7 +762,7 @@ exports.saveDraftItems = async (req, res, next) => {
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: 'Customer not found'
+        message: "Customer not found",
       });
     }
 
@@ -699,7 +774,7 @@ exports.saveDraftItems = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: customer.draftDiscountItems
+      data: customer.draftDiscountItems,
     });
   } catch (err) {
     next(err);
@@ -716,7 +791,7 @@ exports.clearDraftItems = async (req, res, next) => {
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: 'Customer not found'
+        message: "Customer not found",
       });
     }
 
@@ -725,7 +800,7 @@ exports.clearDraftItems = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Draft items cleared'
+      message: "Draft items cleared",
     });
   } catch (err) {
     next(err);

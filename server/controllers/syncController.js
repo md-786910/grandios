@@ -3,15 +3,15 @@
  * Handles WAWI data synchronization endpoints
  */
 
-const syncService = require('../services/wawiSyncService');
-const cascadeSyncService = require('../services/cascadingSyncService');
-const Customer = require('../models/Customer');
-const Order = require('../models/Order');
-const OrderLine = require('../models/OrderLine');
-const Product = require('../models/Product');
-const ProductAttribute = require('../models/ProductAttribute');
-const ProductAttributeValue = require('../models/ProductAttributeValue');
-const DiscountOrder = require('../models/DiscountOrder');
+const syncService = require("../services/wawiSyncService");
+const cascadeSyncService = require("../services/cascadingSyncService");
+const Customer = require("../models/Customer");
+const Order = require("../models/Order");
+const OrderLine = require("../models/OrderLine");
+const Product = require("../models/Product");
+const ProductAttribute = require("../models/ProductAttribute");
+const ProductAttributeValue = require("../models/ProductAttributeValue");
+const DiscountOrder = require("../models/DiscountOrder");
 
 // @desc    Get sync status
 // @route   GET /api/sync/status
@@ -21,7 +21,14 @@ exports.getSyncStatus = async (req, res, next) => {
     const status = syncService.getSyncStatus();
 
     // Add counts from database
-    const [customerCount, orderCount, orderLineCount, productCount, attributeCount, attributeValueCount] = await Promise.all([
+    const [
+      customerCount,
+      orderCount,
+      orderLineCount,
+      productCount,
+      attributeCount,
+      attributeValueCount,
+    ] = await Promise.all([
       Customer.countDocuments(),
       Order.countDocuments(),
       OrderLine.countDocuments(),
@@ -58,19 +65,20 @@ exports.syncCustomers = async (req, res, next) => {
     if (status.isRunning) {
       return res.status(409).json({
         success: false,
-        error: 'Sync already in progress',
+        error: "Sync already in progress",
         data: status,
       });
     }
 
     // Run sync asynchronously
-    syncService.syncCustomers()
-      .then(result => console.log('[Sync] Customers completed:', result))
-      .catch(err => console.error('[Sync] Customers failed:', err));
+    syncService
+      .syncCustomers()
+      .then((result) => console.log("[Sync] Customers completed:", result))
+      .catch((err) => console.error("[Sync] Customers failed:", err));
 
     res.status(202).json({
       success: true,
-      message: 'Customer sync started',
+      message: "Customer sync started",
       data: syncService.getSyncStatus(),
     });
   } catch (err) {
@@ -87,18 +95,19 @@ exports.syncOrders = async (req, res, next) => {
     if (status.isRunning) {
       return res.status(409).json({
         success: false,
-        error: 'Sync already in progress',
+        error: "Sync already in progress",
         data: status,
       });
     }
 
-    syncService.syncOrders()
-      .then(result => console.log('[Sync] Orders completed:', result))
-      .catch(err => console.error('[Sync] Orders failed:', err));
+    syncService
+      .syncOrders()
+      .then((result) => console.log("[Sync] Orders completed:", result))
+      .catch((err) => console.error("[Sync] Orders failed:", err));
 
     res.status(202).json({
       success: true,
-      message: 'Order sync started',
+      message: "Order sync started",
       data: syncService.getSyncStatus(),
     });
   } catch (err) {
@@ -115,18 +124,19 @@ exports.syncProducts = async (req, res, next) => {
     if (status.isRunning) {
       return res.status(409).json({
         success: false,
-        error: 'Sync already in progress',
+        error: "Sync already in progress",
         data: status,
       });
     }
 
-    syncService.syncProducts()
-      .then(result => console.log('[Sync] Products completed:', result))
-      .catch(err => console.error('[Sync] Products failed:', err));
+    syncService
+      .syncProducts()
+      .then((result) => console.log("[Sync] Products completed:", result))
+      .catch((err) => console.error("[Sync] Products failed:", err));
 
     res.status(202).json({
       success: true,
-      message: 'Product sync started',
+      message: "Product sync started",
       data: syncService.getSyncStatus(),
     });
   } catch (err) {
@@ -143,18 +153,19 @@ exports.runFullSync = async (req, res, next) => {
     if (status.isRunning) {
       return res.status(409).json({
         success: false,
-        error: 'Sync already in progress',
+        error: "Sync already in progress",
         data: status,
       });
     }
 
-    syncService.runFullSync()
-      .then(result => console.log('[Sync] Full sync completed:', result))
-      .catch(err => console.error('[Sync] Full sync failed:', err));
+    syncService
+      .runFullSync()
+      .then((result) => console.log("[Sync] Full sync completed:", result))
+      .catch((err) => console.error("[Sync] Full sync failed:", err));
 
     res.status(202).json({
       success: true,
-      message: 'Full sync started',
+      message: "Full sync started",
       data: syncService.getSyncStatus(),
     });
   } catch (err) {
@@ -169,17 +180,17 @@ exports.getCustomers = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
-    const search = req.query.search || '';
-    const sortBy = req.query.sortBy || 'name';
-    const sortOrder = req.query.sortOrder === 'desc' ? -1 : 1;
+    const search = req.query.search || "";
+    const sortBy = req.query.sortBy || "name";
+    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
     const skip = (page - 1) * limit;
 
     const query = {};
     if (search) {
       const searchConditions = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { ref: { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        // { ref: { $regex: search, $options: 'i' } },
       ];
 
       // If search is a number, also search by contactId
@@ -193,18 +204,18 @@ exports.getCustomers = async (req, res, next) => {
 
     // Build sort object based on sortBy parameter
     const sortFields = {
-      name: 'name',
-      customerNumber: 'contactId',
-      discountRedeemed: 'totalDiscountRedeemed',
-      discountGranted: 'totalDiscountGranted',
-      wallet: 'wallet',
+      name: "name",
+      customerNumber: "contactId",
+      discountRedeemed: "totalDiscountRedeemed",
+      discountGranted: "totalDiscountGranted",
+      wallet: "wallet",
     };
-    const sortField = sortFields[sortBy] || 'name';
+    const sortField = sortFields[sortBy] || "name";
     const sortObj = { [sortField]: sortOrder };
 
     const [customers, total] = await Promise.all([
       Customer.find(query)
-        .collation({ locale: 'de', strength: 2 })
+        .collation({ locale: "de", strength: 2 })
         .sort(sortObj)
         .skip(skip)
         .limit(limit)
@@ -244,12 +255,12 @@ exports.getOrders = async (req, res, next) => {
 
     const [orders, total] = await Promise.all([
       Order.find(query)
-        .populate('customerId', 'name email ref contactId')
+        .populate("customerId", "name email ref contactId")
         .populate({
-          path: 'orderLines',
+          path: "orderLines",
           populate: {
-            path: 'productRef',
-            select: 'name image listPrice defaultCode',
+            path: "productRef",
+            select: "name image listPrice defaultCode",
           },
         })
         .sort({ orderDate: -1 })
@@ -282,12 +293,12 @@ exports.getOrderById = async (req, res, next) => {
     const { orderId } = req.params;
 
     const order = await Order.findById(orderId)
-      .populate('customerId', 'name email ref contactId phone mobile address')
+      .populate("customerId", "name email ref contactId phone mobile address")
       .populate({
-        path: 'orderLines',
+        path: "orderLines",
         populate: {
-          path: 'productRef',
-          select: 'name image listPrice defaultCode barcode categoryName',
+          path: "productRef",
+          select: "name image listPrice defaultCode barcode categoryName",
         },
       })
       .lean();
@@ -295,7 +306,7 @@ exports.getOrderById = async (req, res, next) => {
     if (!order) {
       return res.status(404).json({
         success: false,
-        error: 'Order not found',
+        error: "Order not found",
       });
     }
 
@@ -315,24 +326,20 @@ exports.getProducts = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
-    const search = req.query.search || '';
+    const search = req.query.search || "";
     const skip = (page - 1) * limit;
 
     const query = { active: true };
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { defaultCode: { $regex: search, $options: 'i' } },
-        { barcode: { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: "i" } },
+        { defaultCode: { $regex: search, $options: "i" } },
+        { barcode: { $regex: search, $options: "i" } },
       ];
     }
 
     const [products, total] = await Promise.all([
-      Product.find(query)
-        .sort({ name: 1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+      Product.find(query).sort({ name: 1 }).skip(skip).limit(limit).lean(),
       Product.countDocuments(query),
     ]);
 
@@ -360,18 +367,21 @@ exports.syncProductAttributes = async (req, res, next) => {
     if (status.isRunning) {
       return res.status(409).json({
         success: false,
-        error: 'Sync already in progress',
+        error: "Sync already in progress",
         data: status,
       });
     }
 
-    syncService.syncProductAttributes()
-      .then(result => console.log('[Sync] Product attributes completed:', result))
-      .catch(err => console.error('[Sync] Product attributes failed:', err));
+    syncService
+      .syncProductAttributes()
+      .then((result) =>
+        console.log("[Sync] Product attributes completed:", result)
+      )
+      .catch((err) => console.error("[Sync] Product attributes failed:", err));
 
     res.status(202).json({
       success: true,
-      message: 'Product attribute sync started',
+      message: "Product attribute sync started",
       data: syncService.getSyncStatus(),
     });
   } catch (err) {
@@ -388,18 +398,23 @@ exports.syncProductAttributeValues = async (req, res, next) => {
     if (status.isRunning) {
       return res.status(409).json({
         success: false,
-        error: 'Sync already in progress',
+        error: "Sync already in progress",
         data: status,
       });
     }
 
-    syncService.syncProductAttributeValues()
-      .then(result => console.log('[Sync] Product attribute values completed:', result))
-      .catch(err => console.error('[Sync] Product attribute values failed:', err));
+    syncService
+      .syncProductAttributeValues()
+      .then((result) =>
+        console.log("[Sync] Product attribute values completed:", result)
+      )
+      .catch((err) =>
+        console.error("[Sync] Product attribute values failed:", err)
+      );
 
     res.status(202).json({
       success: true,
-      message: 'Product attribute value sync started',
+      message: "Product attribute value sync started",
       data: syncService.getSyncStatus(),
     });
   } catch (err) {
@@ -414,12 +429,12 @@ exports.getProductAttributes = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 50;
-    const search = req.query.search || '';
+    const search = req.query.search || "";
     const skip = (page - 1) * limit;
 
     const query = {};
     if (search) {
-      query.name = { $regex: search, $options: 'i' };
+      query.name = { $regex: search, $options: "i" };
     }
 
     const [attributes, total] = await Promise.all([
@@ -453,13 +468,13 @@ exports.getProductAttributeValues = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 50;
-    const search = req.query.search || '';
+    const search = req.query.search || "";
     const attributeId = req.query.attributeId;
     const skip = (page - 1) * limit;
 
     const query = {};
     if (search) {
-      query.name = { $regex: search, $options: 'i' };
+      query.name = { $regex: search, $options: "i" };
     }
     if (attributeId) {
       query.wawiAttributeId = parseInt(attributeId, 10);
@@ -467,7 +482,7 @@ exports.getProductAttributeValues = async (req, res, next) => {
 
     const [values, total] = await Promise.all([
       ProductAttributeValue.find(query)
-        .populate('attributeId', 'name displayType')
+        .populate("attributeId", "name displayType")
         .sort({ sequence: 1, name: 1 })
         .skip(skip)
         .limit(limit)
@@ -511,8 +526,8 @@ exports.getOrderLines = async (req, res, next) => {
 
     const [orderLines, total] = await Promise.all([
       OrderLine.find(query)
-        .populate('orderId', 'posReference orderDate amountTotal')
-        .populate('productRef', 'name defaultCode')
+        .populate("orderId", "posReference orderDate amountTotal")
+        .populate("productRef", "name defaultCode")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -569,14 +584,19 @@ exports.syncCustomerCascade = async (req, res, next) => {
     if (!contactId) {
       return res.status(400).json({
         success: false,
-        error: 'Contact ID is required',
+        error: "Contact ID is required",
       });
     }
 
     // Run sync asynchronously
-    cascadeSyncService.syncCustomerWithRelatedData(parseInt(contactId, 10))
-      .then(result => console.log('[CascadeSync] Customer sync completed:', result))
-      .catch(err => console.error('[CascadeSync] Customer sync failed:', err));
+    cascadeSyncService
+      .syncCustomerWithRelatedData(parseInt(contactId, 10))
+      .then((result) =>
+        console.log("[CascadeSync] Customer sync completed:", result)
+      )
+      .catch((err) =>
+        console.error("[CascadeSync] Customer sync failed:", err)
+      );
 
     res.status(202).json({
       success: true,
@@ -597,19 +617,22 @@ exports.runCascadeSync = async (req, res, next) => {
     if (status.isRunning) {
       return res.status(409).json({
         success: false,
-        error: 'Cascade sync already in progress',
+        error: "Cascade sync already in progress",
         data: status,
       });
     }
 
     // Run sync asynchronously
-    cascadeSyncService.runFullCascadeSync()
-      .then(result => console.log('[CascadeSync] Full sync completed:', result))
-      .catch(err => console.error('[CascadeSync] Full sync failed:', err));
+    cascadeSyncService
+      .runFullCascadeSync()
+      .then((result) =>
+        console.log("[CascadeSync] Full sync completed:", result)
+      )
+      .catch((err) => console.error("[CascadeSync] Full sync failed:", err));
 
     res.status(202).json({
       success: true,
-      message: 'Full cascade sync started',
+      message: "Full cascade sync started",
       data: cascadeSyncService.getCascadeStatus(),
     });
   } catch (err) {
@@ -626,7 +649,7 @@ exports.runIncrementalSync = async (req, res, next) => {
     if (status.isRunning) {
       return res.status(409).json({
         success: false,
-        error: 'Sync already in progress',
+        error: "Sync already in progress",
         data: status,
       });
     }
@@ -634,9 +657,17 @@ exports.runIncrementalSync = async (req, res, next) => {
     const hoursBack = parseInt(req.query.hoursBack, 10) || 24;
 
     // Run sync asynchronously
-    cascadeSyncService.runIncrementalSync({ hoursBack })
-      .then(result => console.log('[CascadeSync] Incremental sync completed:', result?.progress))
-      .catch(err => console.error('[CascadeSync] Incremental sync failed:', err));
+    cascadeSyncService
+      .runIncrementalSync({ hoursBack })
+      .then((result) =>
+        console.log(
+          "[CascadeSync] Incremental sync completed:",
+          result?.progress
+        )
+      )
+      .catch((err) =>
+        console.error("[CascadeSync] Incremental sync failed:", err)
+      );
 
     res.status(202).json({
       success: true,
@@ -653,7 +684,7 @@ exports.runIncrementalSync = async (req, res, next) => {
 // @access  Private
 exports.getSchedulerStatus = async (req, res, next) => {
   try {
-    const scheduler = require('../services/scheduler');
+    const scheduler = require("../services/scheduler");
     const status = scheduler.getSchedulerStatus();
 
     res.status(200).json({
@@ -686,8 +717,8 @@ exports.getDiscountGroups = async (req, res, next) => {
 
     const [groups, total] = await Promise.all([
       DiscountOrder.find(query)
-        .populate('customerId', 'name email contactId')
-        .populate('orders.orderId', 'posReference orderDate amountTotal')
+        .populate("customerId", "name email contactId")
+        .populate("orders.orderId", "posReference orderDate amountTotal")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)

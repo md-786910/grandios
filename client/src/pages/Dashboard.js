@@ -5,14 +5,32 @@ import { dashboardAPI } from "../services/api";
 import { sanitizeName } from "../utils/helpers";
 
 const formatCurrency = (value) => {
-  return (value || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (value || 0).toLocaleString("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 };
 
 const Dashboard = () => {
   const [stats, setStats] = useState([
-    { label: "Gesamter gewährter Rabatt", value: "€ 0,00", bgColor: "bg-blue-100", labelColor: "text-blue-500" },
-    { label: "Anzahl der verkauften Artikel", value: "0", bgColor: "bg-green-100", labelColor: "text-green-500" },
-    { label: "Gesamtzahl Der Kunden", value: "0", bgColor: "bg-red-100", labelColor: "text-red-500" },
+    {
+      label: "Gesamter gewährter Rabatt",
+      value: "€ 0,00",
+      bgColor: "bg-blue-100",
+      labelColor: "text-blue-500",
+    },
+    {
+      label: "Anzahl der verkauften Artikel",
+      value: "0",
+      bgColor: "bg-green-100",
+      labelColor: "text-green-500",
+    },
+    {
+      label: "Gesamtzahl Der Kunden",
+      value: "0",
+      bgColor: "bg-red-100",
+      labelColor: "text-red-500",
+    },
   ]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,19 +51,19 @@ const Dashboard = () => {
               label: "Gesamter gewährter Rabatt",
               value: `€ ${formatCurrency(data.totalDiscountGranted)}`,
               bgColor: "bg-blue-100",
-              labelColor: "text-blue-500"
+              labelColor: "text-blue-500",
             },
             {
               label: "Anzahl der verkauften Artikel",
               value: data.totalItemsSold.toString(),
               bgColor: "bg-green-100",
-              labelColor: "text-green-500"
+              labelColor: "text-green-500",
             },
             {
               label: "Gesamtzahl Der Kunden",
               value: data.totalCustomers.toString(),
               bgColor: "bg-red-100",
-              labelColor: "text-red-500"
+              labelColor: "text-red-500",
             },
           ]);
         }
@@ -60,7 +78,10 @@ const Dashboard = () => {
     const fetchOrders = async () => {
       setLoading(true);
       try {
-        const ordersRes = await dashboardAPI.getRecentOrders(currentPage, itemsPerPage);
+        const ordersRes = await dashboardAPI.getRecentOrders(
+          currentPage,
+          itemsPerPage
+        );
         if (ordersRes.data.success) {
           setOrders(ordersRes.data.data);
           setTotalPages(ordersRes.data.pagination.pages);
@@ -76,9 +97,11 @@ const Dashboard = () => {
   }, [currentPage]);
 
   const getStatusInfo = (order) => {
-    if (order.state === "pending") return { status: "Ausstehend", statusType: "pending" };
+    if (order.state === "pending")
+      return { status: "Ausstehend", statusType: "pending" };
     if (order.state === "paid") return { status: "Tilgen", statusType: "paid" };
-    if (order.state === "completed") return { status: "Eingelöst", statusType: "redeemed" };
+    if (order.state === "completed")
+      return { status: "Eingelöst", statusType: "redeemed" };
     return { status: order.state, statusType: "pending" };
   };
 
@@ -116,9 +139,24 @@ const Dashboard = () => {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <svg className="animate-spin h-8 w-8 text-gray-400" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            <svg
+              className="animate-spin h-8 w-8 text-gray-400"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+                fill="none"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
             </svg>
           </div>
         ) : orders.length === 0 ? (
@@ -149,7 +187,9 @@ const Dashboard = () => {
                     <span className="text-sm font-semibold text-gray-900">
                       Gesamtbestellwert -
                     </span>
-                    <span className="text-sm text-gray-600">€ {formatCurrency(order.amountTotal)}</span>
+                    <span className="text-sm text-gray-600">
+                      € {formatCurrency(order.amountTotal)}
+                    </span>
                   </div>
                 </div>
 
@@ -163,7 +203,8 @@ const Dashboard = () => {
                       Kundennummer -
                     </span>
                     <span className="text-sm text-gray-600">
-                      {order.customerId?.ref || `CustNo_${order.partnerId}`}
+                      {order.customerId?.contactId ||
+                        `CustNo_${order.partnerId}`}
                     </span>
                   </div>
                 </div>
@@ -194,18 +235,20 @@ const Dashboard = () => {
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-6">
           <p className="text-sm text-gray-600">
-            Zeige {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalOrders)} von {totalOrders} Bestellungen
+            Zeige {(currentPage - 1) * itemsPerPage + 1}-
+            {Math.min(currentPage * itemsPerPage, totalOrders)} von{" "}
+            {totalOrders} Bestellungen
           </p>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Zurück
             </button>
             {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(page => {
+              .filter((page) => {
                 if (totalPages <= 7) return true;
                 if (page === 1 || page === totalPages) return true;
                 if (Math.abs(page - currentPage) <= 1) return true;
@@ -229,7 +272,9 @@ const Dashboard = () => {
                 </React.Fragment>
               ))}
             <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
               disabled={currentPage === totalPages}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
