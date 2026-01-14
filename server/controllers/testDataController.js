@@ -7,16 +7,56 @@ const DEFAULT_PRODUCT_IMAGE =
 
 // Sample product data for generating test orders (using picsum.photos for realistic product images)
 const sampleProducts = [
-  { name: "T-Shirt Basic", price: 19.99, image: "https://picsum.photos/seed/tshirt/200/200" },
-  { name: "Hoodie Premium", price: 49.99, image: "https://picsum.photos/seed/hoodie/200/200" },
-  { name: "Polo Shirt", price: 29.99, image: "https://picsum.photos/seed/polo/200/200" },
-  { name: "Jeans Classic", price: 59.99, image: "https://picsum.photos/seed/jeans/200/200" },
-  { name: "Sneakers Sport", price: 89.99, image: "https://picsum.photos/seed/sneakers/200/200" },
-  { name: "Cap Embroidered", price: 14.99, image: "https://picsum.photos/seed/cap/200/200" },
-  { name: "Jacket Winter", price: 99.99, image: "https://picsum.photos/seed/jacket/200/200" },
-  { name: "Shorts Summer", price: 24.99, image: "https://picsum.photos/seed/shorts/200/200" },
-  { name: "Socks Pack", price: 9.99, image: "https://picsum.photos/seed/socks/200/200" },
-  { name: "Belt Leather", price: 34.99, image: "https://picsum.photos/seed/belt/200/200" },
+  {
+    name: "T-Shirt Basic",
+    price: 19.99,
+    image: "https://picsum.photos/seed/tshirt/200/200",
+  },
+  {
+    name: "Hoodie Premium",
+    price: 49.99,
+    image: "https://picsum.photos/seed/hoodie/200/200",
+  },
+  {
+    name: "Polo Shirt",
+    price: 29.99,
+    image: "https://picsum.photos/seed/polo/200/200",
+  },
+  {
+    name: "Jeans Classic",
+    price: 59.99,
+    image: "https://picsum.photos/seed/jeans/200/200",
+  },
+  {
+    name: "Sneakers Sport",
+    price: 89.99,
+    image: "https://picsum.photos/seed/sneakers/200/200",
+  },
+  {
+    name: "Cap Embroidered",
+    price: 14.99,
+    image: "https://picsum.photos/seed/cap/200/200",
+  },
+  {
+    name: "Jacket Winter",
+    price: 99.99,
+    image: "https://picsum.photos/seed/jacket/200/200",
+  },
+  {
+    name: "Shorts Summer",
+    price: 24.99,
+    image: "https://picsum.photos/seed/shorts/200/200",
+  },
+  {
+    name: "Socks Pack",
+    price: 9.99,
+    image: "https://picsum.photos/seed/socks/200/200",
+  },
+  {
+    name: "Belt Leather",
+    price: 34.99,
+    image: "https://picsum.photos/seed/belt/200/200",
+  },
 ];
 
 const sampleCustomers = [
@@ -137,7 +177,7 @@ exports.generateTestOrders = async (req, res, next) => {
 
       // Generate order date within last 30 days
       const orderDate = new Date();
-      orderDate.setDate(orderDate.getDate() - randomBetween(0, 30));
+      // orderDate.setDate(orderDate.getDate() - randomBetween(0, 30));
 
       const order = await Order.create({
         orderId: timestamp,
