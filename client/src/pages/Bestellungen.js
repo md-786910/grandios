@@ -391,10 +391,11 @@ const Bestellungen = () => {
         {/* Test Message */}
         {testMessage.text && (
           <div
-            className={`mb-4 p-4 rounded-lg ${testMessage.type === "success"
-              ? "bg-green-50 border border-green-200 text-green-700"
-              : "bg-red-50 border border-red-200 text-red-700"
-              }`}
+            className={`mb-4 p-4 rounded-lg ${
+              testMessage.type === "success"
+                ? "bg-green-50 border border-green-200 text-green-700"
+                : "bg-red-50 border border-red-200 text-red-700"
+            }`}
           >
             {testMessage.text}
           </div>
@@ -456,7 +457,9 @@ const Bestellungen = () => {
             {/* Status Filter */}
             <select
               value={statusFilter}
-              onChange={(e) => updateParams({ status: e.target.value, page: 1 })}
+              onChange={(e) =>
+                updateParams({ status: e.target.value, page: 1 })
+              }
               className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm bg-white"
             >
               <option value="">Alle Status</option>
@@ -543,13 +546,14 @@ const Bestellungen = () => {
                           >
                             {selectedCustomer
                               ? customers.find(
-                                (c) => c._id === selectedCustomer
-                              )?.name || "Kunde auswählen..."
+                                  (c) => c._id === selectedCustomer
+                                )?.name || "Kunde auswählen..."
                               : "Kunde auswählen..."}
                           </span>
                           <svg
-                            className={`h-4 w-4 text-gray-400 transition-transform ${customerDropdownOpen ? "rotate-180" : ""
-                              }`}
+                            className={`h-4 w-4 text-gray-400 transition-transform ${
+                              customerDropdownOpen ? "rotate-180" : ""
+                            }`}
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -571,10 +575,11 @@ const Bestellungen = () => {
                             {customers.map((customer) => (
                               <div
                                 key={customer._id}
-                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 ${selectedCustomer === customer._id
-                                  ? "bg-purple-100"
-                                  : ""
-                                  }`}
+                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 ${
+                                  selectedCustomer === customer._id
+                                    ? "bg-purple-100"
+                                    : ""
+                                }`}
                                 onClick={() => {
                                   setSelectedCustomer(customer._id);
                                   setCustomerDropdownOpen(false);
@@ -767,10 +772,11 @@ const Bestellungen = () => {
                           )}
                           <button
                             onClick={() => updateParams({ page })}
-                            className={`px-3 py-1 text-sm font-medium rounded-lg ${currentPage === page
-                              ? "bg-gray-900 text-white"
-                              : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
-                              }`}
+                            className={`px-3 py-1 text-sm font-medium rounded-lg ${
+                              currentPage === page
+                                ? "bg-gray-900 text-white"
+                                : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                            }`}
                           >
                             {page}
                           </button>
@@ -816,25 +822,25 @@ const Bestellungen = () => {
   const orderItems =
     selectedOrder.orderLines?.length > 0
       ? selectedOrder.orderLines.map((line) => ({
-        orderLineId: line.orderLineId || line._id,
-        productId: line.productId,
-        productName: line.fullProductName || line.productName,
-        priceUnit: line.priceUnit,
-        priceSubtotalIncl:
-          line.priceSubtotalIncl || line.priceUnit * line.quantity,
-        quantity: line.quantity || 1,
-        discount: line.discount || 0,
-        discountEligible: line.discountEligible !== false,
-        image: line.productRef?.image || null,
-        color:
-          line.productRef?.attributeValues?.find(
-            (a) => a.attributeName === "Farbe"
-          )?.valueName || null,
-        material:
-          line.productRef?.attributeValues?.find(
-            (a) => a.attributeName === "Material"
-          )?.valueName || null,
-      }))
+          orderLineId: line.orderLineId || line._id,
+          productId: line.productId,
+          productName: line.fullProductName || line.productName,
+          priceUnit: line.priceUnit,
+          priceSubtotalIncl:
+            line.priceSubtotalIncl || line.priceUnit * line.quantity,
+          quantity: line.quantity || 1,
+          discount: line.discount || 0,
+          discountEligible: line.discountEligible !== false,
+          image: line.productRef?.image || null,
+          color:
+            line.productRef?.attributeValues?.find(
+              (a) => a.attributeName === "Farbe"
+            )?.valueName || null,
+          material:
+            line.productRef?.attributeValues?.find(
+              (a) => a.attributeName === "Material"
+            )?.valueName || null,
+        }))
       : selectedOrder.items || [];
 
   const discountEligibleItems = orderItems.filter(
@@ -858,7 +864,7 @@ const Bestellungen = () => {
           </span>
         </div>
         <button
-          onClick={() => navigate("/bestellungen")}
+          onClick={() => navigate(-1)}
           className="px-6 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px]"
         >
           Zurück
