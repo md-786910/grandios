@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Layout from "../components/Layout";
 import { dashboardAPI } from "../services/api";
 import { sanitizeName } from "../utils/helpers";
@@ -12,6 +12,9 @@ const formatCurrency = (value) => {
 };
 
 const Dashboard = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
   const [stats, setStats] = useState([
     {
       label: "Gesamter gewährter Rabatt",
@@ -34,11 +37,28 @@ const Dashboard = () => {
   ]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
+
+  // URL-based params
+  const currentPage = parseInt(searchParams.get("page") || "1", 10);
+  const itemsPerPage = 10;
+
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
-  const itemsPerPage = 10;
-  const navigate = useNavigate();
+
+  // Helper to update URL params
+  const updateParams = (updates) => {
+    setSearchParams((prev) => {
+      const newParams = new URLSearchParams(prev);
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null || value === undefined || value === "") {
+          newParams.delete(key);
+        } else {
+          newParams.set(key, String(value));
+        }
+      });
+      return newParams;
+    });
+  };
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -169,9 +189,8 @@ const Dashboard = () => {
             return (
               <div
                 key={order._id}
-                className={`flex items-center justify-between px-6 py-5 ${
-                  index !== orders.length - 1 ? "border-b border-gray-100" : ""
-                }`}
+                className={`flex items-center justify-between px-6 py-5 ${index !== orders.length - 1 ? "border-b border-gray-100" : ""
+                  }`}
               >
                 {/* Order Info */}
                 <div className="flex-1 min-w-0">
@@ -241,7 +260,7 @@ const Dashboard = () => {
           </p>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              onClick={() => updateParams({ page: Math.max(currentPage - 1, 1) })}
               disabled={currentPage === 1}
               className="px-2 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -260,12 +279,11 @@ const Dashboard = () => {
                     <span className="px-2 text-gray-400">...</span>
                   )}
                   <button
-                    onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1 text-sm font-medium rounded-lg ${
-                      currentPage === page
+                    onClick={() => updateParams({ page })}
+                    className={`px-3 py-1 text-sm font-medium rounded-lg ${currentPage === page
                         ? "bg-gray-900 text-white"
                         : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
-                    }`}
+                      }`}
                   >
                     {page}
                   </button>
@@ -273,7 +291,7 @@ const Dashboard = () => {
               ))}
             <button
               onClick={() =>
-                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                updateParams({ page: Math.min(currentPage + 1, totalPages) })
               }
               disabled={currentPage === totalPages}
               className="px-2 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"

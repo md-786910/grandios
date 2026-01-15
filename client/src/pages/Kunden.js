@@ -1,29 +1,51 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Layout from "../components/Layout";
 import { syncAPI } from "../services/api";
 import { sanitizeName } from "../utils/helpers";
 
 const Kunden = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
+
+  // URL-based state
+  const currentPage = parseInt(searchParams.get("page") || "1", 10);
+  const sortBy = searchParams.get("sort") || "name";
+  const sortOrder = searchParams.get("order") || "asc";
+
   const [itemsPerPage] = useState(20);
-  const [sortBy, setSortBy] = useState("name");
-  const [sortOrder, setSortOrder] = useState("asc");
   const [pagination, setPagination] = useState({
     total: 0,
     pages: 0,
   });
 
+  // Helper to update URL params
+  const updateParams = (updates) => {
+    setSearchParams((prev) => {
+      const newParams = new URLSearchParams(prev);
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null || value === undefined || value === "") {
+          newParams.delete(key);
+        } else {
+          newParams.set(key, String(value));
+        }
+      });
+      return newParams;
+    });
+  };
+
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchTerm);
-      setCurrentPage(1);
+      if (searchTerm && currentPage !== 1) {
+        updateParams({ page: 1 });
+      }
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
@@ -46,12 +68,10 @@ const Kunden = () => {
   // Handle sort change
   const handleSort = (field) => {
     if (sortBy === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+      updateParams({ order: sortOrder === "asc" ? "desc" : "asc", page: 1 });
     } else {
-      setSortBy(field);
-      setSortOrder("asc");
+      updateParams({ sort: field, order: "asc", page: 1 });
     }
-    setCurrentPage(1);
   };
 
   // Sort indicator component
@@ -251,7 +271,7 @@ const Kunden = () => {
           </p>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              onClick={() => updateParams({ page: Math.max(currentPage - 1, 1) })}
               disabled={currentPage === 1}
               className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -270,19 +290,18 @@ const Kunden = () => {
                     <span className="px-2 text-gray-400">...</span>
                   )}
                   <button
-                    onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1 text-sm font-medium rounded-lg ${
-                      currentPage === page
-                        ? "bg-gray-900 text-white"
-                        : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
-                    }`}
+                    onClick={() => updateParams({ page })}
+                    className={`px-3 py-1 text-sm font-medium rounded-lg ${currentPage === page
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                      }`}
                   >
                     {page}
                   </button>
                 </React.Fragment>
               ))}
             <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              onClick={() => updateParams({ page: Math.min(currentPage + 1, totalPages) })}
               disabled={currentPage === totalPages}
               className="px-2 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
