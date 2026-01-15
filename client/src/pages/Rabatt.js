@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Layout from "../components/Layout";
 import { discountsAPI } from "../services/api";
 import { sanitizeName } from "../utils/helpers";
 
 const Rabatt = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [customersData, setCustomersData] = useState([]);
@@ -19,24 +21,39 @@ const Rabatt = () => {
     ordersRequiredForDiscount: 3,
   });
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
+
+  // URL-based state
+  const currentPage = parseInt(searchParams.get("page") || "1", 10);
+  const statusFilter = searchParams.get("status") || "";
+
   const [totalItems, setTotalItems] = useState(0);
   const [itemsPerPage] = useState(10);
-  const [statusFilter, setStatusFilter] = useState("");
 
-  // Debounce search input
+  // Helper to update URL params
+  const updateParams = (updates) => {
+    setSearchParams((prev) => {
+      const newParams = new URLSearchParams(prev);
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null || value === undefined || value === "") {
+          newParams.delete(key);
+        } else {
+          newParams.set(key, String(value));
+        }
+      });
+      return newParams;
+    });
+  };
+
+  // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchTerm);
-      setCurrentPage(1); // Reset to page 1 on search
+      if (searchTerm && currentPage !== 1) {
+        updateParams({ page: 1 });
+      }
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
-
-  // Reset to page 1 when filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [statusFilter]);
 
   const fetchDiscounts = useCallback(async () => {
     try {
@@ -113,24 +130,42 @@ const Rabatt = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-64 pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm"
           />
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
+          {searchTerm ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer hover:text-gray-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              onClick={() => setSearchTerm("")}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          ) : (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          )}
         </div>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => updateParams({ status: e.target.value, page: 1 })}
           className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm bg-white"
         >
           <option value="">Alle Status</option>
@@ -246,11 +281,10 @@ const Rabatt = () => {
           paginatedCustomers.map((discount, index) => (
             <div
               key={discount.id || discount._id}
-              className={`flex items-center justify-between p-4 ${
-                index !== paginatedCustomers.length - 1
-                  ? "border-b border-gray-100"
-                  : ""
-              }`}
+              className={`flex items-center justify-between p-4 ${index !== paginatedCustomers.length - 1
+                ? "border-b border-gray-100"
+                : ""
+                }`}
             >
               {/* Customer Info */}
               <div className="min-w-[250px]">
@@ -333,7 +367,7 @@ const Rabatt = () => {
           </p>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              onClick={() => updateParams({ page: Math.max(currentPage - 1, 1) })}
               disabled={currentPage === 1}
               className="px-2 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -352,12 +386,11 @@ const Rabatt = () => {
                     <span className="px-2 text-gray-400">...</span>
                   )}
                   <button
-                    onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1 text-sm font-medium rounded-lg ${
-                      currentPage === page
-                        ? "bg-gray-900 text-white"
-                        : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
-                    }`}
+                    onClick={() => updateParams({ page })}
+                    className={`px-3 py-1 text-sm font-medium rounded-lg ${currentPage === page
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                      }`}
                   >
                     {page}
                   </button>
@@ -365,7 +398,7 @@ const Rabatt = () => {
               ))}
             <button
               onClick={() =>
-                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                updateParams({ page: Math.min(currentPage + 1, totalPages) })
               }
               disabled={currentPage === totalPages}
               className="px-2 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"

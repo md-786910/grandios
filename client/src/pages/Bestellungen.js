@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import Layout from "../components/Layout";
 import ConfirmModal from "../components/ConfirmModal";
 import { ordersAPI, testAPI, customersAPI } from "../services/api";
@@ -8,6 +8,8 @@ import { sanitizeName } from "../utils/helpers";
 const Bestellungen = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [orders, setOrders] = useState([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -30,9 +32,27 @@ const Bestellungen = () => {
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const customerDropdownRef = useRef(null);
-  const [currentPage, setCurrentPage] = useState(1);
+
+  // URL-based params
+  const currentPage = parseInt(searchParams.get("page") || "1", 10);
+  const statusFilter = searchParams.get("status") || "";
+
   const [itemsPerPage] = useState(10);
-  const [statusFilter, setStatusFilter] = useState("");
+
+  // Helper to update URL params
+  const updateParams = (updates) => {
+    setSearchParams((prev) => {
+      const newParams = new URLSearchParams(prev);
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null || value === undefined || value === "") {
+          newParams.delete(key);
+        } else {
+          newParams.set(key, String(value));
+        }
+      });
+      return newParams;
+    });
+  };
 
   const fetchOrders = async () => {
     try {
@@ -249,15 +269,18 @@ const Bestellungen = () => {
 
   // Reset to page 1 when search or filter changes
   useEffect(() => {
-    setCurrentPage(1);
+    // Only reset if we are not on page 1
+    if (currentPage !== 1) {
+      updateParams({ page: 1 });
+    }
   }, [searchTerm, statusFilter]);
 
   const handlePrevPage = () => {
-    setCurrentPage((prev) => Math.max(prev - 1, 1));
+    updateParams({ page: Math.max(currentPage - 1, 1) });
   };
 
   const handleNextPage = () => {
-    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+    updateParams({ page: Math.min(currentPage + 1, totalPages) });
   };
 
   // Open delete confirmation modal
@@ -368,11 +391,10 @@ const Bestellungen = () => {
         {/* Test Message */}
         {testMessage.text && (
           <div
-            className={`mb-4 p-4 rounded-lg ${
-              testMessage.type === "success"
-                ? "bg-green-50 border border-green-200 text-green-700"
-                : "bg-red-50 border border-red-200 text-red-700"
-            }`}
+            className={`mb-4 p-4 rounded-lg ${testMessage.type === "success"
+              ? "bg-green-50 border border-green-200 text-green-700"
+              : "bg-red-50 border border-red-200 text-red-700"
+              }`}
           >
             {testMessage.text}
           </div>
@@ -397,26 +419,44 @@ const Bestellungen = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-64 pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm"
               />
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
+              {searchTerm ? (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer hover:text-gray-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  onClick={() => setSearchTerm("")}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              )}
             </div>
 
             {/* Status Filter */}
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => updateParams({ status: e.target.value, page: 1 })}
               className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm bg-white"
             >
               <option value="">Alle Status</option>
@@ -503,14 +543,13 @@ const Bestellungen = () => {
                           >
                             {selectedCustomer
                               ? customers.find(
-                                  (c) => c._id === selectedCustomer
-                                )?.name || "Kunde auswählen..."
+                                (c) => c._id === selectedCustomer
+                              )?.name || "Kunde auswählen..."
                               : "Kunde auswählen..."}
                           </span>
                           <svg
-                            className={`h-4 w-4 text-gray-400 transition-transform ${
-                              customerDropdownOpen ? "rotate-180" : ""
-                            }`}
+                            className={`h-4 w-4 text-gray-400 transition-transform ${customerDropdownOpen ? "rotate-180" : ""
+                              }`}
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -532,11 +571,10 @@ const Bestellungen = () => {
                             {customers.map((customer) => (
                               <div
                                 key={customer._id}
-                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 ${
-                                  selectedCustomer === customer._id
-                                    ? "bg-purple-100"
-                                    : ""
-                                }`}
+                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 ${selectedCustomer === customer._id
+                                  ? "bg-purple-100"
+                                  : ""
+                                  }`}
                                 onClick={() => {
                                   setSelectedCustomer(customer._id);
                                   setCustomerDropdownOpen(false);
@@ -728,12 +766,11 @@ const Bestellungen = () => {
                             <span className="px-2 text-gray-400">...</span>
                           )}
                           <button
-                            onClick={() => setCurrentPage(page)}
-                            className={`px-3 py-1 text-sm font-medium rounded-lg ${
-                              currentPage === page
-                                ? "bg-gray-900 text-white"
-                                : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
-                            }`}
+                            onClick={() => updateParams({ page })}
+                            className={`px-3 py-1 text-sm font-medium rounded-lg ${currentPage === page
+                              ? "bg-gray-900 text-white"
+                              : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                              }`}
                           >
                             {page}
                           </button>
@@ -779,25 +816,25 @@ const Bestellungen = () => {
   const orderItems =
     selectedOrder.orderLines?.length > 0
       ? selectedOrder.orderLines.map((line) => ({
-          orderLineId: line.orderLineId || line._id,
-          productId: line.productId,
-          productName: line.fullProductName || line.productName,
-          priceUnit: line.priceUnit,
-          priceSubtotalIncl:
-            line.priceSubtotalIncl || line.priceUnit * line.quantity,
-          quantity: line.quantity || 1,
-          discount: line.discount || 0,
-          discountEligible: line.discountEligible !== false,
-          image: line.productRef?.image || null,
-          color:
-            line.productRef?.attributeValues?.find(
-              (a) => a.attributeName === "Farbe"
-            )?.valueName || null,
-          material:
-            line.productRef?.attributeValues?.find(
-              (a) => a.attributeName === "Material"
-            )?.valueName || null,
-        }))
+        orderLineId: line.orderLineId || line._id,
+        productId: line.productId,
+        productName: line.fullProductName || line.productName,
+        priceUnit: line.priceUnit,
+        priceSubtotalIncl:
+          line.priceSubtotalIncl || line.priceUnit * line.quantity,
+        quantity: line.quantity || 1,
+        discount: line.discount || 0,
+        discountEligible: line.discountEligible !== false,
+        image: line.productRef?.image || null,
+        color:
+          line.productRef?.attributeValues?.find(
+            (a) => a.attributeName === "Farbe"
+          )?.valueName || null,
+        material:
+          line.productRef?.attributeValues?.find(
+            (a) => a.attributeName === "Material"
+          )?.valueName || null,
+      }))
       : selectedOrder.items || [];
 
   const discountEligibleItems = orderItems.filter(
