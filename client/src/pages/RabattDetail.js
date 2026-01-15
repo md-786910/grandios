@@ -660,7 +660,7 @@ const RabattDetail = () => {
       {discountItems.length > 0 && (
         <div
           ref={pendingGroupRef}
-          className="bg-white rounded-xl border border-amber-300 mb-6 overflow-hidden shadow-lg sticky top-[64px] z-30 transform transition-all duration-200"
+          className="bg-white rounded-xl border border-amber-300 mb-6 overflow-hidden shadow-lg sticky top-[64px] z-30 transform transition-all duration-200 max-h-[40vh] overflow-y-auto"
         >
           {/* Header - Clickable to collapse/expand */}
           <div
@@ -1227,7 +1227,7 @@ const RabattDetail = () => {
         const isTooMany = totalItems > MANUAL_MIN_ORDERS;
         const isReadyForAuto = totalItems >= settings.ordersRequiredForDiscount;
 
-        const headerOffset = 64; // Height of the main fixed header
+        const headerOffset = 70; // Height of the main fixed header
         const dynamicTop =
           discountItems.length > 0
             ? headerOffset + pendingGroupHeight // Sticky below pending group (no extra gap needed as it's flush)
@@ -1237,7 +1237,7 @@ const RabattDetail = () => {
           <div
             style={{ top: `${dynamicTop}px` }}
             className={`rounded-xl border p-4 mb-6 transition-all duration-200 ease-out overflow-hidden sticky z-30 ${isTooMany
-              ? "bg-red-50 border-red-200"
+              ? "bg-blue-50 border-blue-200"
               : isReadyForManual
                 ? "bg-green-50 border-green-200"
                 : totalItems > 0
@@ -1254,7 +1254,7 @@ const RabattDetail = () => {
                       key={i}
                       className={`w-3 h-3 rounded-full transition-colors ${i < totalItems
                         ? isTooMany
-                          ? "bg-red-500"
+                          ? "bg-blue-500"
                           : isReadyForManual
                             ? "bg-green-500"
                             : "bg-blue-500"
@@ -1264,7 +1264,7 @@ const RabattDetail = () => {
                   ))}
                   {/* Show extra dot if more than 3 */}
                   {isTooMany && (
-                    <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                    <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
                   )}
                 </div>
 
@@ -1277,16 +1277,16 @@ const RabattDetail = () => {
                     </span>
                   ) : isTooMany ? (
                     <>
-                      <span className="text-sm font-medium text-red-700">
+                      <span className="text-sm font-medium text-blue-700">
                         {totalItems} Bestellungen/Gruppen sind für einen Rabatt
                         erforderlich!{totalItems > 1 ? "en" : ""}
                       </span>
-                      <span className="text-sm text-red-600 font-medium">
+                      <span className="text-sm text-blue-600 font-medium">
                         • {MANUAL_MIN_ORDERS} Ausgewählte Bestellungen, die für
                         Gruppenbestellungen in Frage kommen
                       </span>
                       {hasSelectedOrders && (
-                        <span className="text-xs text-red-500">
+                        <span className="text-xs text-blue-500">
                           ({selectedOrders.length} ausgewählt)
                         </span>
                       )}
@@ -1369,7 +1369,7 @@ const RabattDetail = () => {
                     <button
                       onClick={() => setSelectedOrders([])}
                       className={`px-2 py-1.5 text-sm ${isTooMany
-                        ? "text-red-500 hover:text-red-700"
+                        ? "text-blue-500 hover:text-blue-700"
                         : "text-gray-500 hover:text-gray-700"
                         }`}
                     >
