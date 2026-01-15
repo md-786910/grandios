@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import Layout from "../components/Layout";
@@ -64,6 +64,34 @@ const RabattDetail = () => {
   const [selectedDiscountItems, setSelectedDiscountItems] = useState([]); // Track which discount items are selected (by index)
   const [pendingSectionCollapsed, setPendingSectionCollapsed] = useState(true); // Track if pending discount section is collapsed
   const [clearAllConfirm, setClearAllConfirm] = useState(false); // Confirmation for clearing all discount items
+
+  // Dynamic Layout state
+  const pendingGroupRef = useRef(null);
+  const [pendingGroupHeight, setPendingGroupHeight] = useState(0);
+
+  // Monitor pending group height for sticky adjustment
+  useLayoutEffect(() => {
+    const updateHeight = () => {
+      if (pendingGroupRef.current) {
+        setPendingGroupHeight(pendingGroupRef.current.offsetHeight);
+      } else {
+        setPendingGroupHeight(0);
+      }
+    };
+
+    // Initial measure
+    updateHeight();
+
+    const observer = new ResizeObserver(() => {
+      updateHeight();
+    });
+
+    if (pendingGroupRef.current) {
+      observer.observe(pendingGroupRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [discountItems.length, pendingSectionCollapsed]); // dependencies that might mount/unmount or change content
 
   // Save discountItems to database whenever it changes (after initial load)
   useEffect(() => {
@@ -602,11 +630,10 @@ const RabattDetail = () => {
       <div className="mb-4" style={{ minHeight: message.text ? "auto" : 0 }}>
         {message.text && (
           <div
-            className={`p-4 rounded-lg ${
-              message.type === "success"
-                ? "bg-green-50 border border-green-200 text-green-700"
-                : "bg-red-50 border border-red-200 text-red-700"
-            }`}
+            className={`p-4 rounded-lg ${message.type === "success"
+              ? "bg-green-50 border border-green-200 text-green-700"
+              : "bg-red-50 border border-red-200 text-red-700"
+              }`}
           >
             {message.text}
           </div>
@@ -631,7 +658,10 @@ const RabattDetail = () => {
 
       {/* Pending Discount Group - Table Style like saved groups */}
       {discountItems.length > 0 && (
-        <div className="bg-white rounded-xl border border-amber-300 mb-6 overflow-hidden shadow-lg sticky top-[64px] z-30">
+        <div
+          ref={pendingGroupRef}
+          className="bg-white rounded-xl border border-amber-300 mb-6 overflow-hidden shadow-lg sticky top-[64px] z-30 transform transition-all duration-200 max-h-[40vh] overflow-y-auto"
+        >
           {/* Header - Clickable to collapse/expand */}
           <div
             className="bg-gradient-to-r from-amber-100 to-orange-100 px-4 py-2 border-b border-amber-200 flex items-center justify-between cursor-pointer hover:from-amber-150 hover:to-orange-150"
@@ -665,9 +695,8 @@ const RabattDetail = () => {
               </span>
               {/* Collapse/Expand indicator */}
               <svg
-                className={`h-4 w-4 text-amber-700 transition-transform ${
-                  pendingSectionCollapsed ? "" : "rotate-180"
-                }`}
+                className={`h-4 w-4 text-amber-700 transition-transform ${pendingSectionCollapsed ? "" : "rotate-180"
+                  }`}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -815,9 +844,8 @@ const RabattDetail = () => {
                   <div key={index} className="bg-white">
                     {/* Collapsed bundle header */}
                     <div
-                      className={`grid grid-cols-[60px_1fr_1fr_100px_80px] cursor-pointer hover:bg-amber-50 transition-colors ${
-                        isExpanded ? "bg-amber-50" : ""
-                      }`}
+                      className={`grid grid-cols-[60px_1fr_1fr_100px_80px] cursor-pointer hover:bg-amber-50 transition-colors ${isExpanded ? "bg-amber-50" : ""
+                        }`}
                       onClick={toggleItem}
                     >
                       <div className="p-3 flex items-center justify-center border-r border-gray-100">
@@ -832,9 +860,8 @@ const RabattDetail = () => {
                             Bestellungen
                           </span>
                           <svg
-                            className={`h-4 w-4 text-gray-500 transition-transform ${
-                              isExpanded ? "rotate-180" : ""
-                            }`}
+                            className={`h-4 w-4 text-gray-500 transition-transform ${isExpanded ? "rotate-180" : ""
+                              }`}
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -869,12 +896,12 @@ const RabattDetail = () => {
                             ))}
                           {itemOrders.flatMap((o) => o.items || []).length >
                             6 && (
-                            <span className="text-sm font-medium text-gray-600">
-                              +
-                              {itemOrders.flatMap((o) => o.items || []).length -
-                                6}
-                            </span>
-                          )}
+                              <span className="text-sm font-medium text-gray-600">
+                                +
+                                {itemOrders.flatMap((o) => o.items || []).length -
+                                  6}
+                              </span>
+                            )}
                         </div>
                       </div>
                       <div className="p-3 border-r border-gray-100 flex items-center justify-center">
@@ -930,9 +957,8 @@ const RabattDetail = () => {
                           return (
                             <div
                               key={orderId}
-                              className={`grid grid-cols-[60px_1fr_1fr_100px_80px] ml-4 ${
-                                !isLastOrder ? "border-b border-blue-100" : ""
-                              }`}
+                              className={`grid grid-cols-[60px_1fr_1fr_100px_80px] ml-4 ${!isLastOrder ? "border-b border-blue-100" : ""
+                                }`}
                             >
                               <div className="p-2 flex items-center justify-center border-r border-blue-100">
                                 <span className="text-xs text-gray-400">
@@ -1201,23 +1227,23 @@ const RabattDetail = () => {
         const isTooMany = totalItems > MANUAL_MIN_ORDERS;
         const isReadyForAuto = totalItems >= settings.ordersRequiredForDiscount;
 
+        const headerOffset = 70; // Height of the main fixed header
+        const dynamicTop =
+          discountItems.length > 0
+            ? headerOffset + pendingGroupHeight // Sticky below pending group (no extra gap needed as it's flush)
+            : headerOffset;
+
         return (
           <div
-            className={`rounded-xl border p-4 mb-6 transition-colors overflow-hidden sticky z-30 ${
-              isTooMany
-                ? "bg-red-50 border-red-200"
-                : isReadyForManual
+            style={{ top: `${dynamicTop}px` }}
+            className={`rounded-xl border p-4 mb-6 transition-all duration-200 ease-out overflow-hidden sticky z-30 ${isTooMany
+              ? "bg-blue-50 border-blue-200"
+              : isReadyForManual
                 ? "bg-green-50 border-green-200"
                 : totalItems > 0
-                ? "bg-blue-50 border-blue-200"
-                : "bg-white border-gray-200"
-            } ${
-              discountItems.length > 0
-                ? pendingSectionCollapsed
-                  ? "top-[120px]"
-                  : "top-[210px]"
-                : "top-[64px]"
-            }`}
+                  ? "bg-blue-50 border-blue-200"
+                  : "bg-white border-gray-200"
+              }`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -1226,20 +1252,19 @@ const RabattDetail = () => {
                   {[...Array(MANUAL_MIN_ORDERS)].map((_, i) => (
                     <div
                       key={i}
-                      className={`w-3 h-3 rounded-full transition-colors ${
-                        i < totalItems
-                          ? isTooMany
-                            ? "bg-red-500"
-                            : isReadyForManual
+                      className={`w-3 h-3 rounded-full transition-colors ${i < totalItems
+                        ? isTooMany
+                          ? "bg-blue-500"
+                          : isReadyForManual
                             ? "bg-green-500"
                             : "bg-blue-500"
-                          : "bg-gray-200"
-                      }`}
+                        : "bg-gray-200"
+                        }`}
                     />
                   ))}
                   {/* Show extra dot if more than 3 */}
                   {isTooMany && (
-                    <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                    <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
                   )}
                 </div>
 
@@ -1252,16 +1277,16 @@ const RabattDetail = () => {
                     </span>
                   ) : isTooMany ? (
                     <>
-                      <span className="text-sm font-medium text-red-700">
+                      <span className="text-sm font-medium text-blue-700">
                         {totalItems} Bestellungen/Gruppen sind für einen Rabatt
                         erforderlich!{totalItems > 1 ? "en" : ""}
                       </span>
-                      <span className="text-sm text-red-600 font-medium">
+                      <span className="text-sm text-blue-600 font-medium">
                         • {MANUAL_MIN_ORDERS} Ausgewählte Bestellungen, die für
                         Gruppenbestellungen in Frage kommen
                       </span>
                       {hasSelectedOrders && (
-                        <span className="text-xs text-red-500">
+                        <span className="text-xs text-blue-500">
                           ({selectedOrders.length} ausgewählt)
                         </span>
                       )}
@@ -1275,9 +1300,8 @@ const RabattDetail = () => {
                   ) : (
                     <>
                       <span
-                        className={`text-sm font-medium ${
-                          isReadyForManual ? "text-green-700" : "text-blue-700"
-                        }`}
+                        className={`text-sm font-medium ${isReadyForManual ? "text-green-700" : "text-blue-700"
+                          }`}
                       >
                         {totalItems} Bestellung{totalItems > 1 ? "en" : ""}{" "}
                         ausgewählt
@@ -1316,11 +1340,10 @@ const RabattDetail = () => {
                     {selectedOrders.length > 1 && !hasSelectedItems && (
                       <button
                         onClick={() => setShowGroupConfirm(true)}
-                        className={`px-3 py-1.5 text-white rounded-lg text-sm font-medium transition-colors ${
-                          isTooMany
-                            ? "bg-blue-600 hover:bg-blue-700"
-                            : "bg-blue-600 hover:bg-blue-700"
-                        }`}
+                        className={`px-3 py-1.5 text-white rounded-lg text-sm font-medium transition-colors ${isTooMany
+                          ? "bg-blue-600 hover:bg-blue-700"
+                          : "bg-blue-600 hover:bg-blue-700"
+                          }`}
                         title="Ausgewählte Bestellungen als eine Gruppe zusammenfassen"
                       >
                         Als Gruppe
@@ -1334,23 +1357,21 @@ const RabattDetail = () => {
                         })
                       }
                       disabled={creatingGroup || !isReadyForManual || isTooMany}
-                      className={`px-4 py-1.5 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
-                        isReadyForManual && !isTooMany
-                          ? "bg-green-600 hover:bg-green-700"
-                          : isTooMany
+                      className={`px-4 py-1.5 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${isReadyForManual && !isTooMany
+                        ? "bg-green-600 hover:bg-green-700"
+                        : isTooMany
                           ? "bg-red-400 cursor-not-allowed"
                           : "bg-gray-400 cursor-not-allowed"
-                      }`}
+                        }`}
                     >
                       {creatingGroup ? "..." : "Rabattgruppe erstellen"}
                     </button>
                     <button
                       onClick={() => setSelectedOrders([])}
-                      className={`px-2 py-1.5 text-sm ${
-                        isTooMany
-                          ? "text-red-500 hover:text-red-700"
-                          : "text-gray-500 hover:text-gray-700"
-                      }`}
+                      className={`px-2 py-1.5 text-sm ${isTooMany
+                        ? "text-blue-500 hover:text-blue-700"
+                        : "text-gray-500 hover:text-gray-700"
+                        }`}
                     >
                       ✕
                     </button>
@@ -1374,19 +1395,18 @@ const RabattDetail = () => {
                         })
                       }
                       disabled={creatingGroup || !isReadyForManual || isTooMany}
-                      className={`px-4 py-1.5 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
-                        isReadyForManual && !isTooMany
-                          ? "bg-green-600 hover:bg-green-700"
-                          : isTooMany
+                      className={`px-4 py-1.5 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${isReadyForManual && !isTooMany
+                        ? "bg-green-600 hover:bg-green-700"
+                        : isTooMany
                           ? "bg-red-400 cursor-not-allowed"
                           : "bg-gray-400 cursor-not-allowed"
-                      }`}
+                        }`}
                     >
                       {creatingGroup
                         ? "..."
                         : editingGroup
-                        ? "Aktualisieren"
-                        : "Rabattgruppe erstellen"}
+                          ? "Aktualisieren"
+                          : "Rabattgruppe erstellen"}
                     </button>
                     {/* <button
                       onClick={() => {
@@ -1499,9 +1519,8 @@ const RabattDetail = () => {
                       <div className="flex-1">
                         {/* Collapsed Group Header */}
                         <div
-                          className={`grid grid-cols-[60px_1fr_1fr_100px] cursor-pointer hover:bg-gray-50 transition-colors ${
-                            isExpanded ? "bg-green-50" : ""
-                          }`}
+                          className={`grid grid-cols-[60px_1fr_1fr_100px] cursor-pointer hover:bg-gray-50 transition-colors ${isExpanded ? "bg-green-50" : ""
+                            }`}
                           onClick={toggleGroup}
                         >
                           <div className="p-4 flex items-center justify-center border-r border-gray-100">
@@ -1515,18 +1534,16 @@ const RabattDetail = () => {
                           <div className="p-4 border-r border-gray-100">
                             <div className="flex items-center gap-2">
                               <span
-                                className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                  isRedeemed
-                                    ? "bg-gray-100 text-gray-600"
-                                    : "bg-green-100 text-green-700"
-                                }`}
+                                className={`px-2 py-0.5 rounded text-xs font-medium ${isRedeemed
+                                  ? "bg-gray-100 text-gray-600"
+                                  : "bg-green-100 text-green-700"
+                                  }`}
                               >
                                 Rabattgruppe
                               </span>
                               <svg
-                                className={`h-4 w-4 text-gray-500 transition-transform ${
-                                  isExpanded ? "rotate-180" : ""
-                                }`}
+                                className={`h-4 w-4 text-gray-500 transition-transform ${isExpanded ? "rotate-180" : ""
+                                  }`}
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
@@ -1563,19 +1580,18 @@ const RabattDetail = () => {
                                 ))}
                               {groupOrders.flatMap((o) => o.items || [])
                                 .length > 6 && (
-                                <span className="text-sm font-medium text-gray-600">
-                                  +
-                                  {groupOrders.flatMap((o) => o.items || [])
-                                    .length - 6}
-                                </span>
-                              )}
+                                  <span className="text-sm font-medium text-gray-600">
+                                    +
+                                    {groupOrders.flatMap((o) => o.items || [])
+                                      .length - 6}
+                                  </span>
+                                )}
                             </div>
                           </div>
                           <div className="p-4 flex items-center justify-center">
                             <svg
-                              className={`h-7 w-7 ${
-                                isRedeemed ? "text-gray-400" : "text-green-500"
-                              }`}
+                              className={`h-7 w-7 ${isRedeemed ? "text-gray-400" : "text-green-500"
+                                }`}
                               viewBox="0 0 24 24"
                               fill="none"
                               stroke="currentColor"
@@ -1688,11 +1704,10 @@ const RabattDetail = () => {
                                   return (
                                     <div
                                       key={`bundle-${bundleIdx}`}
-                                      className={`${
-                                        !isLastBundle
-                                          ? "border-b-2 border-green-200"
-                                          : ""
-                                      }`}
+                                      className={`${!isLastBundle
+                                        ? "border-b-2 border-green-200"
+                                        : ""
+                                        }`}
                                     >
                                       {/* Bundle header if multiple orders */}
                                       {isBundle && (
@@ -1734,7 +1749,7 @@ const RabattDetail = () => {
                                                 sum +
                                                 (item.priceSubtotalIncl ||
                                                   item.priceUnit *
-                                                    item.quantity),
+                                                  item.quantity),
                                               0
                                             );
                                           const isLastOrder =
@@ -1744,15 +1759,13 @@ const RabattDetail = () => {
                                           return (
                                             <div
                                               key={orderId}
-                                              className={`grid ${
-                                                isBundle
-                                                  ? "grid-cols-[60px_40px_1fr_1fr_100px]"
-                                                  : "grid-cols-[60px_1fr_1fr_100px]"
-                                              } ${
-                                                !isLastOrder
+                                              className={`grid ${isBundle
+                                                ? "grid-cols-[60px_40px_1fr_1fr_100px]"
+                                                : "grid-cols-[60px_1fr_1fr_100px]"
+                                                } ${!isLastOrder
                                                   ? "border-b border-green-100"
                                                   : ""
-                                              }`}
+                                                }`}
                                             >
                                               {/* First column - empty spacer (group number is absolutely positioned) */}
                                               <div className="p-3 border-r border-transparent"></div>
@@ -1806,10 +1819,10 @@ const RabattDetail = () => {
                                                     ))}
                                                   {(order.items?.length || 0) >
                                                     4 && (
-                                                    <span className="text-sm font-medium text-gray-600">
-                                                      +{order.items.length - 4}
-                                                    </span>
-                                                  )}
+                                                      <span className="text-sm font-medium text-gray-600">
+                                                        +{order.items.length - 4}
+                                                      </span>
+                                                    )}
                                                 </div>
                                               </div>
                                               {/* Empty column for discount amount placeholder */}
@@ -1943,9 +1956,8 @@ const RabattDetail = () => {
                   return (
                     <div
                       key={itemKey}
-                      className={`grid grid-cols-[60px_1fr_1fr_100px_160px] border-b border-gray-100 ${
-                        isItemSelected ? "bg-amber-50" : "bg-gray-50"
-                      }`}
+                      className={`grid grid-cols-[60px_1fr_1fr_100px_160px] border-b border-gray-100 ${isItemSelected ? "bg-amber-50" : "bg-gray-50"
+                        }`}
                     >
                       <div className="p-4 flex items-center justify-center border-r border-gray-100">
                         <input
@@ -1954,11 +1966,10 @@ const RabattDetail = () => {
                           onChange={() =>
                             toggleDiscountItemSelection(itemIndex)
                           }
-                          className={`w-5 h-5 rounded border-gray-300 cursor-pointer ${
-                            isItemSelected
-                              ? "text-amber-500 focus:ring-amber-500"
-                              : "text-gray-400 focus:ring-gray-400"
-                          }`}
+                          className={`w-5 h-5 rounded border-gray-300 cursor-pointer ${isItemSelected
+                            ? "text-amber-500 focus:ring-amber-500"
+                            : "text-gray-400 focus:ring-gray-400"
+                            }`}
                         />
                       </div>
                       <div className="p-4 border-r border-gray-100">
@@ -1993,9 +2004,8 @@ const RabattDetail = () => {
                       </div>
                       <div className="p-4 border-r border-gray-100 flex items-center justify-center">
                         <svg
-                          className={`h-6 w-6 ${
-                            isItemSelected ? "text-amber-500" : "text-gray-400"
-                          }`}
+                          className={`h-6 w-6 ${isItemSelected ? "text-amber-500" : "text-gray-400"
+                            }`}
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -2009,16 +2019,14 @@ const RabattDetail = () => {
                         </svg>
                       </div>
                       <div
-                        className={`p-4 flex flex-col items-center justify-center ${
-                          isItemSelected ? "bg-amber-100/50" : "bg-gray-100/50"
-                        }`}
+                        className={`p-4 flex flex-col items-center justify-center ${isItemSelected ? "bg-amber-100/50" : "bg-gray-100/50"
+                          }`}
                       >
                         <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            isItemSelected
-                              ? "bg-amber-200 text-amber-800"
-                              : "bg-gray-200 text-gray-600"
-                          }`}
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${isItemSelected
+                            ? "bg-amber-200 text-amber-800"
+                            : "bg-gray-200 text-gray-600"
+                            }`}
                         >
                           {isItemSelected ? "Ausgewählt" : "Nicht ausgewählt"}
                         </span>
@@ -2036,15 +2044,14 @@ const RabattDetail = () => {
                     {/* Collapsed bundle header */}
                     <div className="flex">
                       <div
-                        className={`flex-1 grid grid-cols-[60px_1fr_1fr_100px] cursor-pointer hover:bg-amber-50 transition-colors ${
-                          isExpanded
-                            ? isItemSelected
-                              ? "bg-amber-50"
-                              : "bg-gray-100"
-                            : isItemSelected
+                        className={`flex-1 grid grid-cols-[60px_1fr_1fr_100px] cursor-pointer hover:bg-amber-50 transition-colors ${isExpanded
+                          ? isItemSelected
+                            ? "bg-amber-50"
+                            : "bg-gray-100"
+                          : isItemSelected
                             ? "bg-amber-50/50"
                             : "bg-gray-50"
-                        }`}
+                          }`}
                         onClick={togglePendingItem}
                       >
                         <div className="p-4 flex items-center justify-center border-r border-gray-100">
@@ -2056,11 +2063,10 @@ const RabattDetail = () => {
                               toggleDiscountItemSelection(itemIndex);
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            className={`w-5 h-5 rounded border-gray-300 cursor-pointer ${
-                              isItemSelected
-                                ? "text-amber-500 focus:ring-amber-500"
-                                : "text-gray-400 focus:ring-gray-400"
-                            }`}
+                            className={`w-5 h-5 rounded border-gray-300 cursor-pointer ${isItemSelected
+                              ? "text-amber-500 focus:ring-amber-500"
+                              : "text-gray-400 focus:ring-gray-400"
+                              }`}
                           />
                         </div>
                         <div className="p-4 border-r border-gray-100">
@@ -2070,9 +2076,8 @@ const RabattDetail = () => {
                               Bestellungen
                             </span>
                             <svg
-                              className={`h-4 w-4 text-gray-500 transition-transform ${
-                                isExpanded ? "rotate-180" : ""
-                              }`}
+                              className={`h-4 w-4 text-gray-500 transition-transform ${isExpanded ? "rotate-180" : ""
+                                }`}
                               fill="none"
                               viewBox="0 0 24 24"
                               stroke="currentColor"
@@ -2107,21 +2112,20 @@ const RabattDetail = () => {
                               ))}
                             {itemOrders.flatMap((o) => o.items || []).length >
                               6 && (
-                              <span className="text-sm font-medium text-gray-600">
-                                +
-                                {itemOrders.flatMap((o) => o.items || [])
-                                  .length - 6}
-                              </span>
-                            )}
+                                <span className="text-sm font-medium text-gray-600">
+                                  +
+                                  {itemOrders.flatMap((o) => o.items || [])
+                                    .length - 6}
+                                </span>
+                              )}
                           </div>
                         </div>
                         <div className="p-4 flex items-center justify-center">
                           <svg
-                            className={`h-7 w-7 ${
-                              isItemSelected
-                                ? "text-amber-500"
-                                : "text-gray-400"
-                            }`}
+                            className={`h-7 w-7 ${isItemSelected
+                              ? "text-amber-500"
+                              : "text-gray-400"
+                              }`}
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
@@ -2169,16 +2173,14 @@ const RabattDetail = () => {
 
                       {/* Status Column */}
                       <div
-                        className={`w-[160px] flex flex-col items-center justify-center gap-2 p-4 border-l border-gray-200 ${
-                          isItemSelected ? "bg-amber-100/50" : "bg-gray-100/50"
-                        }`}
+                        className={`w-[160px] flex flex-col items-center justify-center gap-2 p-4 border-l border-gray-200 ${isItemSelected ? "bg-amber-100/50" : "bg-gray-100/50"
+                          }`}
                       >
                         <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            isItemSelected
-                              ? "bg-amber-200 text-amber-800"
-                              : "bg-gray-200 text-gray-600"
-                          }`}
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${isItemSelected
+                            ? "bg-amber-200 text-amber-800"
+                            : "bg-gray-200 text-gray-600"
+                            }`}
                         >
                           {isItemSelected ? "Ausgewählt" : "Nicht ausgewählt"}
                         </span>
@@ -2205,9 +2207,8 @@ const RabattDetail = () => {
                           return (
                             <div
                               key={orderId}
-                              className={`grid grid-cols-[60px_1fr_1fr_100px_160px] ml-4 ${
-                                !isLastOrder ? "border-b border-amber-100" : ""
-                              }`}
+                              className={`grid grid-cols-[60px_1fr_1fr_100px_160px] ml-4 ${!isLastOrder ? "border-b border-amber-100" : ""
+                                }`}
                             >
                               <div className="p-3 flex items-center justify-center border-r border-amber-100">
                                 <span className="text-xs text-gray-400">
@@ -2305,13 +2306,12 @@ const RabattDetail = () => {
                   return (
                     <div
                       key={orderId}
-                      className={`grid grid-cols-[60px_1fr_1fr_100px_160px] border-b border-gray-100 ${
-                        isSelected
-                          ? "bg-blue-50"
-                          : isInEditingGroup && !isSelected
+                      className={`grid grid-cols-[60px_1fr_1fr_100px_160px] border-b border-gray-100 ${isSelected
+                        ? "bg-blue-50"
+                        : isInEditingGroup && !isSelected
                           ? "bg-orange-50"
                           : "bg-white"
-                      }`}
+                        }`}
                     >
                       {/* Checkbox */}
                       <div className="p-4 flex items-center justify-center border-r border-gray-100">
@@ -2320,11 +2320,10 @@ const RabattDetail = () => {
                           checked={isSelected}
                           onChange={() => handleOrderSelect(orderId)}
                           disabled={!canSelect}
-                          className={`w-5 h-5 rounded border-gray-300 ${
-                            canSelect
-                              ? "text-blue-600 focus:ring-blue-500 cursor-pointer"
-                              : "text-gray-300 cursor-not-allowed"
-                          }`}
+                          className={`w-5 h-5 rounded border-gray-300 ${canSelect
+                            ? "text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            : "text-gray-300 cursor-not-allowed"
+                            }`}
                         />
                       </div>
 
@@ -2455,9 +2454,8 @@ const RabattDetail = () => {
                       <div className="flex-1">
                         {/* Collapsed Group Header */}
                         <div
-                          className={`grid grid-cols-[60px_1fr_1fr_100px] cursor-pointer hover:bg-gray-50 transition-colors ${
-                            isExpanded ? "bg-green-50" : ""
-                          }`}
+                          className={`grid grid-cols-[60px_1fr_1fr_100px] cursor-pointer hover:bg-gray-50 transition-colors ${isExpanded ? "bg-green-50" : ""
+                            }`}
                           onClick={toggleGroup}
                         >
                           <div className="p-4 flex items-center justify-center border-r border-gray-100">
@@ -2474,9 +2472,8 @@ const RabattDetail = () => {
                                 Rabattgruppe
                               </span>
                               <svg
-                                className={`h-4 w-4 text-gray-500 transition-transform ${
-                                  isExpanded ? "rotate-180" : ""
-                                }`}
+                                className={`h-4 w-4 text-gray-500 transition-transform ${isExpanded ? "rotate-180" : ""
+                                  }`}
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
@@ -2513,12 +2510,12 @@ const RabattDetail = () => {
                                 ))}
                               {groupOrders.flatMap((o) => o.items || [])
                                 .length > 6 && (
-                                <span className="text-sm font-medium text-gray-600">
-                                  +
-                                  {groupOrders.flatMap((o) => o.items || [])
-                                    .length - 6}
-                                </span>
-                              )}
+                                  <span className="text-sm font-medium text-gray-600">
+                                    +
+                                    {groupOrders.flatMap((o) => o.items || [])
+                                      .length - 6}
+                                  </span>
+                                )}
                             </div>
                           </div>
                           <div className="p-4 flex items-center justify-center">
@@ -2621,11 +2618,10 @@ const RabattDetail = () => {
                                   return (
                                     <div
                                       key={`bundle-${bundleIdx}`}
-                                      className={`${
-                                        !isLastBundle
-                                          ? "border-b-2 border-green-200"
-                                          : ""
-                                      }`}
+                                      className={`${!isLastBundle
+                                        ? "border-b-2 border-green-200"
+                                        : ""
+                                        }`}
                                     >
                                       {isBundle && (
                                         <div className="bg-blue-50 px-4 py-2 border-b border-blue-100">
@@ -2664,7 +2660,7 @@ const RabattDetail = () => {
                                                 sum +
                                                 (item.priceSubtotalIncl ||
                                                   item.priceUnit *
-                                                    item.quantity),
+                                                  item.quantity),
                                               0
                                             );
                                           const isLastOrder =
@@ -2674,15 +2670,13 @@ const RabattDetail = () => {
                                           return (
                                             <div
                                               key={orderId}
-                                              className={`grid ${
-                                                isBundle
-                                                  ? "grid-cols-[60px_40px_1fr_1fr_100px]"
-                                                  : "grid-cols-[60px_1fr_1fr_100px]"
-                                              } ${
-                                                !isLastOrder
+                                              className={`grid ${isBundle
+                                                ? "grid-cols-[60px_40px_1fr_1fr_100px]"
+                                                : "grid-cols-[60px_1fr_1fr_100px]"
+                                                } ${!isLastOrder
                                                   ? "border-b border-green-100"
                                                   : ""
-                                              }`}
+                                                }`}
                                             >
                                               <div className="p-3 border-r border-transparent"></div>
 
@@ -2733,10 +2727,10 @@ const RabattDetail = () => {
                                                     ))}
                                                   {(order.items?.length || 0) >
                                                     4 && (
-                                                    <span className="text-sm font-medium text-gray-600">
-                                                      +{order.items.length - 4}
-                                                    </span>
-                                                  )}
+                                                      <span className="text-sm font-medium text-gray-600">
+                                                        +{order.items.length - 4}
+                                                      </span>
+                                                    )}
                                                 </div>
                                               </div>
                                               <div className="p-3"></div>

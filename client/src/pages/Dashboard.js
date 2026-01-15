@@ -112,7 +112,7 @@ const Dashboard = () => {
       case "paid":
         return "text-green-500 border-green-300 bg-white";
       case "redeemed":
-        return "text-orange-500 border-orange-300 bg-white";
+        return "bg-orange-500 text-white";
       default:
         return "text-gray-500 border-gray-300 bg-white";
     }
@@ -212,7 +212,7 @@ const Dashboard = () => {
                 {/* Status & Action */}
                 <div className="flex items-center gap-6">
                   <button
-                    className={`px-5 py-2 text-sm font-medium border rounded-lg cursor-pointer transition-all hover:opacity-80 active:scale-95 ${getStatusStyles(
+                    className={`px-5 py-2 text-sm font-medium border rounded-lg cursor-default ${getStatusStyles(
                       statusInfo.statusType
                     )}`}
                   >
@@ -243,7 +243,7 @@ const Dashboard = () => {
             <button
               onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-2 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Zurück
             </button>
@@ -261,9 +261,9 @@ const Dashboard = () => {
                   )}
                   <button
                     onClick={() => setCurrentPage(page)}
-                    className={`px-4 py-2 text-sm font-medium rounded-lg ${
+                    className={`px-3 py-1 text-sm font-medium rounded-lg ${
                       currentPage === page
-                        ? "bg-blue-500 text-white"
+                        ? "bg-gray-900 text-white"
                         : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
                     }`}
                   >
@@ -276,7 +276,7 @@ const Dashboard = () => {
                 setCurrentPage((prev) => Math.min(prev + 1, totalPages))
               }
               disabled={currentPage === totalPages}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-2 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Weiter
             </button>
