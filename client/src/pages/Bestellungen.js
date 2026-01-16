@@ -31,6 +31,7 @@ const Bestellungen = () => {
   const [hasMoreCustomers, setHasMoreCustomers] = useState(true);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState("");
   const customerDropdownRef = useRef(null);
 
   // URL-based params
@@ -568,11 +569,31 @@ const Bestellungen = () => {
                         </div>
                         {customerDropdownOpen && (
                           <div
-                            ref={customerDropdownRef}
-                            onScroll={handleCustomerScroll}
-                            className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+                            className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg"
                           >
-                            {customers.map((customer) => (
+                            {/* Customer Search Input */}
+                            <div className="p-2 border-b border-gray-100">
+                              <input
+                                type="text"
+                                placeholder="Kunde suchen..."
+                                value={customerSearchTerm}
+                                onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                              />
+                            </div>
+                            <div
+                              ref={customerDropdownRef}
+                              onScroll={handleCustomerScroll}
+                              className="max-h-40 overflow-y-auto"
+                            >
+                            {customers
+                              .filter((customer) =>
+                                !customerSearchTerm ||
+                                String(customer.name || "").toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+                                String(customer.contactId || "").toLowerCase().includes(customerSearchTerm.toLowerCase())
+                              )
+                              .map((customer) => (
                               <div
                                 key={customer._id}
                                 className={`px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 ${
@@ -583,6 +604,7 @@ const Bestellungen = () => {
                                 onClick={() => {
                                   setSelectedCustomer(customer._id);
                                   setCustomerDropdownOpen(false);
+                                  setCustomerSearchTerm("");
                                 }}
                               >
                                 {sanitizeName(customer.name)} (
@@ -618,6 +640,7 @@ const Bestellungen = () => {
                                 Scrollen für mehr...
                               </div>
                             )}
+                            </div>
                           </div>
                         )}
                       </div>

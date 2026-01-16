@@ -228,11 +228,25 @@ const RabattDetail = () => {
       .sort(([a], [b]) => Number(a) - Number(b))
       .map(([, orderIds]) => orderIds);
 
-    // Create discount items from the bundle groups - preserve bundle structure
-    const editItems = sortedBundles.map((orderIds) => ({
-      orders: orderIds,
-      isBundle: orderIds.length > 1,
-    }));
+    // Automatic groups use single-order bundles (each bundleIndex has 1 order).
+    const allSingleOrders = sortedBundles.every(
+      (bundle) => bundle.length === 1
+    );
+
+    let editItems;
+    if (allSingleOrders) {
+      // Automatic group: use direct order selection (no pending bundle items)
+      const allOrders = sortedBundles.flat();
+      setSelectedOrders(allOrders);
+      setSelectedDiscountItems([]);
+      return;
+    } else {
+      // Manual group with actual bundles: preserve bundle structure
+      editItems = sortedBundles.map((orderIds) => ({
+        orders: orderIds,
+        isBundle: orderIds.length > 1,
+      }));
+    }
 
     // Append edit items to existing pending items (preserve existing)
     setDiscountItems((prev) => {
@@ -319,17 +333,32 @@ const RabattDetail = () => {
         bundleIndex++; // Each selected order gets its own bundleIndex
       });
 
-      await discountsAPI.createGroup(
-        id,
-        ordersWithBundles,
-        settings.discountRate
-      );
-      setMessage({
-        type: "success",
-        text: "Rabattgruppe erfolgreich erstellt!",
-      });
-      toast.success("Rabattgruppe erstellt.");
+      if (editingGroup) {
+        await discountsAPI.updateGroup(
+          id,
+          editingGroup._id,
+          ordersWithBundles,
+          settings.discountRate
+        );
+        setMessage({
+          type: "success",
+          text: "Rabattgruppe erfolgreich aktualisiert!",
+        });
+        toast.success("Rabattgruppe aktualisiert.");
+      } else {
+        await discountsAPI.createGroup(
+          id,
+          ordersWithBundles,
+          settings.discountRate
+        );
+        setMessage({
+          type: "success",
+          text: "Rabattgruppe erfolgreich erstellt!",
+        });
+        toast.success("Rabattgruppe erstellt.");
+      }
       setSelectedOrders([]);
+      setEditingGroup(null);
       // Only remove selected discount items, keep unselected ones
       setDiscountItems((prev) =>
         prev.filter((_, index) => !selectedDiscountItems.includes(index))
@@ -416,6 +445,16 @@ const RabattDetail = () => {
           bundleIndex++;
         }
       });
+
+      // Validate minimum 2 orders for a discount group
+      if (ordersWithBundles.length < 2) {
+        setMessage({
+          type: "error",
+          text: "Eine Rabattgruppe muss mindestens 2 Bestellungen enthalten",
+        });
+        setCreatingGroup(false);
+        return;
+      }
 
       if (editingGroup) {
         // Update existing group
@@ -1349,8 +1388,8 @@ const RabattDetail = () => {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
-                {hasSelectedOrders && (
-                  <>
+              {hasSelectedOrders && (
+                <>
                     {selectedOrders.length > 1 && !hasSelectedItems && (
                       <button
                         onClick={() => setShowGroupConfirm(true)}
@@ -1380,7 +1419,11 @@ const RabattDetail = () => {
                           : "bg-gray-400 cursor-not-allowed"
                       }`}
                     >
-                      {creatingGroup ? "..." : "Rabattgruppe erstellen"}
+                      {creatingGroup
+                        ? "..."
+                        : editingGroup
+                        ? "Aktualisieren"
+                        : "Rabattgruppe erstellen"}
                     </button>
                     <button
                       onClick={() => setSelectedOrders([])}

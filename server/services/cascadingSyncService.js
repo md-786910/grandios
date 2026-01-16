@@ -341,11 +341,12 @@ async function checkAndCreateDiscountGroup(customer, orders) {
   while (eligibleOrders.length >= ORDERS_FOR_DISCOUNT) {
     const groupOrders = eligibleOrders.splice(0, ORDERS_FOR_DISCOUNT);
 
-    const discountOrderItems = groupOrders.map(order => ({
+    const discountOrderItems = groupOrders.map((order, index) => ({
       orderId: order._id,
       amount: order.amountTotal,
       discountRate: DISCOUNT_RATE,
       discountAmount: order.amountTotal * DISCOUNT_RATE,
+      bundleIndex: index,  // Each order is a separate item (not bundled together)
     }));
 
     // Create discount group
