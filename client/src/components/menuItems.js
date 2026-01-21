@@ -3,7 +3,7 @@ import React from "react";
 const menuItems = [
   {
     id: "dashboard",
-    label: "Armaturenbrett",
+    label: "Dashboard",
     path: "/dashboard",
     icon: (
       <svg
@@ -23,9 +23,9 @@ const menuItems = [
     ),
   },
   {
-    id: "rabatt",
-    label: "Rabatt",
-    path: "/rabatt",
+    id: "bonus",
+    label: "Bonus",
+    path: "/bonus",
     icon: (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -45,7 +45,7 @@ const menuItems = [
   },
   {
     id: "bestellungen",
-    label: "Bestellungen",
+    label: "Einkäufe",
     path: "/bestellungen",
     icon: (
       <svg

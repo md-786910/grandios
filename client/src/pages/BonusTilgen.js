@@ -7,7 +7,7 @@ const ordersData = [
     id: 1,
     bestellnummer: "GRAND12345",
     datum: "26-12-2024",
-    gesamtNichtRabattiert: "99,90",
+    gesamtNichtBonusiert: "99,90",
     items: [
       { image: "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=60&h=60&fit=crop" },
       { image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=60&h=60&fit=crop" },
@@ -18,7 +18,7 @@ const ordersData = [
     id: 2,
     bestellnummer: "GRAND09867",
     datum: "26-12-2024",
-    gesamtNichtRabattiert: "149,90",
+    gesamtNichtBonusiert: "149,90",
     items: [
       { image: "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=60&h=60&fit=crop" },
       { image: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=60&h=60&fit=crop" },
@@ -28,7 +28,7 @@ const ordersData = [
     id: 3,
     bestellnummer: "GRAND45678",
     datum: "26-12-2024",
-    gesamtNichtRabattiert: "49,90",
+    gesamtNichtBonusiert: "49,90",
     items: [
       { image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=60&h=60&fit=crop" },
       { image: "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=60&h=60&fit=crop" },
@@ -37,7 +37,7 @@ const ordersData = [
   },
 ];
 
-const RabattTilgen = () => {
+const BonusTilgen = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [selectedOrders, setSelectedOrders] = useState([1, 2]); // Pre-select first two
@@ -60,7 +60,7 @@ const RabattTilgen = () => {
       {/* Header with Zurück button */}
       <div className="flex justify-end mb-6">
         <button
-          onClick={() => navigate(`/rabatt/${id}`)}
+          onClick={() => navigate(`/bonus/${id}`)}
           className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm"
         >
           Zurück
@@ -83,12 +83,12 @@ const RabattTilgen = () => {
                   {/* Order Info */}
                   <td className="p-5 w-[420px]">
                     <p className="text-sm text-gray-900">
-                      <span className="font-semibold">Bestellnummer</span> - {order.bestellnummer} |{" "}
-                      <span className="font-semibold">Bestelldatum</span> - {order.datum}
+                      <span className="font-semibold">Einkaufsnummer</span> - {order.bestellnummer} |{" "}
+                      <span className="font-semibold">Einkaufsdatum</span> - {order.datum}
                     </p>
                     <p className="text-sm text-gray-600 mt-1">
-                      <span className="font-semibold">Gesamtbestellwert Nicht Rabattierter Artikel:</span> €{" "}
-                      {order.gesamtNichtRabattiert}
+                      <span className="font-semibold">Gesamtbestellwert Nicht Bonusierter Artikel:</span> €{" "}
+                      {order.gesamtNichtBonusiert}
                     </p>
                   </td>
 
@@ -141,4 +141,4 @@ const RabattTilgen = () => {
   );
 };
 
-export default RabattTilgen;
+export default BonusTilgen;

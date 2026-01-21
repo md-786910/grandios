@@ -36,7 +36,7 @@ const ProductImage = ({ src, size = "md", className = "" }) => {
   );
 };
 
-const RabattDetail = () => {
+const BonusDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [notizen, setNotizen] = useState("");
@@ -342,9 +342,9 @@ const RabattDetail = () => {
         );
         setMessage({
           type: "success",
-          text: "Rabattgruppe erfolgreich aktualisiert!",
+          text: "Bonusgruppe erfolgreich aktualisiert!",
         });
-        toast.success("Rabattgruppe aktualisiert.");
+        toast.success("Bonusgruppe aktualisiert.");
       } else {
         await discountsAPI.createGroup(
           id,
@@ -353,9 +353,9 @@ const RabattDetail = () => {
         );
         setMessage({
           type: "success",
-          text: "Rabattgruppe erfolgreich erstellt!",
+          text: "Bonusgruppe erfolgreich erstellt!",
         });
-        toast.success("Rabattgruppe erstellt.");
+        toast.success("Bonusgruppe erstellt.");
       }
       setSelectedOrders([]);
       setEditingGroup(null);
@@ -369,7 +369,7 @@ const RabattDetail = () => {
       console.error("Failed to create discount group:", error);
       setMessage({
         type: "error",
-        text: error.message || "Fehler beim Erstellen der Rabattgruppe",
+        text: error.message || "Fehler beim Erstellen der Bonusgruppe",
       });
     } finally {
       setCreatingGroup(false);
@@ -411,7 +411,7 @@ const RabattDetail = () => {
         return newItems;
       }
     });
-    toast.success("Bestellung aus Gruppe entfernt.");
+    toast.success("Einkauf aus Gruppe entfernt.");
   };
 
   // Get all order IDs that are already in discount items
@@ -450,7 +450,7 @@ const RabattDetail = () => {
       if (ordersWithBundles.length < 2) {
         setMessage({
           type: "error",
-          text: "Eine Rabattgruppe muss mindestens 2 Bestellungen enthalten",
+          text: "Eine Bonusgruppe muss mindestens 2 Einkäufe enthalten",
         });
         setCreatingGroup(false);
         return;
@@ -466,9 +466,9 @@ const RabattDetail = () => {
         );
         setMessage({
           type: "success",
-          text: "Rabattgruppe erfolgreich aktualisiert!",
+          text: "Bonusgruppe erfolgreich aktualisiert!",
         });
-        toast.success("Rabattgruppe aktualisiert.");
+        toast.success("Bonusgruppe aktualisiert.");
       } else {
         // Create new group
         await discountsAPI.createGroup(
@@ -478,9 +478,9 @@ const RabattDetail = () => {
         );
         setMessage({
           type: "success",
-          text: "Rabattgruppe erfolgreich erstellt!",
+          text: "Bonusgruppe erfolgreich erstellt!",
         });
-        toast.success("Rabattgruppe erstellt.");
+        toast.success("Bonusgruppe erstellt.");
       }
       setSelectedOrders([]);
       // Only remove selected discount items, keep unselected ones
@@ -496,7 +496,7 @@ const RabattDetail = () => {
         type: "error",
         text:
           error.message ||
-          "Fehler beim Erstellen/Aktualisieren der Rabattgruppe",
+          "Fehler beim Erstellen/Aktualisieren der Bonusgruppe",
       });
     } finally {
       setCreatingGroup(false);
@@ -514,8 +514,8 @@ const RabattDetail = () => {
 
     try {
       await discountsAPI.redeemGroup(id, redeemGroupId);
-      setMessage({ type: "success", text: "Rabatt erfolgreich eingelöst!" });
-      toast.success("Rabatt eingelöst.");
+      setMessage({ type: "success", text: "Bonus erfolgreich eingelöst!" });
+      toast.success("Bonus eingelöst.");
       setRedeemGroupId(null);
       await fetchData();
     } catch (error) {
@@ -539,8 +539,8 @@ const RabattDetail = () => {
 
     try {
       await discountsAPI.deleteGroup(id, deleteGroupId);
-      setMessage({ type: "success", text: "Rabattgruppe gelöscht!" });
-      toast.success("Rabattgruppe gelöscht.");
+      setMessage({ type: "success", text: "Bonusgruppe gelöscht!" });
+      toast.success("Bonusgruppe gelöscht.");
       setDeleteGroupId(null);
       await fetchData();
     } catch (error) {
@@ -599,7 +599,7 @@ const RabattDetail = () => {
         <div className="text-center py-12">
           <p className="text-gray-500">Kunde nicht gefunden</p>
           <button
-            onClick={() => navigate("/rabatt")}
+            onClick={() => navigate("/bonus")}
             className="mt-4 px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
           >
             Zurück zur Liste
@@ -689,7 +689,7 @@ const RabattDetail = () => {
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Rabatt Details</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Bonus Details</h1>
           <p className="text-gray-500 text-sm mt-1">
             {sanitizeName(customer?.customerName || customer?.name)}
           </p>
@@ -730,14 +730,14 @@ const RabattDetail = () => {
                 </svg>
               </div>
               <span className="text-sm font-semibold text-amber-900">
-                Rabattgruppe wird erstellt
+                Bonusgruppe wird erstellt
               </span>
               <span className="px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full text-xs font-medium">
                 {discountItems.reduce(
                   (sum, item) => sum + item.orders.length,
                   0
                 )}{" "}
-                Bestellungen
+                Einkäufe
               </span>
               {/* Collapse/Expand indicator */}
               <svg
@@ -826,15 +826,15 @@ const RabattDetail = () => {
                       </div>
                       <div className="p-3 border-r border-gray-100">
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">Bestellnummer</span> -{" "}
+                          <span className="font-semibold">Einkaufsnummer</span> -{" "}
                           {order.posReference || order.orderId}
                         </p>
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">Bestelldatum</span> -{" "}
+                          <span className="font-semibold">Einkaufsdatum</span> -{" "}
                           {formatDate(order.orderDate)}
                         </p>
                         <p className="text-sm mt-1 text-gray-600">
-                          <span className="font-semibold">Rabattfähig:</span> €{" "}
+                          <span className="font-semibold">Bonusfähig:</span> €{" "}
                           {formatCurrency(itemEligible)}
                         </p>
                       </div>
@@ -905,7 +905,7 @@ const RabattDetail = () => {
                         <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
                             Gruppenbestellung - {item.orders.length}{" "}
-                            Bestellungen
+                            Einkäufe
                           </span>
                           <svg
                             className={`h-4 w-4 text-gray-500 transition-transform ${
@@ -924,11 +924,11 @@ const RabattDetail = () => {
                           </svg>
                         </div>
                         <p className="text-sm mt-1 text-gray-600">
-                          <span className="font-semibold">Rabattfähig:</span> €{" "}
+                          <span className="font-semibold">Bonusfähig:</span> €{" "}
                           {formatCurrency(itemEligible)}
                         </p>
                         <p className="text-xs text-gray-400 mt-0.5">
-                          Klicken zum Erweitern
+                          Erweitern
                         </p>
                       </div>
                       <div className="p-3 border-r border-gray-100">
@@ -1018,19 +1018,19 @@ const RabattDetail = () => {
                               <div className="p-2 border-r border-blue-100">
                                 <p className="text-sm text-gray-900">
                                   <span className="font-semibold">
-                                    Bestellnummer
+                                    Einkaufsnummer
                                   </span>{" "}
                                   - {order.posReference || order.orderId}
                                 </p>
                                 <p className="text-sm text-gray-900">
                                   <span className="font-semibold">
-                                    Bestelldatum
+                                    Einkaufsdatum
                                   </span>{" "}
                                   - {formatDate(order.orderDate)}
                                 </p>
                                 <p className="text-sm mt-1 text-gray-600">
                                   <span className="font-semibold">
-                                    Rabattfähig:
+                                    Bonusfähig:
                                   </span>{" "}
                                   € {formatCurrency(orderEligible)}
                                 </p>
@@ -1116,7 +1116,7 @@ const RabattDetail = () => {
                 />
               </svg>
               <span className="text-sm text-orange-800">
-                <strong>Bearbeitungsmodus:</strong> Rabattgruppe wird bearbeitet
+                <strong>Bearbeitungsmodus:</strong> Bonusgruppe wird bearbeitet
               </span>
             </div>
             <button
@@ -1148,14 +1148,14 @@ const RabattDetail = () => {
                 />
               </svg>
               <span className="text-sm text-blue-800">
-                <strong>{queue.orderCount}</strong> Bestellung(en) in
+                <strong>{queue.orderCount}</strong> Einkauf(e) in
                 Warteschlange ({queue.orderCount}/
-                {settings.ordersRequiredForDiscount} für automatischen Rabatt)
+                {settings.ordersRequiredForDiscount} für automatischen Bonus)
               </span>
             </div>
             {queue.readyForDiscount && (
               <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                Bereit für automatischen Rabatt
+                Bereit für automatischen Bonus
               </span>
             )}
           </div>
@@ -1217,10 +1217,10 @@ const RabattDetail = () => {
             </p>
           </div>
 
-          {/* Gesamtrabatt Gewährt */}
+          {/* Gesamtbonus Gewährt */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center">
             <h3 className="font-semibold text-gray-600 mb-2 text-sm">
-              Gesamtrabatt Gewährt
+              Gesamtbonus Gewährt
             </h3>
             <p className="text-3xl font-bold text-gray-900">
               € {formatCurrency(totalDiscountGranted)}
@@ -1255,7 +1255,7 @@ const RabattDetail = () => {
       <div className="flex gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center w-[350px]">
           <h3 className="font-semibold text-gray-600 mb-2 text-sm">
-            Anzahl Der Bestellungen
+            Anzahl Der Einkäufe
           </h3>
           <p className="text-3xl font-bold text-gray-900">{totalOrders}</p>
         </div>
@@ -1324,17 +1324,17 @@ const RabattDetail = () => {
                 <div className="flex items-center gap-3">
                   {totalItems === 0 ? (
                     <span className="text-sm text-gray-500">
-                      Wählen Sie genau {MANUAL_MIN_ORDERS} Bestellungen oder
+                      Wählen Sie genau {MANUAL_MIN_ORDERS} Einkäufe oder
                       Gruppen
                     </span>
                   ) : isTooMany ? (
                     <>
                       <span className="text-sm font-medium text-blue-700">
-                        {totalItems} Bestellungen/Gruppen sind für einen Rabatt
+                        {totalItems} Einkäufe/Gruppen sind für einen Bonus
                         erforderlich!{totalItems > 1 ? "en" : ""}
                       </span>
                       <span className="text-sm text-blue-600 font-medium">
-                        • {MANUAL_MIN_ORDERS} Ausgewählte Bestellungen, die für
+                        • {MANUAL_MIN_ORDERS} Ausgewählte Einkäufe, die für
                         Gruppenbestellungen in Frage kommen
                       </span>
                       {hasSelectedOrders && (
@@ -1356,8 +1356,7 @@ const RabattDetail = () => {
                           isReadyForManual ? "text-green-700" : "text-blue-700"
                         }`}
                       >
-                        {totalItems} Bestellung{totalItems > 1 ? "en" : ""}{" "}
-                        ausgewählt
+                        {totalItems === 1 ? "Einkauf" : "Einkäufe"} ausgewählt
                       </span>
                       {hasSelectedOrders && (
                         <span className="text-xs text-gray-500">
@@ -1372,7 +1371,7 @@ const RabattDetail = () => {
                       )}
                       {isReadyForManual && (
                         <span className="text-sm text-green-600 font-medium">
-                          • Rabatt: €{" "}
+                          • Bonus: €{" "}
                           {formatCurrency(itemsDiscount + selectedDiscount)}
                         </span>
                       )}
@@ -1398,7 +1397,7 @@ const RabattDetail = () => {
                             ? "bg-blue-600 hover:bg-blue-700"
                             : "bg-blue-600 hover:bg-blue-700"
                         }`}
-                        title="Ausgewählte Bestellungen als eine Gruppe zusammenfassen"
+                        title="Ausgewählte Einkäufe als eine Gruppe zusammenfassen"
                       >
                         Als Gruppe
                       </button>
@@ -1423,7 +1422,7 @@ const RabattDetail = () => {
                         ? "..."
                         : editingGroup
                         ? "Aktualisieren"
-                        : "Rabattgruppe erstellen"}
+                        : "Bonusgruppe erstellen"}
                     </button>
                     <button
                       onClick={() => setSelectedOrders([])}
@@ -1467,7 +1466,7 @@ const RabattDetail = () => {
                         ? "..."
                         : editingGroup
                         ? "Aktualisieren"
-                        : "Rabattgruppe erstellen"}
+                        : "Bonusgruppe erstellen"}
                     </button>
                     {/* <button
                       onClick={() => {
@@ -1496,10 +1495,10 @@ const RabattDetail = () => {
           <>
             <div className="p-4 border-b border-gray-200 bg-gray-50">
               <p className="text-sm text-gray-600">
-                Wählen Sie Bestellungen aus, um eine Rabattgruppe zu erstellen.
+                Wählen Sie Einkäufe aus, um eine Bonusgruppe zu erstellen.
                 {editingGroup
                   ? " Sie bearbeiten gerade eine bestehende Gruppe."
-                  : " Bereits gruppierte oder eingelöste Bestellungen können nicht ausgewählt werden."}
+                  : " Bereits gruppierte oder eingelöste Einkäufe können nicht ausgewählt werden."}
               </p>
             </div>
 
@@ -1602,7 +1601,7 @@ const RabattDetail = () => {
                                     : "bg-green-100 text-green-700"
                                 }`}
                               >
-                                Rabattgruppe
+                                Bonusgruppe
                               </span>
                               <svg
                                 className={`h-4 w-4 text-gray-500 transition-transform ${
@@ -1622,12 +1621,12 @@ const RabattDetail = () => {
                             </div>
                             <p className="text-sm mt-1 text-gray-600">
                               <span className="font-semibold">
-                                Rabattfähig:
+                                Bonusfähig:
                               </span>{" "}
                               € {formatCurrency(groupTotalEligible)}
                             </p>
                             <p className="text-xs text-gray-400 mt-0.5">
-                              Klicken zum Erweitern
+                              Erweitern
                             </p>
                           </div>
                           <div className="p-4 border-r border-gray-100">
@@ -1781,10 +1780,10 @@ const RabattDetail = () => {
                                           <div className="flex items-center gap-2">
                                             <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
                                               Gruppenbestellung -{" "}
-                                              {bundleOrders.length} Bestellungen
+                                              {bundleOrders.length} Einkäufe
                                             </span>
                                             <span className="text-xs text-gray-500">
-                                              Rabattfähig: €{" "}
+                                              Bonusfähig: €{" "}
                                               {formatCurrency(bundleEligible)}
                                             </span>
                                           </div>
@@ -1851,7 +1850,7 @@ const RabattDetail = () => {
                                               <div className="p-3 border-r border-green-100">
                                                 <p className="text-sm text-gray-900">
                                                   <span className="font-semibold">
-                                                    Bestellnummer
+                                                    Einkaufsnummer
                                                   </span>{" "}
                                                   -{" "}
                                                   {order.posReference ||
@@ -1859,14 +1858,14 @@ const RabattDetail = () => {
                                                 </p>
                                                 <p className="text-sm text-gray-900">
                                                   <span className="font-semibold">
-                                                    Bestelldatum
+                                                    Einkaufsdatum
                                                   </span>{" "}
                                                   -{" "}
                                                   {formatDate(order.orderDate)}
                                                 </p>
                                                 <p className="text-sm mt-1 text-gray-600">
                                                   <span className="font-semibold">
-                                                    Rabattfähig:
+                                                    Bonusfähig:
                                                   </span>{" "}
                                                   €{" "}
                                                   {formatCurrency(
@@ -1926,7 +1925,7 @@ const RabattDetail = () => {
                               }}
                               className="w-full px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition-colors font-medium"
                             >
-                              Tilgen
+                              Einlösen
                             </button>
                             <div className="flex gap-1 w-full">
                               <button
@@ -1944,7 +1943,7 @@ const RabattDetail = () => {
                                   handleDeleteGroup(group._id);
                                 }}
                                 className="px-2 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs hover:bg-red-50 transition-colors"
-                                title="Rabattgruppe löschen"
+                                title="Bonusgruppe löschen"
                               >
                                 <svg
                                   className="h-4 w-4"
@@ -2044,15 +2043,15 @@ const RabattDetail = () => {
                       </div>
                       <div className="p-4 border-r border-gray-100">
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">Bestellnummer</span> -{" "}
+                          <span className="font-semibold">Einkaufsnummer</span> -{" "}
                           {order.posReference || order.orderId}
                         </p>
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">Bestelldatum</span> -{" "}
+                          <span className="font-semibold">Einkaufsdatum</span> -{" "}
                           {formatDate(order.orderDate)}
                         </p>
                         <p className="text-sm mt-1 text-gray-600">
-                          <span className="font-semibold">Rabattfähig:</span> €{" "}
+                          <span className="font-semibold">Bonusfähig:</span> €{" "}
                           {formatCurrency(discountEligibleAmount)}
                         </p>
                       </div>
@@ -2148,7 +2147,7 @@ const RabattDetail = () => {
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-0.5 bg-amber-200 text-amber-800 rounded text-xs font-medium">
                               Gruppenbestellung - {item.orders.length}{" "}
-                              Bestellungen
+                              Einkäufe
                             </span>
                             <svg
                               className={`h-4 w-4 text-gray-500 transition-transform ${
@@ -2167,11 +2166,11 @@ const RabattDetail = () => {
                             </svg>
                           </div>
                           <p className="text-sm mt-1 text-gray-600">
-                            <span className="font-semibold">Rabattfähig:</span>{" "}
+                            <span className="font-semibold">Bonusfähig:</span>{" "}
                             € {formatCurrency(itemEligible)}
                           </p>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            Klicken zum Erweitern
+                            Erweitern
                           </p>
                         </div>
                         <div className="p-4 border-r border-gray-100">
@@ -2298,19 +2297,19 @@ const RabattDetail = () => {
                               <div className="p-3 border-r border-amber-100">
                                 <p className="text-sm text-gray-900">
                                   <span className="font-semibold">
-                                    Bestellnummer
+                                    Einkaufsnummer
                                   </span>{" "}
                                   - {order.posReference || order.orderId}
                                 </p>
                                 <p className="text-sm text-gray-900">
                                   <span className="font-semibold">
-                                    Bestelldatum
+                                    Einkaufsdatum
                                   </span>{" "}
                                   - {formatDate(order.orderDate)}
                                 </p>
                                 <p className="text-sm mt-1 text-gray-600">
                                   <span className="font-semibold">
-                                    Rabattfähig:
+                                    Bonusfähig:
                                   </span>{" "}
                                   € {formatCurrency(orderEligible)}
                                 </p>
@@ -2412,15 +2411,15 @@ const RabattDetail = () => {
                       {/* Order Info */}
                       <div className="p-4 border-r border-gray-100">
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">Bestellnummer</span> -{" "}
+                          <span className="font-semibold">Einkaufsnummer</span> -{" "}
                           {order.posReference || order.orderId}
                         </p>
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">Bestelldatum</span> -{" "}
+                          <span className="font-semibold">Einkaufsdatum</span> -{" "}
                           {formatDate(order.orderDate)}
                         </p>
                         <p className="text-sm mt-1 text-gray-600">
-                          <span className="font-semibold">Rabattfähig:</span> €{" "}
+                          <span className="font-semibold">Bonusfähig:</span> €{" "}
                           {formatCurrency(discountEligibleAmount)}
                         </p>
                       </div>
@@ -2470,7 +2469,7 @@ const RabattDetail = () => {
                           </>
                         ) : (
                           <span className="text-xs text-gray-400">
-                            Kein Rabatt
+                            Kein Bonus
                           </span>
                         )}
                       </div>
@@ -2552,7 +2551,7 @@ const RabattDetail = () => {
                           <div className="p-4 border-r border-gray-100">
                             <div className="flex items-center gap-2">
                               <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
-                                Rabattgruppe
+                                Bonusgruppe
                               </span>
                               <svg
                                 className={`h-4 w-4 text-gray-500 transition-transform ${
@@ -2572,12 +2571,12 @@ const RabattDetail = () => {
                             </div>
                             <p className="text-sm mt-1 text-gray-600">
                               <span className="font-semibold">
-                                Rabattfähig:
+                                Bonusfähig:
                               </span>{" "}
                               € {formatCurrency(groupTotalEligible)}
                             </p>
                             <p className="text-xs text-gray-400 mt-0.5">
-                              Klicken zum Erweitern
+                              Erweitern
                             </p>
                           </div>
                           <div className="p-4 border-r border-gray-100">
@@ -2713,10 +2712,10 @@ const RabattDetail = () => {
                                           <div className="flex items-center gap-2">
                                             <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
                                               Gruppenbestellung -{" "}
-                                              {bundleOrders.length} Bestellungen
+                                              {bundleOrders.length} Einkäufe
                                             </span>
                                             <span className="text-xs text-gray-500">
-                                              Rabattfähig: €{" "}
+                                              Bonusfähig: €{" "}
                                               {formatCurrency(bundleEligible)}
                                             </span>
                                           </div>
@@ -2778,7 +2777,7 @@ const RabattDetail = () => {
                                               <div className="p-3 border-r border-green-100">
                                                 <p className="text-sm text-gray-900">
                                                   <span className="font-semibold">
-                                                    Bestellnummer
+                                                    Einkaufsnummer
                                                   </span>{" "}
                                                   -{" "}
                                                   {order.posReference ||
@@ -2786,14 +2785,14 @@ const RabattDetail = () => {
                                                 </p>
                                                 <p className="text-sm text-gray-900">
                                                   <span className="font-semibold">
-                                                    Bestelldatum
+                                                    Einkaufsdatum
                                                   </span>{" "}
                                                   -{" "}
                                                   {formatDate(order.orderDate)}
                                                 </p>
                                                 <p className="text-sm mt-1 text-gray-600">
                                                   <span className="font-semibold">
-                                                    Rabattfähig:
+                                                    Bonusfähig:
                                                   </span>{" "}
                                                   €{" "}
                                                   {formatCurrency(
@@ -2853,7 +2852,7 @@ const RabattDetail = () => {
           </>
         ) : (
           <div className="p-8 text-center text-gray-500">
-            Keine Bestellungen vorhanden
+            Keine Einkäufe vorhanden
           </div>
         )}
       </div>
@@ -2864,7 +2863,7 @@ const RabattDetail = () => {
         onClose={() => setDeleteGroupId(null)}
         onConfirm={confirmDeleteGroup}
         title="RABATTGRUPPE LÖSCHEN"
-        message="Möchten Sie diese Rabattgruppe wirklich löschen? Die Bestellungen werden wieder verfügbar."
+        message="Möchten Sie diese Bonusgruppe wirklich löschen? Die Einkäufe werden wieder verfügbar."
         confirmText="Ja, löschen"
         cancelText="Abbrechen"
       />
@@ -2875,7 +2874,7 @@ const RabattDetail = () => {
         onClose={() => setRedeemGroupId(null)}
         onConfirm={confirmRedeemGroup}
         title="RABATT EINLÖSEN"
-        message="Möchten Sie diesen Rabatt wirklich einlösen? Diese Aktion kann nicht rückgängig gemacht werden."
+        message="Möchten Sie diesen Bonus wirklich einlösen? Diese Aktion kann nicht rückgängig gemacht werden."
         confirmText="Ja, einlösen"
         cancelText="Abbrechen"
       />
@@ -2889,7 +2888,7 @@ const RabattDetail = () => {
           setShowGroupConfirm(false);
         }}
         title="ALS GRUPPE ZUSAMMENFASSEN"
-        message={`Möchten Sie die ${selectedOrders.length} ausgewählten Bestellungen als eine Gruppe zusammenfassen?`}
+        message={`Möchten Sie die ${selectedOrders.length} ausgewählten Einkäufe als eine Gruppe zusammenfassen?`}
         confirmText="Ja, zusammenfassen"
         cancelText="Abbrechen"
       />
@@ -2907,7 +2906,7 @@ const RabattDetail = () => {
           setCreateGroupConfirm({ open: false, mode: null });
         }}
         title="RABATTGRUPPE ERSTELLEN"
-        message="Möchten Sie diese Rabattgruppe erstellen?"
+        message="Möchten Sie diese Bonusgruppe erstellen?"
         confirmText="Ja, erstellen"
         cancelText="Abbrechen"
       />
@@ -2921,7 +2920,7 @@ const RabattDetail = () => {
           setRemoveItemIndex(null);
         }}
         title="ARTIKEL ENTFERNEN"
-        message="Möchten Sie diesen Artikel wirklich aus der Rabattgruppe entfernen?"
+        message="Möchten Sie diesen Artikel wirklich aus der Bonusgruppe entfernen?"
         confirmText="Ja, entfernen"
         cancelText="Abbrechen"
       />
@@ -2938,7 +2937,7 @@ const RabattDetail = () => {
           setRemoveOrderFromItem(null);
         }}
         title="AUS GRUPPE ENTFERNEN"
-        message="Möchten Sie diese Bestellung wirklich aus der Gruppe entfernen?"
+        message="Möchten Sie diesen Einkauf wirklich aus der Gruppe entfernen?"
         confirmText="Ja, entfernen"
         cancelText="Abbrechen"
       />
@@ -2953,7 +2952,7 @@ const RabattDetail = () => {
           setClearAllConfirm(false);
         }}
         title="ALLE LÖSCHEN"
-        message="Möchten Sie wirklich alle Rabatt-Positionen entfernen? Diese Aktion kann nicht rückgängig gemacht werden."
+        message="Möchten Sie wirklich alle Bonus-Positionen entfernen? Diese Aktion kann nicht rückgängig gemacht werden."
         confirmText="Ja, löschen"
         cancelText="Abbrechen"
       />
@@ -2961,4 +2960,4 @@ const RabattDetail = () => {
   );
 };
 
-export default RabattDetail;
+export default BonusDetail;

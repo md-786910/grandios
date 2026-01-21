@@ -4,7 +4,7 @@ import Layout from "../components/Layout";
 import { discountsAPI } from "../services/api";
 import { sanitizeName } from "../utils/helpers";
 
-const Rabatt = () => {
+const Bonus = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -115,7 +115,7 @@ const Rabatt = () => {
   };
 
   const handleViewCustomer = (customerId, customerName) => {
-    navigate(`/rabatt/${customerId}`, { state: { customerName } });
+    navigate(`/bonus/${customerId}`, { state: { customerName } });
   };
 
   return (
@@ -170,7 +170,7 @@ const Rabatt = () => {
         >
           <option value="">Alle Status</option>
           <option value="redeemable">Einlösbar</option>
-          <option value="ready">Bereit für Rabatt</option>
+          <option value="ready">Bereit für Bonus</option>
           <option value="inQueue">In Warteschlange</option>
         </select>
       </div>
@@ -178,8 +178,8 @@ const Rabatt = () => {
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         {/* Gesamtzahl der Kunden */}
-        <div className="bg-green-50 rounded-xl border border-green-100 p-6">
-          <h3 className="text-center font-semibold text-green-600 mb-2">
+        <div className="bg-purple-50 rounded-xl border border-purple-100 p-6">
+          <h3 className="text-center font-bold text-purple-600 mb-2">
             Gesamtzahl der Kunden
           </h3>
           <p className="text-center text-3xl font-bold text-gray-900">
@@ -188,8 +188,8 @@ const Rabatt = () => {
         </div>
 
         {/* Gesamtbestellwert */}
-        <div className="bg-red-50 rounded-xl border border-red-100 p-6">
-          <h3 className="text-center font-semibold text-red-500 mb-2">
+        <div className="bg-green-50 rounded-xl border border-green-100 p-6">
+          <h3 className="text-center font-bold text-green-600 mb-2">
             Gesamtbestellwert
           </h3>
           <p className="text-center text-3xl font-bold text-gray-900">
@@ -197,10 +197,10 @@ const Rabatt = () => {
           </p>
         </div>
 
-        {/* Gesamter Gewährter Rabatt */}
-        <div className="bg-rose-50 rounded-xl border border-rose-100 p-6">
-          <h3 className="text-center font-semibold text-gray-700 mb-2">
-            Gesamter Gewährter Rabatt
+        {/* Gesamter gewährter Bonus */}
+        <div className="bg-blue-50 rounded-xl border border-blue-100 p-6">
+          <h3 className="text-center font-bold text-blue-600 mb-2">
+            Gesamter gewährter Bonus
           </h3>
           <p className="text-center text-3xl font-bold text-gray-900">
             € {formatCurrency(stats.totalDiscountGranted)}
@@ -228,7 +228,7 @@ const Rabatt = () => {
                   />
                 </svg>
                 <span className="text-sm text-blue-800">
-                  <strong>{stats.totalInQueue}</strong> Bestellungen in
+                  <strong>{stats.totalInQueue}</strong> Einkäufe in
                   Warteschlange
                 </span>
               </div>
@@ -236,14 +236,14 @@ const Rabatt = () => {
                 <div className="flex items-center gap-2 pl-4 border-l border-blue-200">
                   <span className="text-sm text-blue-800">
                     <strong>{stats.customersReadyForDiscount}</strong> Kunden
-                    bereit für Rabatt
+                    bereit für Bonus
                   </span>
                 </div>
               )}
             </div>
             <div className="text-xs text-blue-600">
-              {stats.ordersRequiredForDiscount} Bestellungen ={" "}
-              {stats.discountRate}% Rabatt
+              {stats.ordersRequiredForDiscount} Einkäufe ={" "}
+              {stats.discountRate}% Bonus
             </div>
           </div>
         </div>
@@ -308,15 +308,15 @@ const Rabatt = () => {
                   {formatCurrency(discount.totalOrderValue)}
                 </p>
                 <p className="text-sm text-gray-600">
-                  <span className="font-medium">Gesamtrabatt Gewährt:</span> €{" "}
+                  <span className="font-medium">Gesamtbonus Gewährt:</span> €{" "}
                   {formatCurrency(discount.totalDiscountGranted)}
                 </p>
               </div>
 
-              {/* Rabattpreis & Queue Status */}
+              {/* Bonuspreis & Queue Status */}
               <div className="min-w-[150px]">
                 <p className="text-sm text-gray-600">
-                  <span className="font-medium">Rabattpreis:</span> €{" "}
+                  <span className="font-medium">Bonuspreis:</span> €{" "}
                   {formatCurrency(discount.discountBalance)}
                 </p>
                 {/* Queue indicator */}
@@ -340,12 +340,12 @@ const Rabatt = () => {
                   }
                   className="px-6 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm"
                 >
-                  Sicht
+                  Ansehen
                 </button>
                 {/* Status indicators */}
                 {discount.readyForDiscount && (
                   <span className="text-blue-500 text-sm font-medium">
-                    Bereit für Rabatt
+                    Bereit für Bonus
                   </span>
                 )}
                 {discount.redeemable && (
@@ -412,4 +412,4 @@ const Rabatt = () => {
   );
 };
 
-export default Rabatt;
+export default Bonus;

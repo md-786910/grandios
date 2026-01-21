@@ -33,12 +33,17 @@ const Bestellungen = () => {
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const [customerSearchTerm, setCustomerSearchTerm] = useState("");
   const customerDropdownRef = useRef(null);
+  const [bonusCopied, setBonusCopied] = useState(false);
+  const bonusCopyTimeoutRef = useRef(null);
 
   // URL-based params
   const currentPage = parseInt(searchParams.get("page") || "1", 10);
   const statusFilter = searchParams.get("status") || "";
 
   const [itemsPerPage] = useState(10);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   // Helper to update URL params
   const updateParams = (updates) => {
@@ -55,17 +60,21 @@ const Bestellungen = () => {
     });
   };
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
-      // Fetch all orders (high limit to get everything for client-side pagination)
-      const response = await ordersAPI.getAll(1, 1000);
+      setLoading(true);
+      const response = await ordersAPI.getAll(currentPage, itemsPerPage, debouncedSearch, statusFilter);
       if (response.data.success) {
         setOrders(response.data.data);
+        setTotalOrders(response.data.total || 0);
+        setTotalPages(response.data.pagination?.pages || 1);
       }
     } catch (error) {
       console.error("Failed to fetch orders:", error);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [currentPage, itemsPerPage, debouncedSearch, statusFilter]);
 
   const fetchCustomers = useCallback(
     async (page = 1, reset = false) => {
@@ -121,25 +130,39 @@ const Bestellungen = () => {
       try {
         if (id) {
           // Fetch single order
+          setLoading(true);
           const response = await ordersAPI.getById(id);
           if (response.data.success) {
             setSelectedOrder(response.data.data);
           }
+          setLoading(false);
         } else {
-          // Fetch orders first, then load customers in background
-          await fetchOrders();
           // Start loading first page of customers in background
           fetchCustomers(1, true);
         }
       } catch (error) {
         console.error("Failed to fetch data:", error);
-      } finally {
         setLoading(false);
       }
     };
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Fetch orders when page, search, or filter changes
+  useEffect(() => {
+    if (!id) {
+      fetchOrders();
+    }
+  }, [id, fetchOrders]);
+
+  useEffect(() => {
+    return () => {
+      if (bonusCopyTimeoutRef.current) {
+        clearTimeout(bonusCopyTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Generate test orders for selected customer
   const handleGenerateOrdersForCustomer = async () => {
@@ -219,6 +242,40 @@ const Bestellungen = () => {
     });
   };
 
+  const copyToClipboard = async (text) => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "absolute";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    if (textarea.parentNode === document.body) {
+      document.body.removeChild(textarea);
+    }
+  };
+
+  const handleCopyBonusValue = async () => {
+    try {
+      const valueToCopy = formatCurrency(discountValue);
+      await copyToClipboard(valueToCopy);
+      setBonusCopied(true);
+      if (bonusCopyTimeoutRef.current) {
+        clearTimeout(bonusCopyTimeoutRef.current);
+      }
+      bonusCopyTimeoutRef.current = setTimeout(() => {
+        setBonusCopied(false);
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to copy bonus value:", error);
+    }
+  };
+
   const formatDate = (date) => {
     if (!date) return "-";
     return new Date(date).toLocaleDateString("de-DE");
@@ -242,39 +299,30 @@ const Bestellungen = () => {
     return { status: "-", color: "text-gray-400 bg-gray-50 border-gray-200" };
   };
 
-  // Filter orders by search term, status and sort by date (recent first)
-  const filteredOrders = orders
-    .filter((order) => {
-      // Search filter (order number, customer name, customer ref)
-      const matchesSearch =
-        !searchTerm ||
-        order.posReference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sanitizeName(order.customerId?.name)
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        order.customerId?.ref?.toLowerCase().includes(searchTerm.toLowerCase());
+  // Orders are now filtered and paginated by the API
+  const paginatedOrders = orders;
 
-      // Status filter - use discountStatus instead of payment state
-      const matchesStatus =
-        !statusFilter || order.discountStatus === statusFilter;
-
-      return matchesSearch && matchesStatus;
-    })
-    .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
-
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+  // Pagination calculations (using API data)
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+  const endIndex = Math.min(startIndex + itemsPerPage, totalOrders);
 
-  // Reset to page 1 when search or filter changes
+  // Debounce search term
   useEffect(() => {
-    // Only reset if we are not on page 1
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      if (searchTerm && currentPage !== 1) {
+        updateParams({ page: 1 });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
     if (currentPage !== 1) {
       updateParams({ page: 1 });
     }
-  }, [searchTerm, statusFilter]);
+  }, [statusFilter]);
 
   const handlePrevPage = () => {
     updateParams({ page: Math.max(currentPage - 1, 1) });
@@ -312,8 +360,8 @@ const Bestellungen = () => {
     handleCloseDeleteModal();
   };
 
-  // Toggle rabatt checkbox
-  const handleToggleRabatt = (itemId) => {
+  // Toggle bonus checkbox
+  const handleToggleBonus = (itemId) => {
     setSelectedOrder((prev) => ({
       ...prev,
       items: prev.items.map((item) =>
@@ -404,11 +452,10 @@ const Bestellungen = () => {
 
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Bestellungen</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Einkäufe</h1>
             <p className="text-gray-500 mt-1">
-              {orders.length} Bestellungen insgesamt
-              {(searchTerm || statusFilter) &&
-                ` • ${filteredOrders.length} gefiltert`}
+              {totalOrders} Einkäufe
+              {(debouncedSearch || statusFilter) && " (gefiltert)"}
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -416,10 +463,10 @@ const Bestellungen = () => {
             <div className="relative">
               <input
                 type="text"
-                placeholder="Bestellnr., Kunde suchen..."
+                placeholder="Einkaufsnr., Kunde suchen..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-64 pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm"
+                className="w-full max-w-xs pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm"
               />
               {searchTerm ? (
                 <svg
@@ -527,7 +574,7 @@ const Bestellungen = () => {
                 <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                   <div className="p-4 border-b border-gray-100">
                     <h4 className="font-semibold text-gray-900 mb-2">
-                      Testbestellungen erstellen
+                      Testeinkäufe erstellen
                     </h4>
                     <div className="space-y-2">
                       {/* Custom scrollable customer dropdown */}
@@ -652,7 +699,7 @@ const Bestellungen = () => {
                         disabled={!selectedCustomer || generatingData}
                         className="w-full px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm disabled:opacity-50"
                       >
-                        3 Bestellungen erstellen
+                        3 Einkäufe erstellen
                       </button>
                     </div>
                   </div>
@@ -662,7 +709,7 @@ const Bestellungen = () => {
                       disabled={generatingData}
                       className="w-full px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm disabled:opacity-50"
                     >
-                      Komplette Testdaten erstellen (3 Kunden + Bestellungen)
+                      Komplette Testdaten erstellen (3 Kunden + Einkäufe)
                     </button>
                     <button
                       onClick={handleClearTestData}
@@ -679,17 +726,18 @@ const Bestellungen = () => {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-          {filteredOrders.length === 0 ? (
+          {paginatedOrders.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              Keine Bestellungen gefunden
+              Keine Einkäufe gefunden
             </div>
           ) : (
             <>
-              <table className="w-full">
-                <thead>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
                   <tr className="border-b border-gray-100">
                     <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                      Bestellnummer
+                      Einkaufsnummer
                     </th>
                     <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
                       Kunde
@@ -763,14 +811,14 @@ const Bestellungen = () => {
                     );
                   })}
                 </tbody>
-              </table>
+                </table>
+              </div>
 
               {/* Pagination Controls - Always show */}
               <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
                 <p className="text-sm text-gray-600">
-                  Zeige {filteredOrders.length > 0 ? startIndex + 1 : 0}-
-                  {Math.min(endIndex, filteredOrders.length)} von{" "}
-                  {filteredOrders.length} Bestellungen
+                  Zeige {totalOrders > 0 ? startIndex + 1 : 0}-
+                  {endIndex} von {totalOrders} Einkäufe
                 </p>
                 {totalPages > 1 && (
                   <div className="flex items-center gap-2">
@@ -827,7 +875,7 @@ const Bestellungen = () => {
     return (
       <Layout>
         <div className="text-center py-12">
-          <p className="text-gray-500">Bestellung nicht gefunden</p>
+          <p className="text-gray-500">Einkauf nicht gefunden</p>
           <button
             onClick={() => navigate("/bestellungen")}
             className="mt-4 px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
@@ -881,7 +929,7 @@ const Bestellungen = () => {
       {/* Header with Order Number and Back Button */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <span className="text-gray-600 font-medium">Bestellnummer:</span>
+          <span className="text-gray-600 font-medium">Einkaufsnummer:</span>
           <span className="bg-gray-100 px-4 py-2 rounded-lg font-semibold text-gray-900">
             {selectedOrder.posReference}
           </span>
@@ -941,7 +989,7 @@ const Bestellungen = () => {
         <div className="flex-1 grid grid-cols-2 gap-4">
           {/* Order Date */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center">
-            <h3 className="font-semibold text-gray-900 mb-4">Bestelldatum</h3>
+            <h3 className="font-semibold text-gray-900 mb-4">Einkaufsdatum</h3>
             <p className="text-3xl font-bold text-gray-900">
               {formatDate(selectedOrder.orderDate)}
             </p>
@@ -949,10 +997,23 @@ const Bestellungen = () => {
 
           {/* Discount Value */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center">
-            <h3 className="font-semibold text-gray-900 mb-4">Rabattwert</h3>
-            <p className="text-3xl font-bold text-gray-900">
-              € {formatCurrency(discountValue)}
-            </p>
+            <button
+              type="button"
+              onClick={handleCopyBonusValue}
+              className="group flex flex-col items-center justify-center w-full focus:outline-none"
+            >
+              <h3 className="font-semibold text-gray-900 mb-4">Bonuswert</h3>
+              <p className="text-3xl font-bold text-gray-900 group-hover:text-gray-700">
+                € {formatCurrency(discountValue)}
+              </p>
+              <span
+                className={`mt-2 text-xs ${
+                  bonusCopied ? "text-green-600" : "text-gray-500"
+                }`}
+              >
+                {bonusCopied ? "Kopiert" : "Zum Kopieren klicken"}
+              </span>
+            </button>
           </div>
 
           {/* Total Order Value */}
@@ -1065,10 +1126,10 @@ const Bestellungen = () => {
                     </div>
                   </div>
                   {selectedOrder.discountStatus === "redeemed" ? (
-                    // Show "Rabatt angewendet" in gray for redeemed orders
+                    // Show "Bonus angewendet" in gray for redeemed orders
                     item.discountEligible && (
                       <span className="text-gray-400 text-sm font-medium">
-                        Rabatt angewendet
+                        Bonus angewendet
                       </span>
                     )
                   ) : isEditMode ? (
@@ -1077,10 +1138,10 @@ const Bestellungen = () => {
                         <input
                           type="checkbox"
                           checked={item.discountEligible}
-                          onChange={() => handleToggleRabatt(item.orderLineId)}
+                          onChange={() => handleToggleBonus(item.orderLineId)}
                           className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
                         />
-                        <span className="text-sm text-gray-700">Rabatt</span>
+                        <span className="text-sm text-gray-700">Bonus</span>
                       </label>
                       <button
                         onClick={() => handleOpenDeleteModal(item.orderLineId)}
@@ -1105,7 +1166,7 @@ const Bestellungen = () => {
                   ) : (
                     item.discountEligible && (
                       <span className="text-green-600 text-sm font-medium">
-                        Rabattberechtigt
+                        Bonusberechtigt
                       </span>
                     )
                   )}

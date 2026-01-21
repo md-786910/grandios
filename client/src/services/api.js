@@ -99,9 +99,10 @@ export const customersAPI = {
 
 // Orders API
 export const ordersAPI = {
-  getAll: (page = 1, limit = 10, customerId = null) => {
+  getAll: (page = 1, limit = 10, search = "", status = "") => {
     let url = `/orders?page=${page}&limit=${limit}`;
-    if (customerId) url += `&customerId=${customerId}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    if (status) url += `&status=${encodeURIComponent(status)}`;
     return apiCall(url);
   },
 
@@ -131,7 +132,7 @@ export const ordersAPI = {
     apiCall(`/orders/${orderId}/items/${itemId}`, { method: "DELETE" }),
 };
 
-// Discounts API (Rabatt)
+// Discounts API (Bonus)
 export const discountsAPI = {
   getAll: (page = 1, limit = 10, search = "") => {
     let url = `/discounts?page=${page}&limit=${limit}`;

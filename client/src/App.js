@@ -6,9 +6,9 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
-import Rabatt from "./pages/Rabatt";
-import RabattDetail from "./pages/RabattDetail";
-import RabattTilgen from "./pages/RabattTilgen";
+import Bonus from "./pages/Bonus";
+import BonusDetail from "./pages/BonusDetail";
+import BonusTilgen from "./pages/BonusTilgen";
 import Bestellungen from "./pages/Bestellungen";
 import Kunden from "./pages/Kunden";
 import Einstellungen from "./pages/Einstellungen";
@@ -55,26 +55,26 @@ function App() {
             }
           />
           <Route
-            path="/rabatt"
+            path="/bonus"
             element={
               <ProtectedRoute>
-                <Rabatt />
+                <Bonus />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/rabatt/:id"
+            path="/bonus/:id"
             element={
               <ProtectedRoute>
-                <RabattDetail />
+                <BonusDetail />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/rabatt/:id/tilgen"
+            path="/bonus/:id/tilgen"
             element={
               <ProtectedRoute>
-                <RabattTilgen />
+                <BonusTilgen />
               </ProtectedRoute>
             }
           />

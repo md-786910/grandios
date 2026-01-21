@@ -13,20 +13,37 @@ exports.getOrders = async (req, res, next) => {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 100;
     const startIndex = (page - 1) * limit;
+    const search = req.query.search || '';
+    const status = req.query.status || '';
 
-    // Filter by customer if provided
+    // Build filter
     const filter = {};
     if (req.query.customerId) {
       filter.customerId = req.query.customerId;
     }
 
-    const total = await Order.countDocuments(filter);
+    // Search filter (order number)
+    if (search) {
+      filter.$or = [
+        { posReference: { $regex: search, $options: 'i' } }
+      ];
+    }
 
-    const orders = await Order.find(filter)
+    // First get orders with basic filter
+    let orders = await Order.find(filter)
       .populate('customerId', 'name email ref contactId')
-      .skip(startIndex)
-      .limit(limit)
       .sort({ orderDate: -1 });
+
+    // If searching, also filter by customer name
+    if (search) {
+      const searchLower = search.toLowerCase();
+      orders = orders.filter(order =>
+        order.posReference?.toLowerCase().includes(searchLower) ||
+        order.customerId?.name?.toLowerCase().includes(searchLower) ||
+        order.customerId?.ref?.toLowerCase().includes(searchLower) ||
+        order.customerId?.contactId?.toLowerCase().includes(searchLower)
+      );
+    }
 
     // Get discount status for all orders
     const orderIds = orders.map(o => o._id);
@@ -43,21 +60,32 @@ exports.getOrders = async (req, res, next) => {
     });
 
     // Add discountStatus to each order
-    const ordersWithStatus = orders.map(order => ({
+    let ordersWithStatus = orders.map(order => ({
       ...order.toObject(),
       discountStatus: discountStatusMap[order._id.toString()] || null
     }));
 
+    // Filter by discount status if provided
+    if (status) {
+      ordersWithStatus = ordersWithStatus.filter(order => order.discountStatus === status);
+    }
+
+    // Calculate total after all filters
+    const total = ordersWithStatus.length;
+
+    // Apply pagination
+    const paginatedOrders = ordersWithStatus.slice(startIndex, startIndex + limit);
+
     res.status(200).json({
       success: true,
-      count: ordersWithStatus.length,
+      count: paginatedOrders.length,
       total,
       pagination: {
         page,
         limit,
         pages: Math.ceil(total / limit)
       },
-      data: ordersWithStatus
+      data: paginatedOrders
     });
   } catch (err) {
     next(err);

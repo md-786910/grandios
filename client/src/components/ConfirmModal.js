@@ -22,9 +22,10 @@ const ConfirmModal = ({
     setMounted(true);
 
     return () => {
-      // Clean up the portal container on unmount
-      if (portalRef.current && portalRef.current.parentNode) {
-        portalRef.current.parentNode.removeChild(portalRef.current);
+      // Clean up the portal container on unmount (safe even if already removed)
+      if (portalRef.current) {
+        portalRef.current.remove();
+        portalRef.current = null;
       }
     };
   }, []);

@@ -6,15 +6,15 @@ import menuItems from "./menuItems";
 
 const Header = () => {
   const location = useLocation();
-  const [rabattCustomerName, setRabattCustomerName] = useState("");
+  const [bonusCustomerName, setBonusCustomerName] = useState("");
   const [orderInfo, setOrderInfo] = useState({ number: "", customer: "" });
 
-  const rabattMatch = location.pathname.match(/^\/rabatt\/([^/]+)(?:\/tilgen)?$/);
-  const rabattId = rabattMatch?.[1];
+  const bonusMatch = location.pathname.match(/^\/bonus\/([^/]+)(?:\/tilgen)?$/);
+  const bonusId = bonusMatch?.[1];
   const orderMatch = location.pathname.match(/^\/bestellungen\/([^/]+)$/);
   const orderId = orderMatch?.[1];
-  const isRabattTilgen = /^\/rabatt\/[^/]+\/tilgen$/.test(location.pathname);
-  const isRabattDetail = /^\/rabatt\/[^/]+$/.test(location.pathname);
+  const isBonusTilgen = /^\/bonus\/[^/]+\/tilgen$/.test(location.pathname);
+  const isBonusDetail = /^\/bonus\/[^/]+$/.test(location.pathname);
   const isOrderDetail = /^\/bestellungen\/[^/]+$/.test(location.pathname);
   const activeItem = menuItems.find(
     (item) =>
@@ -25,8 +25,8 @@ const Header = () => {
   useEffect(() => {
     let isActive = true;
 
-    if (!rabattId) {
-      setRabattCustomerName("");
+    if (!bonusId) {
+      setBonusCustomerName("");
       return () => {
         isActive = false;
       };
@@ -34,7 +34,7 @@ const Header = () => {
 
     const stateName = location.state?.customerName;
     if (stateName) {
-      setRabattCustomerName(stateName);
+      setBonusCustomerName(stateName);
       return () => {
         isActive = false;
       };
@@ -42,16 +42,16 @@ const Header = () => {
 
     const fetchCustomerName = async () => {
       try {
-        const response = await discountsAPI.getCustomerDiscount(rabattId);
+        const response = await discountsAPI.getCustomerDiscount(bonusId);
         if (!isActive) return;
         if (response.data?.success) {
           const customer = response.data?.data?.customer || {};
           const name = customer.customerName || customer.name || "";
-          setRabattCustomerName(name);
+          setBonusCustomerName(name);
         }
       } catch (error) {
         if (isActive) {
-          setRabattCustomerName("");
+          setBonusCustomerName("");
         }
       }
     };
@@ -60,7 +60,7 @@ const Header = () => {
     return () => {
       isActive = false;
     };
-  }, [location.state, rabattId]);
+  }, [location.state, bonusId]);
 
   useEffect(() => {
     let isActive = true;
@@ -104,20 +104,20 @@ const Header = () => {
     };
   }, [location.state, orderId]);
 
-  const safeCustomerName = rabattCustomerName
-    ? sanitizeName(rabattCustomerName)
+  const safeCustomerName = bonusCustomerName
+    ? sanitizeName(bonusCustomerName)
     : "";
   const safeOrderCustomer = orderInfo.customer
     ? sanitizeName(orderInfo.customer)
     : "";
-  const headerTitle = isRabattTilgen
-    ? "Rabatt Tilgen"
-    : isRabattDetail
-    ? "Rabatt Details"
+  const headerTitle = isBonusTilgen
+    ? "Bonus einlösen"
+    : isBonusDetail
+    ? "Bonus Details"
     : isOrderDetail
-    ? "Bestellung Details"
+    ? "Einkauf Details"
     : activeItem?.label || "Verwaltung";
-  const headerSubtitle = isRabattTilgen || isRabattDetail
+  const headerSubtitle = isBonusTilgen || isBonusDetail
     ? safeCustomerName
     : isOrderDetail
     ? [orderInfo.number, safeOrderCustomer].filter(Boolean).join(" • ")

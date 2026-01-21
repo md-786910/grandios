@@ -28,7 +28,7 @@ function getOrderItems(order) {
   return order.items || [];
 }
 
-// @desc    Get all customer discounts (for Rabatt list page)
+// @desc    Get all customer discounts (for Bonus list page)
 // @route   GET /api/discounts
 // @access  Private
 // Only shows customers who have discount groups created (3+ orders)
@@ -164,7 +164,7 @@ exports.getDiscounts = async (req, res, next) => {
   }
 };
 
-// @desc    Get customer discount details (for Rabatt detail page)
+// @desc    Get customer discount details (for Bonus detail page)
 // @route   GET /api/discounts/:customerId
 // @access  Private
 exports.getCustomerDiscount = async (req, res, next) => {

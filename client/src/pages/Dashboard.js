@@ -17,7 +17,7 @@ const Dashboard = () => {
 
   const [stats, setStats] = useState([
     {
-      label: "Gesamter gewährter Rabatt",
+      label: "Gesamter gewährter Bonus",
       value: "€ 0,00",
       bgColor: "bg-blue-100",
       labelColor: "text-blue-500",
@@ -29,10 +29,10 @@ const Dashboard = () => {
       labelColor: "text-green-500",
     },
     {
-      label: "Gesamtzahl Der Kunden",
+      label: "Gesamtzahl der Kunden",
       value: "€ 0,00",
-      bgColor: "bg-red-100",
-      labelColor: "text-red-500",
+      bgColor: "bg-purple-100",
+      labelColor: "text-purple-500",
     },
   ]);
   const [orders, setOrders] = useState([]);
@@ -68,7 +68,7 @@ const Dashboard = () => {
           const data = statsRes.data.data;
           setStats([
             {
-              label: "Gesamter gewährter Rabatt",
+              label: "Gesamter gewährter Bonus",
               value: `€ ${formatCurrency(data.totalDiscountGranted)}`,
               bgColor: "bg-blue-100",
               labelColor: "text-blue-500",
@@ -80,10 +80,10 @@ const Dashboard = () => {
               labelColor: "text-green-500",
             },
             {
-              label: "Gesamtzahl Der Kunden",
+              label: "Gesamtzahl der Kunden",
               value: `${formatCurrency(data.totalCustomers)}`,
-              bgColor: "bg-red-100",
-              labelColor: "text-red-500",
+              bgColor: "bg-purple-100",
+              labelColor: "text-purple-500",
             },
           ]);
         }
@@ -119,7 +119,7 @@ const Dashboard = () => {
   const getStatusInfo = (order) => {
     if (order.state === "pending")
       return { status: "Ausstehend", statusType: "pending" };
-    if (order.state === "paid") return { status: "Tilgen", statusType: "paid" };
+    if (order.state === "paid") return { status: "Offen", statusType: "paid" };
     if (order.state === "completed")
       return { status: "Eingelöst", statusType: "redeemed" };
     return { status: order.state, statusType: "pending" };
@@ -128,11 +128,11 @@ const Dashboard = () => {
   const getStatusStyles = (statusType) => {
     switch (statusType) {
       case "pending":
-        return "text-red-500 border-red-300 bg-white";
+        return "text-orange-500 border-orange-300 bg-white"; // Orange: not ready yet
       case "paid":
-        return "text-green-500 border-green-300 bg-white";
+        return "text-green-500 border-green-300 bg-white"; // Green: ready to redeem
       case "redeemed":
-        return "bg-orange-500 text-white";
+        return "bg-red-500 text-white"; // Red: already redeemed
       default:
         return "text-gray-500 border-gray-300 bg-white";
     }
@@ -147,7 +147,7 @@ const Dashboard = () => {
             key={index}
             className={`${stat.bgColor} rounded-2xl p-8 text-center`}
           >
-            <p className={`${stat.labelColor} text-sm font-medium mb-3`}>
+            <p className={`${stat.labelColor} text-sm font-bold mb-3`}>
               {stat.label}
             </p>
             <p className="text-4xl font-bold text-gray-900">{stat.value}</p>
@@ -181,7 +181,7 @@ const Dashboard = () => {
           </div>
         ) : orders.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
-            Keine Bestellungen gefunden
+            Keine Einkäufe gefunden
           </div>
         ) : (
           orders.map((order, index) => {
@@ -196,7 +196,7 @@ const Dashboard = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1 mb-1">
                     <span className="text-sm font-semibold text-gray-900">
-                      Bestellnummer -
+                      Einkaufsnummer -
                     </span>
                     <span className="text-sm text-gray-600">
                       {order.posReference}
@@ -256,7 +256,7 @@ const Dashboard = () => {
           <p className="text-sm text-gray-600">
             Zeige {(currentPage - 1) * itemsPerPage + 1}-
             {Math.min(currentPage * itemsPerPage, totalOrders)} von{" "}
-            {totalOrders} Bestellungen
+            {totalOrders} Einkäufe
           </p>
           <div className="flex items-center gap-2">
             <button

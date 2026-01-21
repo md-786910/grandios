@@ -124,7 +124,7 @@ const Kunden = () => {
               placeholder="Name, E-Mail, Kundennr. suchen..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm"
+              className="w-full max-w-xs pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm"
             />
             {searchTerm ? (
               <svg
@@ -175,7 +175,8 @@ const Kunden = () => {
             Keine Kunden gefunden
           </div>
         ) : (
-          <table className="w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100">
                 <th
@@ -216,7 +217,7 @@ const Kunden = () => {
                   onClick={() => handleSort("discountGranted")}
                 >
                   <div className="flex items-center justify-end gap-2">
-                    Rabatt Gewährt
+                    Bonus Gewährt
                     <SortIcon field="discountGranted" />
                   </div>
                 </th>
@@ -225,7 +226,7 @@ const Kunden = () => {
                   onClick={() => handleSort("discountRedeemed")}
                 >
                   <div className="flex items-center justify-end gap-2">
-                    Rabatt Eingelöst
+                    Bonus Eingelöst
                     <SortIcon field="discountRedeemed" />
                   </div>
                 </th>
@@ -276,7 +277,7 @@ const Kunden = () => {
                   <td className="px-6 py-4">
                     <button
                       onClick={() =>
-                        navigate(`/rabatt/${customer._id}`, {
+                        navigate(`/bonus/${customer._id}`, {
                           state: { customerName: customer.name },
                         })
                       }
@@ -288,7 +289,8 @@ const Kunden = () => {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         )}
       </div>
 
