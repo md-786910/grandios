@@ -6,6 +6,7 @@ const OrderLine = require("../models/OrderLine");
 const Product = require("../models/Product");
 const OrderCustomerQueue = require("../models/OrderCustomerQueue");
 const AppSettings = require("../models/AppSettings");
+const NotesHistory = require("../models/NotesHistory");
 
 // Helper to get order items from either orderLines (WAWI) or items (legacy)
 function getOrderItems(order) {
@@ -28,6 +29,30 @@ function getOrderItems(order) {
   return order.items || [];
 }
 
+// Helper to check if an item is eligible for bonus calculation
+// Excludes: items marked as not eligible, Sale items (with existing discount), and vouchers
+function isItemEligibleForBonus(item) {
+  // Must be discount eligible
+  if (!item.discountEligible) return false;
+  // Exclude items with existing discounts (Sale items)
+  if (item.discount && item.discount > 0) return false;
+  // Exclude vouchers (check product name)
+  const name = (item.productName || "").toLowerCase();
+  if (
+    name.includes("gutschein") ||
+    name.includes("voucher") ||
+    name.includes("gift")
+  )
+    return false;
+  return true;
+}
+
+// Helper to check if an order has at least one bonus-eligible item
+function orderHasEligibleItems(order) {
+  const items = getOrderItems(order);
+  return items.some((item) => isItemEligibleForBonus(item));
+}
+
 // @desc    Get all customer discounts (for Bonus list page)
 // @route   GET /api/discounts
 // @access  Private
@@ -41,9 +66,8 @@ exports.getDiscounts = async (req, res, next) => {
     const settings = await AppSettings.getSettings();
 
     // Get unique customer IDs that have at least one discount group
-    const customersWithDiscountGroups = await DiscountOrder.distinct(
-      "customerId"
-    );
+    const customersWithDiscountGroups =
+      await DiscountOrder.distinct("customerId");
 
     // Build query filter
     const query = { _id: { $in: customersWithDiscountGroups } };
@@ -86,10 +110,10 @@ exports.getDiscounts = async (req, res, next) => {
 
         const totalOrderValue = orders.reduce(
           (sum, order) => sum + order.amountTotal,
-          0
+          0,
         );
         const availableGroups = discountOrders.filter(
-          (d) => d.status === "available"
+          (d) => d.status === "available",
         );
 
         return {
@@ -112,7 +136,7 @@ exports.getDiscounts = async (req, res, next) => {
             : false,
           ordersRequiredForDiscount: settings.ordersRequiredForDiscount,
         };
-      })
+      }),
     );
 
     // Calculate overall stats (only for customers with discount groups)
@@ -131,17 +155,17 @@ exports.getDiscounts = async (req, res, next) => {
       totalCustomers: total,
       totalOrderValue: allOrders.reduce(
         (sum, order) => sum + order.amountTotal,
-        0
+        0,
       ),
       totalDiscountGranted: allDiscounts.reduce(
         (sum, d) => sum + d.totalGranted,
-        0
+        0,
       ),
       totalDiscountGroups: allDiscountOrders.length,
       // Queue stats
       totalInQueue: allQueues.reduce((sum, q) => sum + q.orderCount, 0),
       customersReadyForDiscount: allQueues.filter(
-        (q) => q.orderCount >= settings.ordersRequiredForDiscount
+        (q) => q.orderCount >= settings.ordersRequiredForDiscount,
       ).length,
       ordersRequiredForDiscount: settings.ordersRequiredForDiscount,
       discountRate: settings.discountRate,
@@ -217,11 +241,11 @@ exports.getCustomerDiscount = async (req, res, next) => {
     // Calculate stats
     const totalOrderValue = orders.reduce(
       (sum, order) => sum + order.amountTotal,
-      0
+      0,
     );
     const totalItems = ordersWithItems.reduce(
       (sum, order) => sum + (order.items?.length || 0),
-      0
+      0,
     );
 
     res.status(200).json({
@@ -330,7 +354,7 @@ exports.createDiscountGroup = async (req, res, next) => {
     });
 
     const alreadyUsedOrders = allOrderIds.filter((id) =>
-      usedOrderIds.has(id.toString())
+      usedOrderIds.has(id.toString()),
     );
 
     if (alreadyUsedOrders.length > 0) {
@@ -356,7 +380,7 @@ exports.createDiscountGroup = async (req, res, next) => {
         // Update or delete existing groups
         for (const [, { group, orderIdsToRemove }] of groupsToUpdate) {
           const remainingOrders = group.orders.filter(
-            (o) => !orderIdsToRemove.includes(o.orderId.toString())
+            (o) => !orderIdsToRemove.includes(o.orderId.toString()),
           );
 
           if (remainingOrders.length === 0) {
@@ -366,7 +390,7 @@ exports.createDiscountGroup = async (req, res, next) => {
             // Update group with remaining orders and recalculate discount
             const newTotalDiscount = remainingOrders.reduce(
               (sum, o) => sum + (o.discountAmount || 0),
-              0
+              0,
             );
             await DiscountOrder.findByIdAndUpdate(group._id, {
               orders: remainingOrders,
@@ -407,12 +431,14 @@ exports.createDiscountGroup = async (req, res, next) => {
     // Calculate discount for each order
     const orderItems = orders.map((order) => {
       const items = getOrderItems(order);
+      // Only include items eligible for bonus (excludes Sale items and vouchers)
       const eligibleAmount = items
         .filter((item) => item.discountEligible)
+        // .filter((item) => isItemEligibleForBonus(item))
         .reduce(
           (sum, item) =>
             sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
-          0
+          0,
         );
 
       const discountAmount = (eligibleAmount * effectiveDiscountRate) / 100;
@@ -523,7 +549,7 @@ exports.updateDiscountGroup = async (req, res, next) => {
 
     // Get current orders in this group
     const currentOrderIds = discountOrder.orders.map((o) =>
-      o.orderId.toString()
+      o.orderId.toString(),
     );
 
     // Check if any of the new orders are already in OTHER discount groups
@@ -539,7 +565,7 @@ exports.updateDiscountGroup = async (req, res, next) => {
     });
 
     const alreadyUsedOrders = allOrderIds.filter((id) =>
-      usedOrderIds.has(id.toString())
+      usedOrderIds.has(id.toString()),
     );
     if (alreadyUsedOrders.length > 0) {
       return res.status(400).json({
@@ -576,12 +602,14 @@ exports.updateDiscountGroup = async (req, res, next) => {
     // Calculate discount for each order
     const orderItems = orders.map((order) => {
       const items = getOrderItems(order);
+      // Only include items eligible for bonus (excludes Sale items and vouchers)
       const eligibleAmount = items
         .filter((item) => item.discountEligible)
+        // .filter((item) => isItemEligibleForBonus(item))
         .reduce(
           (sum, item) =>
             sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
-          0
+          0,
         );
 
       const discountAmount = (eligibleAmount * effectiveDiscountRate) / 100;
@@ -695,7 +723,7 @@ exports.updateNotes = async (req, res, next) => {
     const customer = await Customer.findByIdAndUpdate(
       req.params.customerId,
       { notes },
-      { new: true }
+      { new: true },
     );
 
     if (!customer) {
@@ -705,9 +733,50 @@ exports.updateNotes = async (req, res, next) => {
       });
     }
 
+    // Create history record
+    await NotesHistory.create({
+      customerId: customer._id,
+      notes: notes || "",
+      changedBy: req.user._id,
+      changedByName: req.user.name,
+    });
+
     res.status(200).json({
       success: true,
       data: { notes: customer.notes },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get notes history for a customer
+// @route   GET /api/discounts/:customerId/notes/history
+// @access  Private
+exports.getNotesHistory = async (req, res, next) => {
+  try {
+    const customerId = req.params.customerId;
+
+    // Verify customer exists
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    // Fetch history sorted by most recent first
+    const history = await NotesHistory.find({ customerId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        history,
+        currentNotes: customer.notes,
+      },
     });
   } catch (err) {
     next(err);
