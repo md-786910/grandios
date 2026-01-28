@@ -6,6 +6,7 @@ const {
   updateDiscountGroup,
   redeemDiscountGroup,
   updateNotes,
+  getNotesHistory,
   deleteDiscountGroup,
   saveDraftItems,
   clearDraftItems
@@ -33,6 +34,9 @@ router.route('/:customerId/groups/:groupId')
 
 router.route('/:customerId/notes')
   .put(updateNotes);
+
+router.route('/:customerId/notes/history')
+  .get(getNotesHistory);
 
 router.route('/:customerId/draft')
   .put(saveDraftItems)

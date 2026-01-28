@@ -44,6 +44,9 @@ const BonusDetail = () => {
   const { setHasUnsavedChanges, checkUnsavedChanges, showModal, setShowModal, proceedWithNavigation, cancelNavigation } = useUnsavedChanges();
   const [notizen, setNotizen] = useState("");
   const [originalNotizen, setOriginalNotizen] = useState(""); // Track original notes from server
+  const [notesHistory, setNotesHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [customer, setCustomer] = useState(null);
   const [orders, setOrders] = useState([]);
   const [discountGroups, setDiscountGroups] = useState([]);
@@ -199,6 +202,22 @@ const BonusDetail = () => {
   const handleSaveAndContinue = async () => {
     await handleSaveNotes();
     proceedWithNavigation(); // This will trigger the pending navigation
+  };
+
+  // Fetch notes history
+  const fetchNotesHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const response = await discountsAPI.getNotesHistory(id);
+      if (response.data.success) {
+        setNotesHistory(response.data.data.history);
+      }
+    } catch (error) {
+      console.error("Failed to fetch notes history:", error);
+      toast.error("Fehler beim Laden der Historie");
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   // Handle cancel modal
@@ -1373,9 +1392,23 @@ const BonusDetail = () => {
         {/* Notizen */}
         <div className="flex-1 bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">
-              Notizen Hinzufügen
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-gray-900">
+                Notizen Hinzufügen
+              </h3>
+              <button
+                onClick={() => {
+                  setShowHistory(true);
+                  fetchNotesHistory();
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                title="Historie anzeigen"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+            </div>
             {hasUnsavedNotes && (
               <span className="text-xs text-orange-600 font-medium flex items-center gap-1">
                 <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -3198,6 +3231,89 @@ const BonusDetail = () => {
         saving={saving}
         message="Sie haben nicht gespeicherte Änderungen in den Notizen. Möchten Sie diese speichern oder verwerfen?"
       />
+
+      {/* Notes History Sidebar */}
+      {showHistory && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-50 transition-opacity duration-300"
+            onClick={() => setShowHistory(false)}
+          />
+
+          {/* Sidebar */}
+          <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out">
+            <div className="h-full flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">Notizen Historie</h2>
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {historyLoading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                  </div>
+                ) : notesHistory.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <svg className="h-12 w-12 mx-auto mb-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p>Keine Historie vorhanden</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {notesHistory.map((entry, idx) => (
+                      <div key={entry.id || entry._id} className="relative pl-6 pb-6 border-l-2 border-blue-500 last:pb-0">
+                        {/* Timeline dot */}
+                        <div className="absolute left-0 top-0 -translate-x-1/2 w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow"></div>
+
+                        {/* Entry content */}
+                        <div>
+                          <div className="flex flex-col mb-2">
+                            <span className="font-semibold text-gray-900">{entry.changedByName}</span>
+                            <span className="text-sm text-gray-500">
+                              {new Date(entry.createdAt).toLocaleString('de-DE', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          <div className="mt-2 p-4 bg-gray-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap shadow-sm">
+                            {entry.notes || <em className="text-gray-400">Leer</em>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-gray-200">
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="w-full px-4 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium"
+                >
+                  Schließen
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </Layout>
   );
 };

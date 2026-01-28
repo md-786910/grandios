@@ -170,6 +170,9 @@ export const discountsAPI = {
       body: JSON.stringify({ notes }),
     }),
 
+  getNotesHistory: (customerId) =>
+    apiCall(`/discounts/${customerId}/notes/history`),
+
   saveDraftItems: (customerId, draftItems) =>
     apiCall(`/discounts/${customerId}/draft`, {
       method: "PUT",
