@@ -863,7 +863,12 @@ const BonusDetail = () => {
                       <div className="p-3 border-r border-gray-100">
                         <p className="text-sm text-gray-900">
                           <span className="font-semibold">Einkaufsnummer</span> -{" "}
-                          {order.posReference || order.orderId}
+                          <button
+                            onClick={() => navigate(`/bestellungen/${orderId}`)}
+                            className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                          >
+                            {order.posReference || order.orderId}
+                          </button>
                         </p>
                         <p className="text-sm text-gray-900">
                           <span className="font-semibold">Einkaufsdatum</span> -{" "}
@@ -1056,7 +1061,13 @@ const BonusDetail = () => {
                                   <span className="font-semibold">
                                     Einkaufsnummer
                                   </span>{" "}
-                                  - {order.posReference || order.orderId}
+                                  -{" "}
+                                  <button
+                                    onClick={() => navigate(`/bestellungen/${orderId}`)}
+                                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                  >
+                                    {order.posReference || order.orderId}
+                                  </button>
                                 </p>
                                 <p className="text-sm text-gray-900">
                                   <span className="font-semibold">
@@ -1261,26 +1272,44 @@ const BonusDetail = () => {
               Gesamtbonus Gewährt
             </h3>
             {(() => {
+              const handleCopyAmount = (amount) => {
+                const formattedAmount = `€ ${formatCurrency(amount)}`;
+                navigator.clipboard.writeText(formattedAmount);
+                toast.success("Betrag kopiert!");
+              };
+
               // Determine which bonus to display and its color
               if (redeemableBonus > 0) {
                 return (
-                  <p className="text-4xl font-extrabold text-green-600">
+                  <button
+                    onClick={() => handleCopyAmount(redeemableBonus)}
+                    className="text-4xl font-extrabold text-green-600 hover:text-green-700 cursor-pointer transition-colors"
+                    title="Klicken zum Kopieren"
+                  >
                     € {formatCurrency(redeemableBonus)}
-                  </p>
+                  </button>
                 );
               }
               if (pendingBonus > 0) {
                 return (
-                  <p className="text-4xl font-extrabold text-orange-500">
+                  <button
+                    onClick={() => handleCopyAmount(pendingBonus)}
+                    className="text-4xl font-extrabold text-orange-500 hover:text-orange-600 cursor-pointer transition-colors"
+                    title="Klicken zum Kopieren"
+                  >
                     € {formatCurrency(pendingBonus)}
-                  </p>
+                  </button>
                 );
               }
               // All redeemed or nothing
               return (
-                <p className="text-4xl font-extrabold text-red-600">
+                <button
+                  onClick={() => handleCopyAmount(0)}
+                  className="text-4xl font-extrabold text-red-600 hover:text-red-700 cursor-pointer transition-colors"
+                  title="Klicken zum Kopieren"
+                >
                   € 0,00
-                </p>
+                </button>
               );
             })()}
           </div>
@@ -1935,8 +1964,13 @@ const BonusDetail = () => {
                                                     Einkaufsnummer
                                                   </span>{" "}
                                                   -{" "}
-                                                  {order.posReference ||
-                                                    order.orderId}
+                                                  <button
+                                                    onClick={() => navigate(`/bestellungen/${(order._id || order.id)?.toString()}`)}
+                                                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                                  >
+                                                    {order.posReference ||
+                                                      order.orderId}
+                                                  </button>
                                                 </p>
                                                 <p className="text-sm text-gray-900">
                                                   <span className="font-semibold">
@@ -2146,7 +2180,12 @@ const BonusDetail = () => {
                       <div className="p-4 border-r border-gray-100">
                         <p className="text-sm text-gray-900">
                           <span className="font-semibold">Einkaufsnummer</span> -{" "}
-                          {order.posReference || order.orderId}
+                          <button
+                            onClick={() => navigate(`/bestellungen/${orderId}`)}
+                            className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                          >
+                            {order.posReference || order.orderId}
+                          </button>
                         </p>
                         <p className="text-sm text-gray-900">
                           <span className="font-semibold">Einkaufsdatum</span> -{" "}
@@ -2401,7 +2440,13 @@ const BonusDetail = () => {
                                   <span className="font-semibold">
                                     Einkaufsnummer
                                   </span>{" "}
-                                  - {order.posReference || order.orderId}
+                                  -{" "}
+                                  <button
+                                    onClick={() => navigate(`/bestellungen/${orderId}`)}
+                                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                  >
+                                    {order.posReference || order.orderId}
+                                  </button>
                                 </p>
                                 <p className="text-sm text-gray-900">
                                   <span className="font-semibold">
@@ -2514,7 +2559,12 @@ const BonusDetail = () => {
                       <div className="p-4 border-r border-gray-100">
                         <p className="text-sm text-gray-900">
                           <span className="font-semibold">Einkaufsnummer</span> -{" "}
-                          {order.posReference || order.orderId}
+                          <button
+                            onClick={() => navigate(`/bestellungen/${orderId}`)}
+                            className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                          >
+                            {order.posReference || order.orderId}
+                          </button>
                         </p>
                         <p className="text-sm text-gray-900">
                           <span className="font-semibold">Einkaufsdatum</span> -{" "}
@@ -2897,8 +2947,13 @@ const BonusDetail = () => {
                                                     Einkaufsnummer
                                                   </span>{" "}
                                                   -{" "}
-                                                  {order.posReference ||
-                                                    order.orderId}
+                                                  <button
+                                                    onClick={() => navigate(`/bestellungen/${(order._id || order.id)?.toString()}`)}
+                                                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                                  >
+                                                    {order.posReference ||
+                                                      order.orderId}
+                                                  </button>
                                                 </p>
                                                 <p className="text-sm text-gray-900">
                                                   <span className="font-semibold">
