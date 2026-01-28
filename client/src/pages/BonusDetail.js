@@ -5,12 +5,14 @@ import {
   useRef,
   useLayoutEffect,
 } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import Layout from "../components/Layout";
 import ConfirmModal from "../components/ConfirmModal";
+import UnsavedChangesModal from "../components/UnsavedChangesModal";
 import { discountsAPI } from "../services/api";
 import { sanitizeName } from "../utils/helpers";
+import { useUnsavedChanges } from "../context/UnsavedChangesContext";
 
 // Default product image fallback
 const DEFAULT_PRODUCT_IMAGE =
@@ -39,7 +41,9 @@ const ProductImage = ({ src, size = "md", className = "" }) => {
 const BonusDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { setHasUnsavedChanges, checkUnsavedChanges, showModal, setShowModal, proceedWithNavigation, cancelNavigation } = useUnsavedChanges();
   const [notizen, setNotizen] = useState("");
+  const [originalNotizen, setOriginalNotizen] = useState(""); // Track original notes from server
   const [customer, setCustomer] = useState(null);
   const [orders, setOrders] = useState([]);
   const [discountGroups, setDiscountGroups] = useState([]);
@@ -124,7 +128,9 @@ const BonusDetail = () => {
         setCustomer(data.customer);
         setOrders(data.orders || []);
         setDiscountGroups(data.discountGroups || []);
-        setNotizen(data.notes || "");
+        const notes = data.notes || "";
+        setNotizen(notes);
+        setOriginalNotizen(notes); // Track original value
         setQueue(data.queue || null);
         setSettings(
           data.settings || { discountRate: 10, ordersRequiredForDiscount: 3 }
@@ -147,10 +153,32 @@ const BonusDetail = () => {
     fetchData();
   }, [id]);
 
+  // Check if notes have unsaved changes
+  const hasUnsavedNotes = notizen !== originalNotizen;
+
+  // Update context when unsaved changes status changes
+  useEffect(() => {
+    setHasUnsavedChanges(hasUnsavedNotes);
+  }, [hasUnsavedNotes, setHasUnsavedChanges]);
+
+  // Warn user before leaving page with unsaved notes (browser close/refresh)
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedNotes) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedNotes]);
+
   const handleSaveNotes = async () => {
     setSaving(true);
     try {
       await discountsAPI.updateNotes(id, notizen);
+      setOriginalNotizen(notizen); // Update original after successful save
       setMessage({ type: "success", text: "Notizen gespeichert!" });
       setTimeout(() => setMessage({ type: "", text: "" }), 3000);
     } catch (error) {
@@ -159,6 +187,23 @@ const BonusDetail = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Handle discard changes
+  const handleDiscardChanges = () => {
+    setNotizen(originalNotizen); // Reset notes to original
+    proceedWithNavigation(); // This will trigger the pending navigation
+  };
+
+  // Handle save and continue
+  const handleSaveAndContinue = async () => {
+    await handleSaveNotes();
+    proceedWithNavigation(); // This will trigger the pending navigation
+  };
+
+  // Handle cancel modal
+  const handleCancelNavigation = () => {
+    cancelNavigation(); // Cancel the navigation
   };
 
   // Check if order is already in a discount group
@@ -1327,20 +1372,38 @@ const BonusDetail = () => {
 
         {/* Notizen */}
         <div className="flex-1 bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">
-            Notizen Hinzufügen
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900">
+              Notizen Hinzufügen
+            </h3>
+            {hasUnsavedNotes && (
+              <span className="text-xs text-orange-600 font-medium flex items-center gap-1">
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+                </svg>
+                Nicht gespeichert
+              </span>
+            )}
+          </div>
           <textarea
             value={notizen}
             onChange={(e) => setNotizen(e.target.value)}
-            className="w-full h-32 border border-gray-200 rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-gray-200"
+            className={`w-full h-32 border rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 transition-colors ${
+              hasUnsavedNotes
+                ? "border-orange-300 focus:ring-orange-200"
+                : "border-gray-200 focus:ring-gray-200"
+            }`}
             placeholder=""
           />
           <div className="flex justify-end mt-3">
             <button
               onClick={handleSaveNotes}
-              disabled={saving}
-              className="px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm"
+              disabled={saving || !hasUnsavedNotes}
+              className={`px-4 py-2 rounded-lg font-medium tracking-wide transition-all duration-500 ease-in-out text-sm ${
+                hasUnsavedNotes
+                  ? "bg-orange-600 text-white hover:bg-orange-700 hover:-translate-y-[1px]"
+                  : "bg-gray-800 text-white hover:bg-gray-900 cursor-not-allowed opacity-50"
+              }`}
             >
               {saving ? "Speichern..." : "Speichern"}
             </button>
@@ -3124,6 +3187,16 @@ const BonusDetail = () => {
         message="Möchten Sie wirklich alle Bonus-Positionen entfernen? Diese Aktion kann nicht rückgängig gemacht werden."
         confirmText="Ja, löschen"
         cancelText="Abbrechen"
+      />
+
+      {/* Unsaved Notes Warning Modal */}
+      <UnsavedChangesModal
+        isOpen={showModal}
+        onClose={handleCancelNavigation}
+        onDiscard={handleDiscardChanges}
+        onSave={handleSaveAndContinue}
+        saving={saving}
+        message="Sie haben nicht gespeicherte Änderungen in den Notizen. Möchten Sie diese speichern oder verwerfen?"
       />
     </Layout>
   );

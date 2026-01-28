@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
+import { UnsavedChangesProvider } from "./context/UnsavedChangesContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -16,33 +17,34 @@ import Einstellungen from "./pages/Einstellungen";
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 3500,
-            style: {
-              background: "#111827",
-              color: "#F9FAFB",
-              borderRadius: "12px",
-              padding: "12px 16px",
-              fontSize: "13px",
-            },
-            success: {
+      <UnsavedChangesProvider>
+        <Router>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 3500,
               style: {
-                background: "#16A34A",
+                background: "#111827",
                 color: "#F9FAFB",
+                borderRadius: "12px",
+                padding: "12px 16px",
+                fontSize: "13px",
               },
-            },
-            error: {
-              style: {
-                background: "#DC2626",
-                color: "#F9FAFB",
+              success: {
+                style: {
+                  background: "#16A34A",
+                  color: "#F9FAFB",
+                },
               },
-            },
-          }}
-        />
-        <Routes>
+              error: {
+                style: {
+                  background: "#DC2626",
+                  color: "#F9FAFB",
+                },
+              },
+            }}
+          />
+          <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password/:token" element={<ResetPassword />} />
@@ -111,7 +113,8 @@ function App() {
             }
           />
         </Routes>
-      </Router>
+        </Router>
+      </UnsavedChangesProvider>
     </AuthProvider>
   );
 }

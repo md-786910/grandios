@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useUnsavedChanges } from "../context/UnsavedChangesContext";
 import menuItems from "./menuItems";
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
+  const { checkUnsavedChanges } = useUnsavedChanges();
   const [logoutModal, setLogoutModal] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState("");
@@ -62,7 +64,9 @@ const Sidebar = () => {
             return (
               <li key={item.id}>
                 <button
-                  onClick={() => navigate(item.path)}
+                  onClick={() => {
+                    checkUnsavedChanges(() => navigate(item.path));
+                  }}
                   className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all ${
                     isActive
                       ? "bg-gray-800 hover:bg-gray-900 text-white"
