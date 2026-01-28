@@ -618,10 +618,46 @@ const BonusDetail = () => {
     (acc, order) => acc + (order.amountTotal || 0),
     0
   );
-  const totalDiscountGranted = discountGroups.reduce(
-    (acc, g) => acc + (g.totalDiscount || 0),
-    0
+
+  // Calculate discount amounts by status
+  const redeemableBonus = discountGroups.reduce((acc, g) => {
+    if (g.status === "redeemed") return acc;
+    const uniqueBundles = new Set(g.orders?.map(o => Number(o.bundleIndex ?? 0))).size;
+    return uniqueBundles >= 3 ? acc + (g.totalDiscount || 0) : acc;
+  }, 0);
+
+  // Get all order IDs that are in groups
+  const ordersInGroups = new Set(
+    discountGroups.flatMap(g =>
+      g.orders?.map(o => (o.orderId?._id || o.orderId)?.toString()) || []
+    )
   );
+
+  // Calculate bonus from orders NOT in any group yet (available/pending orders)
+  const availableOrdersBonus = orders.reduce((acc, order) => {
+    const orderId = (order._id || order.id)?.toString();
+    // Skip if order is already in a group
+    if (ordersInGroups.has(orderId)) return acc;
+
+    // Calculate potential bonus from this order
+    const eligible = order.items?.filter(i => i.discountEligible) || [];
+    const eligibleAmount = eligible.reduce(
+      (sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
+      0
+    );
+    const orderBonus = (eligibleAmount * settings.discountRate) / 100;
+    return acc + orderBonus;
+  }, 0);
+
+  const pendingBonus = discountGroups.reduce((acc, g) => {
+    if (g.status === "redeemed") return acc;
+    const uniqueBundles = new Set(g.orders?.map(o => Number(o.bundleIndex ?? 0))).size;
+    return uniqueBundles < 3 ? acc + (g.totalDiscount || 0) : acc;
+  }, 0) + availableOrdersBonus; // Add available orders bonus to pending
+
+  const redeemedBonus = discountGroups.reduce((acc, g) => {
+    return g.status === "redeemed" ? acc + (g.totalDiscount || 0) : acc;
+  }, 0);
 
   // Calculate selected orders discount
   const selectedOrdersTotal = selectedOrders.reduce((acc, orderId) => {
@@ -1207,23 +1243,55 @@ const BonusDetail = () => {
 
         {/* Middle Stats */}
         <div className="flex flex-col gap-4">
+          {/* Gesamtbonus Gewährt */}
+          <div className={`rounded-xl border p-6 flex flex-col items-center justify-center ${
+            redeemableBonus > 0
+              ? 'bg-green-50 border-green-200'
+              : pendingBonus > 0
+                ? 'bg-orange-50 border-orange-200'
+                : 'bg-red-50 border-red-200'
+          }`}>
+            <h3 className={`font-bold mb-3 text-sm ${
+              redeemableBonus > 0
+                ? 'text-green-600'
+                : pendingBonus > 0
+                  ? 'text-orange-500'
+                  : 'text-red-600'
+            }`}>
+              Gesamtbonus Gewährt
+            </h3>
+            {(() => {
+              // Determine which bonus to display and its color
+              if (redeemableBonus > 0) {
+                return (
+                  <p className="text-4xl font-extrabold text-green-600">
+                    € {formatCurrency(redeemableBonus)}
+                  </p>
+                );
+              }
+              if (pendingBonus > 0) {
+                return (
+                  <p className="text-4xl font-extrabold text-orange-500">
+                    € {formatCurrency(pendingBonus)}
+                  </p>
+                );
+              }
+              // All redeemed or nothing
+              return (
+                <p className="text-4xl font-extrabold text-red-600">
+                  € 0,00
+                </p>
+              );
+            })()}
+          </div>
+
           {/* Gesamtbestellwert */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center min-w-[220px]">
-            <h3 className="font-semibold text-green-600 mb-2 text-sm">
+            <h3 className="font-semibold text-gray-600 mb-2 text-sm">
               Gesamtbestellwert
             </h3>
             <p className="text-3xl font-bold text-gray-900">
               € {formatCurrency(totalOrderValue)}
-            </p>
-          </div>
-
-          {/* Gesamtbonus Gewährt */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center">
-            <h3 className="font-semibold text-gray-600 mb-2 text-sm">
-              Gesamtbonus Gewährt
-            </h3>
-            <p className="text-3xl font-bold text-gray-900">
-              € {formatCurrency(totalDiscountGranted)}
             </p>
           </div>
         </div>
@@ -1603,6 +1671,20 @@ const BonusDetail = () => {
                               >
                                 Bonusgruppe
                               </span>
+                              {(() => {
+                                const uniqueBundles = new Set(
+                                  group.orders?.map(o => Number(o.bundleIndex ?? 0))
+                                ).size;
+                                return (
+                                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                    uniqueBundles < 3
+                                      ? "bg-orange-100 text-orange-700"
+                                      : "bg-blue-100 text-blue-700"
+                                  }`}>
+                                    {uniqueBundles} Einkäufe
+                                  </span>
+                                );
+                              })()}
                               <svg
                                 className={`h-4 w-4 text-gray-500 transition-transform ${
                                   isExpanded ? "rotate-180" : ""
@@ -1909,60 +1991,80 @@ const BonusDetail = () => {
 
                       {/* Action Column - Single column spanning header and expanded */}
                       <div className="w-[160px] flex flex-col items-center justify-center gap-2 p-4 border-l border-gray-200 bg-gray-50">
-                        {isRedeemed ? (
-                          <button
-                            disabled
-                            className="w-full px-4 py-2 bg-gray-400 text-white rounded-lg text-sm cursor-not-allowed"
-                          >
-                            Eingelöst
-                          </button>
-                        ) : (
-                          <>
+                        {/* Status Badge */}
+                        {(() => {
+                          // Count unique bundles (each bundleIndex represents 1 item/group)
+                          const uniqueBundles = new Set(
+                            group.orders?.map(o => Number(o.bundleIndex ?? 0))
+                          ).size;
+
+                          if (isRedeemed) {
+                            return (
+                              <span className="w-full px-4 py-2 bg-gray-400 text-white rounded-lg text-sm font-medium text-center cursor-not-allowed">
+                                Eingelöst
+                              </span>
+                            );
+                          }
+
+                          if (uniqueBundles < 3) {
+                            return (
+                              <span className="w-full px-4 py-2 bg-white text-orange-500 border border-orange-300 rounded-lg text-sm font-medium text-center">
+                                Ausstehend
+                              </span>
+                            );
+                          }
+
+                          return (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleRedeemGroup(group._id);
                               }}
-                              className="w-full px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition-colors font-medium"
+                              className="w-full px-4 py-2 bg-white text-green-500 border border-green-300 rounded-lg text-sm font-medium hover:bg-green-500 hover:text-white transition-all cursor-pointer"
                             >
-                              Einlösen
+                              Offen
                             </button>
-                            <div className="flex gap-1 w-full">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleStartEditGroup(group);
-                                }}
-                                className="flex-1 px-2 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-[#22c55e] hover:text-white hover:border-none transition-all ease-in-out duration-300 font-medium"
+                          );
+                        })()}
+
+                        {/* Action Buttons - Only show for open groups */}
+                        {!isRedeemed && (
+                          <div className="flex gap-1 w-full">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartEditGroup(group);
+                              }}
+                              className="flex-1 px-2 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-[#22c55e] hover:text-white hover:border-none transition-all ease-in-out duration-300 font-medium"
+                            >
+                              Bearbeiten
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteGroup(group._id);
+                              }}
+                              className="px-2 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs hover:bg-red-50 transition-colors"
+                              title="Bonusgruppe löschen"
+                            >
+                              <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
                               >
-                                Bearbeiten
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteGroup(group._id);
-                                }}
-                                className="px-2 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs hover:bg-red-50 transition-colors"
-                                title="Bonusgruppe löschen"
-                              >
-                                <svg
-                                  className="h-4 w-4"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                  />
-                                </svg>
-                              </button>
-                            </div>
-                          </>
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                            </button>
+                          </div>
                         )}
-                        <span className="text-xs text-green-600 font-medium">
+
+                        <span className={`text-xs font-medium ${isRedeemed ? 'text-red-600' : 'text-green-600'}`}>
                           € {formatCurrency(group.totalDiscount)}
                         </span>
                       </div>
@@ -2462,9 +2564,14 @@ const BonusDetail = () => {
                               </span>
                             )}
                             {!isSelected && !isInEditingGroup && (
-                              <span className="text-xs text-gray-500">
-                                Verfügbar
-                              </span>
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="text-xs text-gray-500">
+                                  Verfügbar
+                                </span>
+                                <span className="text-xs font-semibold text-orange-500">
+                                  € {formatCurrency((discountEligibleAmount * settings.discountRate) / 100)}
+                                </span>
+                              </div>
                             )}
                           </>
                         ) : (
@@ -2553,6 +2660,16 @@ const BonusDetail = () => {
                               <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
                                 Bonusgruppe
                               </span>
+                              {(() => {
+                                const uniqueBundles = new Set(
+                                  group.orders?.map(o => Number(o.bundleIndex ?? 0))
+                                ).size;
+                                return (
+                                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                                    {uniqueBundles} Einkäufe
+                                  </span>
+                                );
+                              })()}
                               <svg
                                 className={`h-4 w-4 text-gray-500 transition-transform ${
                                   isExpanded ? "rotate-180" : ""
@@ -2835,13 +2952,10 @@ const BonusDetail = () => {
 
                       {/* Action Column */}
                       <div className="w-[160px] flex flex-col items-center justify-center gap-2 p-4 border-l border-gray-200 bg-gray-50">
-                        <button
-                          disabled
-                          className="w-full px-4 py-2 bg-gray-400 text-white rounded-lg text-sm cursor-not-allowed"
-                        >
+                        <span className="w-full px-4 py-2 bg-gray-400 text-white rounded-lg text-sm font-medium text-center cursor-not-allowed">
                           Eingelöst
-                        </button>
-                        <span className="text-xs text-green-600 font-medium">
+                        </span>
+                        <span className="text-xs text-red-600 font-medium">
                           € {formatCurrency(group.totalDiscount)}
                         </span>
                       </div>

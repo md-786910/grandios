@@ -100,7 +100,7 @@ const Dashboard = () => {
       try {
         const ordersRes = await dashboardAPI.getRecentOrders(
           currentPage,
-          itemsPerPage
+          itemsPerPage,
         );
         if (ordersRes.data.success) {
           setOrders(ordersRes.data.data);
@@ -189,8 +189,9 @@ const Dashboard = () => {
             return (
               <div
                 key={order._id}
-                className={`flex items-center justify-between px-6 py-5 ${index !== orders.length - 1 ? "border-b border-gray-100" : ""
-                  }`}
+                className={`flex items-center justify-between px-6 py-5 ${
+                  index !== orders.length - 1 ? "border-b border-gray-100" : ""
+                }`}
               >
                 {/* Order Info */}
                 <div className="flex-1 min-w-0">
@@ -230,13 +231,13 @@ const Dashboard = () => {
 
                 {/* Status & Action */}
                 <div className="flex items-center gap-6">
-                  <button
+                  {/* <button
                     className={`px-5 py-2 text-sm font-medium border rounded-lg cursor-default ${getStatusStyles(
                       statusInfo.statusType
                     )}`}
                   >
                     {statusInfo.status}
-                  </button>
+                  </button> */}
                   <button
                     onClick={() => navigate(`/bestellungen/${order._id}`)}
                     className="px-4 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm"
@@ -260,7 +261,9 @@ const Dashboard = () => {
           </p>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => updateParams({ page: Math.max(currentPage - 1, 1) })}
+              onClick={() =>
+                updateParams({ page: Math.max(currentPage - 1, 1) })
+              }
               disabled={currentPage === 1}
               className="px-2 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -280,10 +283,11 @@ const Dashboard = () => {
                   )}
                   <button
                     onClick={() => updateParams({ page })}
-                    className={`px-3 py-1 text-sm font-medium rounded-lg ${currentPage === page
+                    className={`px-3 py-1 text-sm font-medium rounded-lg ${
+                      currentPage === page
                         ? "bg-gray-900 text-white"
                         : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
-                      }`}
+                    }`}
                   >
                     {page}
                   </button>

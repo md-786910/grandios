@@ -63,7 +63,12 @@ const Bestellungen = () => {
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await ordersAPI.getAll(currentPage, itemsPerPage, debouncedSearch, statusFilter);
+      const response = await ordersAPI.getAll(
+        currentPage,
+        itemsPerPage,
+        debouncedSearch,
+        statusFilter,
+      );
       if (response.data.success) {
         setOrders(response.data.data);
         setTotalOrders(response.data.total || 0);
@@ -106,7 +111,7 @@ const Bestellungen = () => {
         setLoadingCustomers(false);
       }
     },
-    [loadingCustomers]
+    [loadingCustomers],
   );
 
   // Handle scroll in customer dropdown to load more
@@ -122,7 +127,7 @@ const Bestellungen = () => {
         fetchCustomers(customerPage + 1);
       }
     },
-    [customerPage, hasMoreCustomers, loadingCustomers, fetchCustomers]
+    [customerPage, hasMoreCustomers, loadingCustomers, fetchCustomers],
   );
 
   useEffect(() => {
@@ -283,16 +288,22 @@ const Bestellungen = () => {
 
   const getStatusInfo = (order) => {
     // Show discount group status if order is in a discount group
-    if (order.discountStatus === "available") {
+    if (order.discountStatus === "pending") {
       return {
         status: "Ausstehend",
-        color: "text-yellow-600 bg-yellow-50 border-yellow-200",
+        color: "text-orange-500 bg-white border-orange-300",
+      };
+    }
+    if (order.discountStatus === "available") {
+      return {
+        status: "Offen",
+        color: "text-green-500 bg-white border-green-300",
       };
     }
     if (order.discountStatus === "redeemed") {
       return {
         status: "Eingelöst",
-        color: "text-green-600 bg-green-50 border-green-200",
+        color: "bg-gray-400 text-white border-gray-400",
       };
     }
     // No discount group - show dash
@@ -350,7 +361,7 @@ const Bestellungen = () => {
         setSelectedOrder((prev) => ({
           ...prev,
           items: prev.items.filter(
-            (item) => item.orderLineId !== deleteModal.itemId
+            (item) => item.orderLineId !== deleteModal.itemId,
           ),
         }));
       } catch (error) {
@@ -367,7 +378,7 @@ const Bestellungen = () => {
       items: prev.items.map((item) =>
         item.orderLineId === itemId
           ? { ...item, discountEligible: !item.discountEligible }
-          : item
+          : item,
       ),
     }));
   };
@@ -511,7 +522,8 @@ const Bestellungen = () => {
               className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm bg-white"
             >
               <option value="">Alle Status</option>
-              <option value="available">Ausstehend</option>
+              <option value="pending">Ausstehend</option>
+              <option value="available">Offen</option>
               <option value="redeemed">Eingelöst</option>
             </select>
 
@@ -594,7 +606,7 @@ const Bestellungen = () => {
                           >
                             {selectedCustomer
                               ? customers.find(
-                                  (c) => c._id === selectedCustomer
+                                  (c) => c._id === selectedCustomer,
                                 )?.name || "Kunde auswählen..."
                               : "Kunde auswählen..."}
                           </span>
@@ -615,16 +627,16 @@ const Bestellungen = () => {
                           </svg>
                         </div>
                         {customerDropdownOpen && (
-                          <div
-                            className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg"
-                          >
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
                             {/* Customer Search Input */}
                             <div className="p-2 border-b border-gray-100">
                               <input
                                 type="text"
                                 placeholder="Kunde suchen..."
                                 value={customerSearchTerm}
-                                onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                                onChange={(e) =>
+                                  setCustomerSearchTerm(e.target.value)
+                                }
                                 onClick={(e) => e.stopPropagation()}
                                 className="w-full px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
                               />
@@ -634,59 +646,70 @@ const Bestellungen = () => {
                               onScroll={handleCustomerScroll}
                               className="max-h-40 overflow-y-auto"
                             >
-                            {customers
-                              .filter((customer) =>
-                                !customerSearchTerm ||
-                                String(customer.name || "").toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-                                String(customer.contactId || "").toLowerCase().includes(customerSearchTerm.toLowerCase())
-                              )
-                              .map((customer) => (
-                              <div
-                                key={customer._id}
-                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 ${
-                                  selectedCustomer === customer._id
-                                    ? "bg-purple-100"
-                                    : ""
-                                }`}
-                                onClick={() => {
-                                  setSelectedCustomer(customer._id);
-                                  setCustomerDropdownOpen(false);
-                                  setCustomerSearchTerm("");
-                                }}
-                              >
-                                {sanitizeName(customer.name)} (
-                                {customer?.contactId || customer._id.slice(-6)})
-                              </div>
-                            ))}
-                            {loadingCustomers && (
-                              <div className="px-3 py-2 text-sm text-gray-500 flex items-center gap-2">
-                                <svg
-                                  className="animate-spin h-4 w-4 text-purple-600"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                    fill="none"
-                                  />
-                                  <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                                  />
-                                </svg>
-                                Laden...
-                              </div>
-                            )}
-                            {!loadingCustomers && hasMoreCustomers && (
-                              <div className="px-3 py-2 text-xs text-gray-400 text-center">
-                                Scrollen für mehr...
-                              </div>
-                            )}
+                              {customers
+                                .filter(
+                                  (customer) =>
+                                    !customerSearchTerm ||
+                                    String(customer.name || "")
+                                      .toLowerCase()
+                                      .includes(
+                                        customerSearchTerm.toLowerCase(),
+                                      ) ||
+                                    String(customer.contactId || "")
+                                      .toLowerCase()
+                                      .includes(
+                                        customerSearchTerm.toLowerCase(),
+                                      ),
+                                )
+                                .map((customer) => (
+                                  <div
+                                    key={customer._id}
+                                    className={`px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 ${
+                                      selectedCustomer === customer._id
+                                        ? "bg-purple-100"
+                                        : ""
+                                    }`}
+                                    onClick={() => {
+                                      setSelectedCustomer(customer._id);
+                                      setCustomerDropdownOpen(false);
+                                      setCustomerSearchTerm("");
+                                    }}
+                                  >
+                                    {sanitizeName(customer.name)} (
+                                    {customer?.contactId ||
+                                      customer._id.slice(-6)}
+                                    )
+                                  </div>
+                                ))}
+                              {loadingCustomers && (
+                                <div className="px-3 py-2 text-sm text-gray-500 flex items-center gap-2">
+                                  <svg
+                                    className="animate-spin h-4 w-4 text-purple-600"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <circle
+                                      className="opacity-25"
+                                      cx="12"
+                                      cy="12"
+                                      r="10"
+                                      stroke="currentColor"
+                                      strokeWidth="4"
+                                      fill="none"
+                                    />
+                                    <path
+                                      className="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                                    />
+                                  </svg>
+                                  Laden...
+                                </div>
+                              )}
+                              {!loadingCustomers && hasMoreCustomers && (
+                                <div className="px-3 py-2 text-xs text-gray-400 text-center">
+                                  Scrollen für mehr...
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
@@ -735,90 +758,90 @@ const Bestellungen = () => {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                      Einkaufsnummer
-                    </th>
-                    <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                      Kunde
-                    </th>
-                    <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                      Datum
-                    </th>
-                    <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                      Betrag
-                    </th>
-                    <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                      Status
-                    </th>
-                    <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                      Aktion
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedOrders.map((order) => {
-                    const statusInfo = getStatusInfo(order);
-                    return (
-                      <tr
-                        key={order._id}
-                        className="border-b border-gray-50 hover:bg-gray-50"
-                      >
-                        <td className="px-6 py-4">
-                          <span className="font-medium text-gray-900">
-                            {order.posReference}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {sanitizeName(order.customerId?.name)}
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                        Einkaufsnummer
+                      </th>
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                        Kunde
+                      </th>
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                        Datum
+                      </th>
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                        Betrag
+                      </th>
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                        Status
+                      </th>
+                      <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                        Aktion
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedOrders.map((order) => {
+                      const statusInfo = getStatusInfo(order);
+                      return (
+                        <tr
+                          key={order._id}
+                          className="border-b border-gray-50 hover:bg-gray-50"
+                        >
+                          <td className="px-6 py-4">
+                            <span className="font-medium text-gray-900">
+                              {order.posReference}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {sanitizeName(order.customerId?.name)}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {order.customerId?.contactId || "-"}
+                              </div>
                             </div>
-                            <div className="text-sm text-gray-500">
-                              {order.customerId?.contactId || "-"}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
-                          {formatDate(order.orderDate)}
-                        </td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                          € {formatCurrency(order.amountTotal)}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`px-3 py-1 text-xs font-medium rounded-full border ${statusInfo.color}`}
-                          >
-                            {statusInfo.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <button
-                            onClick={() =>
-                              navigate(`/bestellungen/${order._id}`, {
-                                state: {
-                                  orderNumber: order.posReference,
-                                  customerName: order.customerId?.name,
-                                },
-                              })
-                            }
-                            className="text-sm px-4 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px]"
-                          >
-                            Details
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            {formatDate(order.orderDate)}
+                          </td>
+                          <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                            € {formatCurrency(order.amountTotal)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`px-3 py-1 text-xs font-medium rounded-full border ${statusInfo.color}`}
+                            >
+                              {statusInfo.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={() =>
+                                navigate(`/bestellungen/${order._id}`, {
+                                  state: {
+                                    orderNumber: order.posReference,
+                                    customerName: order.customerId?.name,
+                                  },
+                                })
+                              }
+                              className="text-sm px-4 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px]"
+                            >
+                              Details
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
                 </table>
               </div>
 
               {/* Pagination Controls - Always show */}
               <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
                 <p className="text-sm text-gray-600">
-                  Zeige {totalOrders > 0 ? startIndex + 1 : 0}-
-                  {endIndex} von {totalOrders} Einkäufe
+                  Zeige {totalOrders > 0 ? startIndex + 1 : 0}-{endIndex} von{" "}
+                  {totalOrders} Einkäufe
                 </p>
                 {totalPages > 1 && (
                   <div className="flex items-center gap-2">
@@ -905,22 +928,22 @@ const Bestellungen = () => {
           image: line.productRef?.image || null,
           color:
             line.productRef?.attributeValues?.find(
-              (a) => a.attributeName === "Farbe"
+              (a) => a.attributeName === "Farbe",
             )?.valueName || null,
           material:
             line.productRef?.attributeValues?.find(
-              (a) => a.attributeName === "Material"
+              (a) => a.attributeName === "Material",
             )?.valueName || null,
         }))
       : selectedOrder.items || [];
 
   const discountEligibleItems = orderItems.filter(
-    (item) => item.discountEligible
+    (item) => item.discountEligible,
   );
   const discountEligibleAmount = discountEligibleItems.reduce(
     (sum, item) =>
       sum + (item.priceSubtotalIncl || item.priceUnit) * (item.quantity || 1),
-    0
+    0,
   );
   const discountValue = discountEligibleAmount * 0.1;
 
