@@ -7,29 +7,29 @@
  * Run: node server/scripts/clearAndFullSync.js
  */
 
-require('dotenv').config();
-const mongoose = require('mongoose');
-const cascadeSyncService = require('../services/cascadingSyncService');
-const Customer = require('../models/Customer');
-const Order = require('../models/Order');
-const OrderLine = require('../models/OrderLine');
-const Product = require('../models/Product');
-const ProductAttribute = require('../models/ProductAttribute');
-const ProductAttributeValue = require('../models/ProductAttributeValue');
-const Discount = require('../models/Discount');
-const DiscountOrder = require('../models/DiscountOrder');
-const OrderCustomerQueue = require('../models/OrderCustomerQueue');
+require("dotenv").config();
+const mongoose = require("mongoose");
+const cascadeSyncService = require("../services/cascadingSyncService");
+const Customer = require("../models/Customer");
+const Order = require("../models/Order");
+const OrderLine = require("../models/OrderLine");
+const Product = require("../models/Product");
+const ProductAttribute = require("../models/ProductAttribute");
+const ProductAttributeValue = require("../models/ProductAttributeValue");
+const Discount = require("../models/Discount");
+const DiscountOrder = require("../models/DiscountOrder");
+const OrderCustomerQueue = require("../models/OrderCustomerQueue");
 
 async function clearAndFullSync() {
   try {
-    console.log('🔌 Connecting to MongoDB...');
+    console.log("🔌 Connecting to MongoDB...");
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log('✓ Connected!\n');
+    console.log("✓ Connected!\n");
 
     // Step 1: Show current counts
-    console.log('═══════════════════════════════════════');
-    console.log('📊 CURRENT DATABASE COUNTS');
-    console.log('═══════════════════════════════════════');
+    console.log("═══════════════════════════════════════");
+    console.log("📊 CURRENT DATABASE COUNTS");
+    console.log("═══════════════════════════════════════");
     const beforeCounts = {
       customers: await Customer.countDocuments(),
       orders: await Order.countDocuments(),
@@ -53,53 +53,55 @@ async function clearAndFullSync() {
     console.log(`Order Queues:        ${beforeCounts.queues}`);
 
     // Step 2: Clear all data
-    console.log('\n═══════════════════════════════════════');
-    console.log('🗑️  CLEARING DATABASE');
-    console.log('═══════════════════════════════════════');
+    console.log("\n═══════════════════════════════════════");
+    console.log("🗑️  CLEARING DATABASE");
+    console.log("═══════════════════════════════════════");
 
     // Clear in order (respecting references)
-    console.log('Clearing discount orders...');
+    console.log("Clearing discount orders...");
     const discountOrderResult = await DiscountOrder.deleteMany({});
-    console.log(`✓ Deleted ${discountOrderResult.deletedCount} discount orders`);
+    console.log(
+      `✓ Deleted ${discountOrderResult.deletedCount} discount orders`,
+    );
 
-    console.log('Clearing discounts...');
+    console.log("Clearing discounts...");
     const discountResult = await Discount.deleteMany({});
     console.log(`✓ Deleted ${discountResult.deletedCount} discounts`);
 
-    console.log('Clearing order queues...');
+    console.log("Clearing order queues...");
     const queueResult = await OrderCustomerQueue.deleteMany({});
     console.log(`✓ Deleted ${queueResult.deletedCount} order queues`);
 
-    console.log('Clearing order lines...');
+    console.log("Clearing order lines...");
     const orderLineResult = await OrderLine.deleteMany({});
     console.log(`✓ Deleted ${orderLineResult.deletedCount} order lines`);
 
-    console.log('Clearing orders...');
+    console.log("Clearing orders...");
     const orderResult = await Order.deleteMany({});
     console.log(`✓ Deleted ${orderResult.deletedCount} orders`);
 
-    console.log('Clearing products...');
+    console.log("Clearing products...");
     const productResult = await Product.deleteMany({});
     console.log(`✓ Deleted ${productResult.deletedCount} products`);
 
-    console.log('Clearing attribute values...');
+    console.log("Clearing attribute values...");
     const attrValueResult = await ProductAttributeValue.deleteMany({});
     console.log(`✓ Deleted ${attrValueResult.deletedCount} attribute values`);
 
-    console.log('Clearing attributes...');
+    console.log("Clearing attributes...");
     const attrResult = await ProductAttribute.deleteMany({});
     console.log(`✓ Deleted ${attrResult.deletedCount} attributes`);
 
-    console.log('Clearing customers...');
+    console.log("Clearing customers...");
     const customerResult = await Customer.deleteMany({});
     console.log(`✓ Deleted ${customerResult.deletedCount} customers`);
 
-    console.log('\n✅ Database cleared successfully!');
+    console.log("\n✅ Database cleared successfully!");
 
     // Step 3: Verify clear
-    console.log('\n═══════════════════════════════════════');
-    console.log('✔️  VERIFICATION (should all be 0)');
-    console.log('═══════════════════════════════════════');
+    console.log("\n═══════════════════════════════════════");
+    console.log("✔️  VERIFICATION (should all be 0)");
+    console.log("═══════════════════════════════════════");
     const afterClearCounts = {
       customers: await Customer.countDocuments(),
       orders: await Order.countDocuments(),
@@ -115,10 +117,10 @@ async function clearAndFullSync() {
     console.log(`Discounts:           ${afterClearCounts.discounts}`);
 
     // Step 4: Run full cascade sync
-    console.log('\n═══════════════════════════════════════');
-    console.log('🔄 RUNNING FULL SYNC FROM WAWI');
-    console.log('═══════════════════════════════════════');
-    console.log('This may take several minutes...\n');
+    console.log("\n═══════════════════════════════════════");
+    console.log("🔄 RUNNING FULL SYNC FROM WAWI");
+    console.log("═══════════════════════════════════════");
+    console.log("This may take several minutes...\n");
 
     const syncStartTime = Date.now();
 
@@ -128,30 +130,34 @@ async function clearAndFullSync() {
       const status = cascadeSyncService.getCascadeStatus();
       if (status.progress) {
         const { customers, orders, discountGroups } = status.progress;
-        if (customers !== lastProgress.customers ||
-            orders !== lastProgress.orders ||
-            discountGroups !== lastProgress.discountGroups) {
-          console.log(`  ⏳ Progress: ${customers} customers, ${orders} orders, ${discountGroups} discount groups`);
+        if (
+          customers !== lastProgress.customers ||
+          orders !== lastProgress.orders ||
+          discountGroups !== lastProgress.discountGroups
+        ) {
+          console.log(
+            `  ⏳ Progress: ${customers} customers, ${orders} orders, ${discountGroups} discount groups`,
+          );
           lastProgress = { customers, orders, discountGroups };
         }
       }
     }, 2000);
 
     const result = await cascadeSyncService.runFullCascadeSync({
-      batchSize: 50
+      batchSize: 50,
     });
 
     clearInterval(progressInterval);
 
     const syncDuration = ((Date.now() - syncStartTime) / 1000).toFixed(1);
 
-    console.log('\n✅ Full sync completed!');
+    console.log("\n✅ Full sync completed!");
     console.log(`⏱️  Duration: ${syncDuration}s`);
 
     // Step 5: Show final results
-    console.log('\n═══════════════════════════════════════');
-    console.log('📈 SYNC RESULTS');
-    console.log('═══════════════════════════════════════');
+    console.log("\n═══════════════════════════════════════");
+    console.log("📈 SYNC RESULTS");
+    console.log("═══════════════════════════════════════");
     console.log(`Customers synced:    ${result.progress.customers}`);
     console.log(`Orders synced:       ${result.progress.orders}`);
     console.log(`Order Lines synced:  ${result.progress.orderLines}`);
@@ -161,7 +167,7 @@ async function clearAndFullSync() {
     console.log(`Skipped:             ${result.skipped || 0}`);
 
     if (result.errors && result.errors.length > 0) {
-      console.log('\n⚠️  ERRORS ENCOUNTERED:');
+      console.log("\n⚠️  ERRORS ENCOUNTERED:");
       result.errors.slice(0, 10).forEach((err, i) => {
         console.log(`  ${i + 1}. ${err}`);
       });
@@ -171,9 +177,9 @@ async function clearAndFullSync() {
     }
 
     // Step 6: Final verification
-    console.log('\n═══════════════════════════════════════');
-    console.log('📊 FINAL DATABASE COUNTS');
-    console.log('═══════════════════════════════════════');
+    console.log("\n═══════════════════════════════════════");
+    console.log("📊 FINAL DATABASE COUNTS");
+    console.log("═══════════════════════════════════════");
     const finalCounts = {
       customers: await Customer.countDocuments(),
       orders: await Order.countDocuments(),
@@ -193,40 +199,45 @@ async function clearAndFullSync() {
     console.log(`Order Queues:        ${finalCounts.queues}`);
 
     // Show some sample discount groups with bundleIndex info
-    console.log('\n═══════════════════════════════════════');
-    console.log('🎁 SAMPLE DISCOUNT GROUPS');
-    console.log('═══════════════════════════════════════');
+    console.log("\n═══════════════════════════════════════");
+    console.log("🎁 SAMPLE DISCOUNT GROUPS");
+    console.log("═══════════════════════════════════════");
     const sampleGroups = await DiscountOrder.find({})
       .limit(3)
-      .populate('customerId', 'name email')
+      .populate("customerId", "name email")
       .lean();
 
     if (sampleGroups.length > 0) {
       sampleGroups.forEach((group, idx) => {
-        console.log(`\nGroup ${idx + 1}: ${group.customerId?.name || 'Unknown'}`);
+        console.log(
+          `\nGroup ${idx + 1}: ${group.customerId?.name || "Unknown"}`,
+        );
         console.log(`  Orders: ${group.orders?.length || 0}`);
-        console.log(`  Total: €${group.totalAmount?.toFixed(2) || '0.00'}`);
-        console.log(`  Discount: €${group.totalDiscount?.toFixed(2) || '0.00'}`);
+        console.log(`  Total: €${group.totalAmount?.toFixed(2) || "0.00"}`);
+        console.log(
+          `  Discount: €${group.totalDiscount?.toFixed(2) || "0.00"}`,
+        );
         console.log(`  Status: ${group.status}`);
         if (group.orders && group.orders.length > 0) {
-          console.log(`  Bundle indices: [${group.orders.map(o => o.bundleIndex ?? 'none').join(', ')}]`);
+          console.log(
+            `  Bundle indices: [${group.orders.map((o) => o.bundleIndex ?? "none").join(", ")}]`,
+          );
         }
       });
     } else {
-      console.log('No discount groups created.');
+      console.log("No discount groups created.");
     }
 
-    console.log('\n═══════════════════════════════════════');
-    console.log('✅ CLEAR AND SYNC COMPLETED SUCCESSFULLY!');
-    console.log('═══════════════════════════════════════\n');
-
+    console.log("\n═══════════════════════════════════════");
+    console.log("✅ CLEAR AND SYNC COMPLETED SUCCESSFULLY!");
+    console.log("═══════════════════════════════════════\n");
   } catch (error) {
-    console.error('\n❌ ERROR:', error.message);
+    console.error("\n❌ ERROR:", error.message);
     console.error(error.stack);
     process.exit(1);
   } finally {
     await mongoose.disconnect();
-    console.log('🔌 Disconnected from MongoDB\n');
+    console.log("🔌 Disconnected from MongoDB\n");
   }
 }
 

@@ -35,6 +35,7 @@ const CUSTOMER_FIELDS = [
   "country_id",
   "ref",
   "company_type",
+  "customer_rank",
   "write_date",
 ];
 
@@ -154,6 +155,7 @@ async function syncCustomers(options = {}) {
         limit: batchSize,
         offset,
         order: "id asc",
+        domain: [["customer_rank", ">", 0]],
       });
 
       const customers = result.data;
@@ -771,6 +773,7 @@ function mapWawiCustomer(wawiCustomer) {
         : undefined,
     },
     companyType: wawiCustomer.company_type || "person",
+    customerRank: wawiCustomer.customer_rank || 0,
   };
 }
 
