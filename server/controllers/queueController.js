@@ -5,11 +5,45 @@ const Customer = require('../models/Customer');
 const Order = require('../models/Order');
 const AppSettings = require('../models/AppSettings');
 
+// Helper to check if an item is eligible for bonus calculation
+// Excludes: items marked as not eligible, Sale items (with existing discount), and vouchers
+function isItemEligibleForBonus(item) {
+  // Must be discount eligible
+  if (!item.discountEligible) return false;
+  // Exclude items with existing discounts (Sale items)
+  if (item.discount && item.discount > 0) return false;
+  // Exclude vouchers (check product name)
+  const name = (item.productName || '').toLowerCase();
+  if (name.includes('gutschein') || name.includes('voucher') || name.includes('gift')) return false;
+  return true;
+}
+
+// Helper to check if an order has at least one bonus-eligible item
+function orderHasEligibleItems(order) {
+  const items = order.items || [];
+  return items.some(item => isItemEligibleForBonus(item));
+}
+
 // @desc    Add order to customer queue
 // @route   Called internally when order is created
 // @access  Internal
 exports.addOrderToQueue = async (orderId, customerId) => {
   try {
+    // First, get the order to check if it has eligible items
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return { success: false, message: 'Order not found' };
+    }
+
+    // Check if order has at least one eligible item (not Sale/Voucher only)
+    if (!orderHasEligibleItems(order)) {
+      return {
+        success: false,
+        message: 'Order has no eligible items (only Sale items or vouchers)',
+        skipped: true
+      };
+    }
+
     // Find or create queue for customer
     let queue = await OrderCustomerQueue.findOne({ customerId });
 
@@ -90,10 +124,12 @@ exports.processQueue = async (customerId) => {
 
     // Calculate discount for each order
     // Each order gets a unique bundleIndex (single orders, not bundles) for automatic creation
+    // Only items eligible for bonus are included (excludes Sale items and vouchers)
     const discountRate = settings.discountRate;
     const orderItems = orders.map((order, index) => {
-      const eligibleAmount = order.items
-        .filter(item => item.discountEligible)
+      const items = order.items || [];
+      const eligibleAmount = items
+        .filter(item => isItemEligibleForBonus(item))
         .reduce((sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0);
 
       const discountAmount = (eligibleAmount * discountRate) / 100;
