@@ -316,39 +316,35 @@ const Bonus = () => {
 
               {/* Bonuspreis & Queue Status */}
               <div className="min-w-[150px]">
-                <div
-                  onClick={() => {
-                    const amount = discount.redeemableBonus > 0
-                      ? discount.redeemableBonus
-                      : discount.pendingBonus > 0
-                        ? discount.pendingBonus
-                        : 0;
-                    navigator.clipboard.writeText(`€ ${formatCurrency(amount)}`);
-                    toast.success("Betrag kopiert!");
-                  }}
-                  className="cursor-pointer hover:opacity-80 transition-opacity"
-                  title="Klicken zum Kopieren"
-                >
-                  <p className="text-sm">
-                    <span className="font-medium text-gray-600">Bonuspreis:</span>{" "}
-                    <span className={`font-bold ${
-                      discount.redeemableBonus > 0
-                        ? 'text-green-600'
-                        : discount.pendingBonus > 0
-                          ? 'text-orange-500'
-                          : 'text-red-600'
-                    }`}>
-                      € {formatCurrency(
-                        discount.redeemableBonus > 0
-                          ? discount.redeemableBonus
-                          : discount.pendingBonus > 0
-                            ? discount.pendingBonus
-                            : 0
-                      )}
-                    </span>
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">Klicken zum Kopieren</p>
-                </div>
+                {(() => {
+                  const redeemable = discount.redeemableBonus || 0;
+                  const pending = discount.pendingBonus || 0;
+                  const displayAmount = redeemable > 0 ? redeemable : pending > 0 ? pending : 0;
+                  const colorClass = redeemable > 0
+                    ? 'text-green-600'
+                    : pending > 0
+                      ? 'text-orange-500'
+                      : 'text-red-600';
+
+                  return (
+                    <div
+                      onClick={() => {
+                        navigator.clipboard.writeText(`€ ${formatCurrency(displayAmount)}`);
+                        toast.success("Betrag kopiert!");
+                      }}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                      title="Klicken zum Kopieren"
+                    >
+                      <p className="text-sm">
+                        <span className="font-medium text-gray-600">Bonuspreis:</span>{" "}
+                        <span className={`font-bold ${colorClass}`}>
+                          € {formatCurrency(displayAmount)}
+                        </span>
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">Klicken zum Kopieren</p>
+                    </div>
+                  );
+                })()}
                 {/* Queue indicator */}
                 {discount.queueCount > 0 && (
                   <p className="text-sm text-blue-600 mt-1">
