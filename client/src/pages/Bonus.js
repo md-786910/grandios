@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import toast from "react-hot-toast";
 import Layout from "../components/Layout";
 import { discountsAPI } from "../services/api";
 import { sanitizeName } from "../utils/helpers";
@@ -315,10 +316,39 @@ const Bonus = () => {
 
               {/* Bonuspreis & Queue Status */}
               <div className="min-w-[150px]">
-                <p className="text-sm text-gray-600">
-                  <span className="font-medium">Bonuspreis:</span> €{" "}
-                  {formatCurrency(discount.discountBalance)}
-                </p>
+                <div
+                  onClick={() => {
+                    const amount = discount.redeemableBonus > 0
+                      ? discount.redeemableBonus
+                      : discount.pendingBonus > 0
+                        ? discount.pendingBonus
+                        : 0;
+                    navigator.clipboard.writeText(`€ ${formatCurrency(amount)}`);
+                    toast.success("Betrag kopiert!");
+                  }}
+                  className="cursor-pointer hover:opacity-80 transition-opacity"
+                  title="Klicken zum Kopieren"
+                >
+                  <p className="text-sm">
+                    <span className="font-medium text-gray-600">Bonuspreis:</span>{" "}
+                    <span className={`font-bold ${
+                      discount.redeemableBonus > 0
+                        ? 'text-green-600'
+                        : discount.pendingBonus > 0
+                          ? 'text-orange-500'
+                          : 'text-red-600'
+                    }`}>
+                      € {formatCurrency(
+                        discount.redeemableBonus > 0
+                          ? discount.redeemableBonus
+                          : discount.pendingBonus > 0
+                            ? discount.pendingBonus
+                            : 0
+                      )}
+                    </span>
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">Klicken zum Kopieren</p>
+                </div>
                 {/* Queue indicator */}
                 {discount.queueCount > 0 && (
                   <p className="text-sm text-blue-600 mt-1">

@@ -1380,6 +1380,7 @@ const BonusDetail = () => {
                     </button>
                   );
                 })()}
+                <p className="text-xs text-gray-500 mt-2">Klicken zum Kopieren</p>
               </div>
 
               {/* Gesamtbestellwert */}
