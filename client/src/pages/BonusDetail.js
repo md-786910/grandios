@@ -1273,129 +1273,151 @@ const BonusDetail = () => {
         </div>
       )}
 
-      {/* Top Section */}
-      <div className="flex gap-4 mb-4">
-        {/* Kundendetails */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 w-[350px]">
-          <h3 className="text-center font-semibold text-gray-900 mb-6">
-            Kundendetails
-          </h3>
-          <div className="space-y-3 text-sm">
-            <div className="flex">
-              <span className="text-gray-500 w-32">Kundennummer:</span>
-              <span className="text-gray-900">
-                {customer.customerNumber || customer.ref || "-"}
-              </span>
-            </div>
-            <div className="flex">
-              <span className="text-gray-500 w-32">Kundenname:</span>
-              <span className="text-gray-900">
-                {sanitizeName(customer.customerName || customer.name)}
-              </span>
-            </div>
-            <div className="flex">
-              <span className="text-gray-500 w-32">E-Mail:</span>
-              <span className="text-gray-900">{customer.email}</span>
-            </div>
-            <div className="flex">
-              <span className="text-gray-500 w-32">Telefonnummer:</span>
-              <span className="text-gray-900">
-                {customer.phone || customer.mobile || "-"}
-              </span>
-            </div>
-            <div className="flex">
-              <span className="text-gray-500 w-32">Adresse:</span>
-              <div className="text-gray-900">
-                <div>{customer.address?.street || "-"}</div>
-                <div>
-                  {customer.address?.postalCode} {customer.address?.city}
+      {/* Top Section with Notizen spanning full height */}
+      <div className="flex gap-4 mb-6">
+        {/* Left side: Kundendetails + Bottom Stats */}
+        <div className="flex flex-col gap-4">
+          {/* Top row */}
+          <div className="flex gap-4 items-stretch">
+            {/* Kundendetails */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6 w-[350px]">
+              <h3 className="text-center font-semibold text-gray-900 mb-6">
+                Kundendetails
+              </h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex">
+                  <span className="text-gray-500 w-32">Kundennummer:</span>
+                  <span className="text-gray-900">
+                    {customer.customerNumber || customer.ref || "-"}
+                  </span>
                 </div>
-                <div>{customer.address?.country}</div>
+                <div className="flex">
+                  <span className="text-gray-500 w-32">Kundenname:</span>
+                  <span className="text-gray-900">
+                    {sanitizeName(customer.customerName || customer.name)}
+                  </span>
+                </div>
+                <div className="flex">
+                  <span className="text-gray-500 w-32">E-Mail:</span>
+                  <span className="text-gray-900">{customer.email}</span>
+                </div>
+                <div className="flex">
+                  <span className="text-gray-500 w-32">Telefonnummer:</span>
+                  <span className="text-gray-900">
+                    {customer.phone || customer.mobile || "-"}
+                  </span>
+                </div>
+                <div className="flex">
+                  <span className="text-gray-500 w-32">Adresse:</span>
+                  <div className="text-gray-900">
+                    <div>{customer.address?.street || "-"}</div>
+                    <div>
+                      {customer.address?.postalCode} {customer.address?.city}
+                    </div>
+                    <div>{customer.address?.country}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Middle Stats */}
+            <div className="flex flex-col gap-4">
+              {/* Gesamtbonus Gewährt */}
+              <div className={`rounded-xl border p-6 flex flex-col items-center justify-center flex-1 ${
+                redeemableBonus > 0
+                  ? 'bg-green-50 border-green-200'
+                  : pendingBonus > 0
+                    ? 'bg-orange-50 border-orange-200'
+                    : 'bg-red-50 border-red-200'
+              }`}>
+                <h3 className={`font-bold mb-3 text-sm ${
+                  redeemableBonus > 0
+                    ? 'text-green-600'
+                    : pendingBonus > 0
+                      ? 'text-orange-500'
+                      : 'text-red-600'
+                }`}>
+                  Gesamtbonus Gewährt
+                </h3>
+                {(() => {
+                  const handleCopyAmount = (amount) => {
+                    const formattedAmount = `€ ${formatCurrency(amount)}`;
+                    navigator.clipboard.writeText(formattedAmount);
+                    toast.success("Betrag kopiert!");
+                  };
+
+                  // Determine which bonus to display and its color
+                  if (redeemableBonus > 0) {
+                    return (
+                      <button
+                        onClick={() => handleCopyAmount(redeemableBonus)}
+                        className="text-4xl font-extrabold text-green-600 hover:text-green-700 cursor-pointer transition-colors"
+                        title="Klicken zum Kopieren"
+                      >
+                        € {formatCurrency(redeemableBonus)}
+                      </button>
+                    );
+                  }
+                  if (pendingBonus > 0) {
+                    return (
+                      <button
+                        onClick={() => handleCopyAmount(pendingBonus)}
+                        className="text-4xl font-extrabold text-orange-500 hover:text-orange-600 cursor-pointer transition-colors"
+                        title="Klicken zum Kopieren"
+                      >
+                        € {formatCurrency(pendingBonus)}
+                      </button>
+                    );
+                  }
+                  // All redeemed or nothing
+                  return (
+                    <button
+                      onClick={() => handleCopyAmount(0)}
+                      className="text-4xl font-extrabold text-red-600 hover:text-red-700 cursor-pointer transition-colors"
+                      title="Klicken zum Kopieren"
+                    >
+                      € 0,00
+                    </button>
+                  );
+                })()}
+              </div>
+
+              {/* Gesamtbestellwert */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center min-w-[220px] flex-1">
+                <h3 className="font-semibold text-gray-600 mb-2 text-sm">
+                  Gesamtbestellwert
+                </h3>
+                <p className="text-3xl font-bold text-gray-900">
+                  € {formatCurrency(totalOrderValue)}
+                </p>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Middle Stats */}
-        <div className="flex flex-col gap-4">
-          {/* Gesamtbonus Gewährt */}
-          <div className={`rounded-xl border p-6 flex flex-col items-center justify-center ${
-            redeemableBonus > 0
-              ? 'bg-green-50 border-green-200'
-              : pendingBonus > 0
-                ? 'bg-orange-50 border-orange-200'
-                : 'bg-red-50 border-red-200'
-          }`}>
-            <h3 className={`font-bold mb-3 text-sm ${
-              redeemableBonus > 0
-                ? 'text-green-600'
-                : pendingBonus > 0
-                  ? 'text-orange-500'
-                  : 'text-red-600'
-            }`}>
-              Gesamtbonus Gewährt
-            </h3>
-            {(() => {
-              const handleCopyAmount = (amount) => {
-                const formattedAmount = `€ ${formatCurrency(amount)}`;
-                navigator.clipboard.writeText(formattedAmount);
-                toast.success("Betrag kopiert!");
-              };
-
-              // Determine which bonus to display and its color
-              if (redeemableBonus > 0) {
-                return (
-                  <button
-                    onClick={() => handleCopyAmount(redeemableBonus)}
-                    className="text-4xl font-extrabold text-green-600 hover:text-green-700 cursor-pointer transition-colors"
-                    title="Klicken zum Kopieren"
-                  >
-                    € {formatCurrency(redeemableBonus)}
-                  </button>
-                );
-              }
-              if (pendingBonus > 0) {
-                return (
-                  <button
-                    onClick={() => handleCopyAmount(pendingBonus)}
-                    className="text-4xl font-extrabold text-orange-500 hover:text-orange-600 cursor-pointer transition-colors"
-                    title="Klicken zum Kopieren"
-                  >
-                    € {formatCurrency(pendingBonus)}
-                  </button>
-                );
-              }
-              // All redeemed or nothing
-              return (
-                <button
-                  onClick={() => handleCopyAmount(0)}
-                  className="text-4xl font-extrabold text-red-600 hover:text-red-700 cursor-pointer transition-colors"
-                  title="Klicken zum Kopieren"
-                >
-                  € 0,00
-                </button>
-              );
-            })()}
-          </div>
-
-          {/* Gesamtbestellwert */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center min-w-[220px]">
-            <h3 className="font-semibold text-gray-600 mb-2 text-sm">
-              Gesamtbestellwert
-            </h3>
-            <p className="text-3xl font-bold text-gray-900">
-              € {formatCurrency(totalOrderValue)}
-            </p>
-          </div>
-        </div>
-
-        {/* Notizen */}
-        <div className="flex-1 bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-gray-900">
-                Notizen Hinzufügen
+          {/* Bottom Stats Row */}
+          <div className="flex gap-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center w-[350px]">
+              <h3 className="font-semibold text-gray-600 mb-2 text-sm">
+                Anzahl Der Einkäufe
               </h3>
+              <p className="text-3xl font-bold text-gray-900">{totalOrders}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center min-w-[220px]">
+              <h3 className="font-semibold text-gray-600 mb-2 text-sm">
+                Anzahl Der Artikel
+              </h3>
+              <p className="text-3xl font-bold text-gray-900">{totalItems}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Notizen - spans full height */}
+        <div className="flex-1 bg-white rounded-xl border border-gray-200 p-6 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900">
+              Notizen Hinzufügen
+            </h3>
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => {
                   setShowHistory(true);
@@ -1408,7 +1430,6 @@ const BonusDetail = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </button>
-            </div>
             {hasUnsavedNotes && (
               <span className="text-xs text-orange-600 font-medium flex items-center gap-1">
                 <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -1417,11 +1438,12 @@ const BonusDetail = () => {
                 Nicht gespeichert
               </span>
             )}
+            </div>
           </div>
           <textarea
             value={notizen}
             onChange={(e) => setNotizen(e.target.value)}
-            className={`w-full h-32 border rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 transition-colors ${
+            className={`w-full flex-1 border rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 transition-colors ${
               hasUnsavedNotes
                 ? "border-orange-300 focus:ring-orange-200"
                 : "border-gray-200 focus:ring-gray-200"
@@ -1441,22 +1463,6 @@ const BonusDetail = () => {
               {saving ? "Speichern..." : "Speichern"}
             </button>
           </div>
-        </div>
-      </div>
-
-      {/* Bottom Stats Row */}
-      <div className="flex gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center w-[350px]">
-          <h3 className="font-semibold text-gray-600 mb-2 text-sm">
-            Anzahl Der Einkäufe
-          </h3>
-          <p className="text-3xl font-bold text-gray-900">{totalOrders}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center min-w-[220px]">
-          <h3 className="font-semibold text-gray-600 mb-2 text-sm">
-            Anzahl Der Artikel
-          </h3>
-          <p className="text-3xl font-bold text-gray-900">{totalItems}</p>
         </div>
       </div>
 
