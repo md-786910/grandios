@@ -116,6 +116,46 @@ exports.getDiscounts = async (req, res, next) => {
           (d) => d.status === "available",
         );
 
+        // Calculate redeemable and pending bonus amounts
+        const redeemableBonus = discountOrders.reduce((acc, group) => {
+          if (group.status === "redeemed") return acc;
+          const uniqueBundles = new Set(
+            group.orders?.map((o) => Number(o.bundleIndex ?? 0))
+          ).size;
+          return uniqueBundles >= 3 ? acc + (group.totalDiscount || 0) : acc;
+        }, 0);
+
+        // Get all order IDs that are already in groups
+        const ordersInGroups = new Set(
+          discountOrders.flatMap((g) =>
+            g.orders?.map((o) => o.orderId?.toString()) || []
+          )
+        );
+
+        // Calculate bonus from orders NOT in any group yet
+        const availableOrdersBonus = orders.reduce((acc, order) => {
+          const orderId = order._id?.toString();
+          // Skip if order is already in a group
+          if (ordersInGroups.has(orderId)) return acc;
+
+          // Calculate potential bonus from discount-eligible items
+          const eligibleItems = order.items?.filter((i) => i.discountEligible) || [];
+          const eligibleAmount = eligibleItems.reduce(
+            (sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
+            0
+          );
+          const orderBonus = (eligibleAmount * settings.discountRate) / 100;
+          return acc + orderBonus;
+        }, 0);
+
+        const pendingBonus = discountOrders.reduce((acc, group) => {
+          if (group.status === "redeemed") return acc;
+          const uniqueBundles = new Set(
+            group.orders?.map((o) => Number(o.bundleIndex ?? 0))
+          ).size;
+          return uniqueBundles < 3 ? acc + (group.totalDiscount || 0) : acc;
+        }, 0) + availableOrdersBonus; // Add available orders bonus to pending
+
         return {
           id: customer._id,
           customerId: customer._id,
@@ -128,6 +168,9 @@ exports.getDiscounts = async (req, res, next) => {
           discountBalance: discount ? discount.balance : 0,
           redeemable: availableGroups.length > 0,
           discountGroupCount: discountOrders.length,
+          // Bonus amounts for display
+          redeemableBonus,
+          pendingBonus,
           // Queue information
           queueCount: queue ? queue.orderCount : 0,
           queueStatus: queue ? queue.status : "pending",
