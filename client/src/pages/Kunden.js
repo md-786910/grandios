@@ -204,28 +204,28 @@ const Kunden = () => {
                   Stadt
                 </th>
                 <th
-                  className="text-right px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
+                  className="text-left px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
                   onClick={() => handleSort("wallet")}
                 >
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-center gap-2">
                     Wallet
                     <SortIcon field="wallet" />
                   </div>
                 </th>
                 <th
-                  className="text-right px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
+                  className="text-left px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
                   onClick={() => handleSort("discountGranted")}
                 >
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-center gap-2">
                     Bonus Gewährt
                     <SortIcon field="discountGranted" />
                   </div>
                 </th>
                 <th
-                  className="text-right px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
+                  className="text-left px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
                   onClick={() => handleSort("discountRedeemed")}
                 >
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-center gap-2">
                     Bonus Eingelöst
                     <SortIcon field="discountRedeemed" />
                   </div>
@@ -265,13 +265,13 @@ const Kunden = () => {
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">
                     {customer.address?.city || "-"}
                   </td>
-                  <td className="px-6 py-4 text-sm text-right font-medium text-green-600">
+                  <td className="px-6 py-4 text-sm text-left font-medium text-green-600">
                     € {formatCurrency(customer.wallet || 0)}
                   </td>
-                  <td className="px-6 py-4 text-sm text-right text-gray-600">
+                  <td className="px-6 py-4 text-sm text-left text-gray-600">
                     € {formatCurrency(customer.totalDiscountGranted || 0)}
                   </td>
-                  <td className="px-6 py-4 text-sm text-right text-gray-600">
+                  <td className="px-6 py-4 text-sm text-left text-gray-600">
                     € {formatCurrency(customer.totalDiscountRedeemed || 0)}
                   </td>
                   <td className="px-6 py-4">

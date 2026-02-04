@@ -356,7 +356,7 @@ const Bonus = () => {
               </div>
 
               {/* Action Button */}
-              <div className="flex flex-col items-center gap-1">
+              <div className="flex flex-col items-start gap-1">
                 <button
                   onClick={() =>
                     handleViewCustomer(
