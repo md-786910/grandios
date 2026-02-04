@@ -7,14 +7,14 @@ const UnsavedChangesModal = ({
   onDiscard,
   onSave,
   saving = false,
-  title = "NICHT GESPEICHERTE ÄNDERUNGEN",
+  title = "Nicht gespeicherte Änderungen",
   message = "Sie haben nicht gespeicherte Änderungen. Möchten Sie diese speichern oder verwerfen?",
 }) => {
   const [mounted, setMounted] = useState(false);
+  const [visible, setVisible] = useState(false);
   const portalRef = useRef(null);
 
   useEffect(() => {
-    // Create a dedicated portal container for this modal instance
     const portalRoot = document.createElement("div");
     portalRoot.setAttribute("data-modal-root", "true");
     document.body.appendChild(portalRoot);
@@ -22,7 +22,6 @@ const UnsavedChangesModal = ({
     setMounted(true);
 
     return () => {
-      // Clean up the portal container on unmount (safe even if already removed)
       if (portalRef.current) {
         portalRef.current.remove();
         portalRef.current = null;
@@ -30,27 +29,38 @@ const UnsavedChangesModal = ({
     };
   }, []);
 
+  // Handle animation states
+  useEffect(() => {
+    if (isOpen) {
+      requestAnimationFrame(() => setVisible(true));
+    } else {
+      setVisible(false);
+    }
+  }, [isOpen]);
+
   if (!mounted || !isOpen || !portalRef.current) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
+      <div
+        className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-200 ease-out ${
+          visible ? "opacity-100" : "opacity-0"
+        }`}
+        onClick={onClose}
+      />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-lg w-full max-w-md mx-4">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-900 tracking-wider uppercase">
-            {title}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
+      <div
+        className={`relative bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden transition-all duration-200 ease-out ${
+          visible ? "opacity-100 scale-100" : "opacity-0 scale-95"
+        }`}
+      >
+        {/* Warning Icon */}
+        <div className="pt-6 pb-2 flex justify-center">
+          <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center">
             <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
+              className="w-6 h-6 text-orange-500"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -59,29 +69,26 @@ const UnsavedChangesModal = ({
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M6 18L18 6M6 6l12 12"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
               />
             </svg>
-          </button>
+          </div>
         </div>
 
         {/* Content */}
-        <div className="px-5 py-6">
-          <p className="text-center text-gray-700 text-sm">{message}</p>
+        <div className="px-6 pb-2 text-center">
+          <h3 className="text-base font-semibold text-gray-900 mb-2">
+            {title}
+          </h3>
+          <p className="text-sm text-gray-500 leading-relaxed">{message}</p>
         </div>
 
-        {/* Footer - Three buttons */}
-        <div className="flex items-center justify-center gap-3 px-5 pb-6">
-          <button
-            onClick={onDiscard}
-            className="px-4 py-2.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm font-medium"
-          >
-            Verwerfen
-          </button>
+        {/* Actions */}
+        <div className="p-4 pt-4 flex flex-col gap-2">
           <button
             onClick={onSave}
             disabled={saving}
-            className="px-4 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="w-full py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 active:scale-[0.98] transition-all duration-150 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {saving ? (
               <>
@@ -104,12 +111,18 @@ const UnsavedChangesModal = ({
                 Speichern...
               </>
             ) : (
-              "Speichern"
+              "Speichern & Fortfahren"
             )}
           </button>
           <button
+            onClick={onDiscard}
+            className="w-full py-2.5 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 active:scale-[0.98] transition-all duration-150 text-sm font-medium"
+          >
+            Verwerfen
+          </button>
+          <button
             onClick={onClose}
-            className="px-4 py-2.5 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm font-medium"
+            className="w-full py-2.5 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg active:scale-[0.98] transition-all duration-150 text-sm font-medium"
           >
             Abbrechen
           </button>
