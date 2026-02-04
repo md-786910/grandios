@@ -795,7 +795,7 @@ const BonusDetail = () => {
           </p>
         </div>
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => checkUnsavedChanges(() => navigate(-1))}
           className="px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm"
         >
           Zurück

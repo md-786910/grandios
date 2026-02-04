@@ -1079,9 +1079,9 @@ const Bestellungen = () => {
                 <button
                   onClick={handleCancel}
                   disabled={saving}
-                  className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm disabled:opacity-50"
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm disabled:opacity-50"
                 >
-                  Stornieren
+                  Abbrechen
                 </button>
               </div>
             ) : (
