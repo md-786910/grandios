@@ -41,7 +41,14 @@ const ProductImage = ({ src, size = "md", className = "" }) => {
 const BonusDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { setHasUnsavedChanges, checkUnsavedChanges, showModal, setShowModal, proceedWithNavigation, cancelNavigation } = useUnsavedChanges();
+  const {
+    setHasUnsavedChanges,
+    checkUnsavedChanges,
+    showModal,
+    setShowModal,
+    proceedWithNavigation,
+    cancelNavigation,
+  } = useUnsavedChanges();
   const [notizen, setNotizen] = useState("");
   const [originalNotizen, setOriginalNotizen] = useState(""); // Track original notes from server
   const [notesHistory, setNotesHistory] = useState([]);
@@ -136,7 +143,7 @@ const BonusDetail = () => {
         setOriginalNotizen(notes); // Track original value
         setQueue(data.queue || null);
         setSettings(
-          data.settings || { discountRate: 10, ordersRequiredForDiscount: 3 }
+          data.settings || { discountRate: 10, ordersRequiredForDiscount: 3 },
         );
 
         // Load draft items from database (only on initial load)
@@ -231,7 +238,7 @@ const BonusDetail = () => {
       const orderInGroup = group.orders?.find(
         (o) =>
           o.orderId?._id?.toString() === orderId?.toString() ||
-          o.orderId?.toString() === orderId?.toString()
+          o.orderId?.toString() === orderId?.toString(),
       );
       if (orderInGroup) {
         return {
@@ -294,7 +301,7 @@ const BonusDetail = () => {
 
     // Automatic groups use single-order bundles (each bundleIndex has 1 order).
     const allSingleOrders = sortedBundles.every(
-      (bundle) => bundle.length === 1
+      (bundle) => bundle.length === 1,
     );
 
     let editItems;
@@ -327,7 +334,7 @@ const BonusDetail = () => {
   const handleCancelEdit = () => {
     // Remove the selected edit items (they were auto-selected when editing started)
     setDiscountItems((prev) =>
-      prev.filter((_, index) => !selectedDiscountItems.includes(index))
+      prev.filter((_, index) => !selectedDiscountItems.includes(index)),
     );
     setEditingGroup(null);
     setSelectedOrders([]);
@@ -402,7 +409,7 @@ const BonusDetail = () => {
           id,
           editingGroup._id,
           ordersWithBundles,
-          settings.discountRate
+          settings.discountRate,
         );
         setMessage({
           type: "success",
@@ -413,7 +420,7 @@ const BonusDetail = () => {
         await discountsAPI.createGroup(
           id,
           ordersWithBundles,
-          settings.discountRate
+          settings.discountRate,
         );
         setMessage({
           type: "success",
@@ -425,7 +432,7 @@ const BonusDetail = () => {
       setEditingGroup(null);
       // Only remove selected discount items, keep unselected ones
       setDiscountItems((prev) =>
-        prev.filter((_, index) => !selectedDiscountItems.includes(index))
+        prev.filter((_, index) => !selectedDiscountItems.includes(index)),
       );
       setSelectedDiscountItems([]);
       await fetchData();
@@ -445,7 +452,7 @@ const BonusDetail = () => {
     setDiscountItems((prev) => prev.filter((_, i) => i !== index));
     // Also remove from selected and adjust indices
     setSelectedDiscountItems((prev) =>
-      prev.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i))
+      prev.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i)),
     );
     setExpandedItems((prev) => {
       const newExpanded = { ...prev };
@@ -526,7 +533,7 @@ const BonusDetail = () => {
           id,
           editingGroup._id,
           ordersWithBundles,
-          settings.discountRate
+          settings.discountRate,
         );
         setMessage({
           type: "success",
@@ -538,7 +545,7 @@ const BonusDetail = () => {
         await discountsAPI.createGroup(
           id,
           ordersWithBundles,
-          settings.discountRate
+          settings.discountRate,
         );
         setMessage({
           type: "success",
@@ -549,7 +556,7 @@ const BonusDetail = () => {
       setSelectedOrders([]);
       // Only remove selected discount items, keep unselected ones
       setDiscountItems((prev) =>
-        prev.filter((_, index) => !selectedDiscountItems.includes(index))
+        prev.filter((_, index) => !selectedDiscountItems.includes(index)),
       );
       setSelectedDiscountItems([]);
       setEditingGroup(null);
@@ -676,25 +683,28 @@ const BonusDetail = () => {
   const totalOrders = orders.length;
   const totalItems = orders.reduce(
     (acc, order) => acc + (order.items?.length || 0),
-    0
+    0,
   );
   const totalOrderValue = orders.reduce(
     (acc, order) => acc + (order.amountTotal || 0),
-    0
+    0,
   );
 
   // Calculate discount amounts by status
   const redeemableBonus = discountGroups.reduce((acc, g) => {
     if (g.status === "redeemed") return acc;
-    const uniqueBundles = new Set(g.orders?.map(o => Number(o.bundleIndex ?? 0))).size;
+    const uniqueBundles = new Set(
+      g.orders?.map((o) => Number(o.bundleIndex ?? 0)),
+    ).size;
     return uniqueBundles >= 3 ? acc + (g.totalDiscount || 0) : acc;
   }, 0);
 
   // Get all order IDs that are in groups
   const ordersInGroups = new Set(
-    discountGroups.flatMap(g =>
-      g.orders?.map(o => (o.orderId?._id || o.orderId)?.toString()) || []
-    )
+    discountGroups.flatMap(
+      (g) =>
+        g.orders?.map((o) => (o.orderId?._id || o.orderId)?.toString()) || [],
+    ),
   );
 
   // Calculate bonus from orders NOT in any group yet (available/pending orders)
@@ -704,20 +714,24 @@ const BonusDetail = () => {
     if (ordersInGroups.has(orderId)) return acc;
 
     // Calculate potential bonus from this order
-    const eligible = order.items?.filter(i => i.discountEligible) || [];
+    const eligible = order.items?.filter((i) => i.discountEligible) || [];
     const eligibleAmount = eligible.reduce(
-      (sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
-      0
+      (sum, item) =>
+        sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
+      0,
     );
     const orderBonus = (eligibleAmount * settings.discountRate) / 100;
     return acc + orderBonus;
   }, 0);
 
-  const pendingBonus = discountGroups.reduce((acc, g) => {
-    if (g.status === "redeemed") return acc;
-    const uniqueBundles = new Set(g.orders?.map(o => Number(o.bundleIndex ?? 0))).size;
-    return uniqueBundles < 3 ? acc + (g.totalDiscount || 0) : acc;
-  }, 0) + availableOrdersBonus; // Add available orders bonus to pending
+  const pendingBonus =
+    discountGroups.reduce((acc, g) => {
+      if (g.status === "redeemed") return acc;
+      const uniqueBundles = new Set(
+        g.orders?.map((o) => Number(o.bundleIndex ?? 0)),
+      ).size;
+      return uniqueBundles < 3 ? acc + (g.totalDiscount || 0) : acc;
+    }, 0) + availableOrdersBonus; // Add available orders bonus to pending
 
   const redeemedBonus = discountGroups.reduce((acc, g) => {
     return g.status === "redeemed" ? acc + (g.totalDiscount || 0) : acc;
@@ -733,7 +747,7 @@ const BonusDetail = () => {
         eligible.reduce(
           (sum, item) =>
             sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
-          0
+          0,
         )
       );
     }
@@ -759,7 +773,7 @@ const BonusDetail = () => {
             sum +
             eligible.reduce(
               (s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
-              0
+              0,
             )
           );
         }
@@ -835,7 +849,7 @@ const BonusDetail = () => {
               <span className="px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full text-xs font-medium">
                 {discountItems.reduce(
                   (sum, item) => sum + item.orders.length,
-                  0
+                  0,
                 )}{" "}
                 Einkäufe
               </span>
@@ -880,7 +894,7 @@ const BonusDetail = () => {
                 const isExpanded = expandedItems[itemKey];
                 const itemOrders = item.orders
                   .map((orderId) =>
-                    orders.find((o) => (o._id || o.id) === orderId)
+                    orders.find((o) => (o._id || o.id) === orderId),
                   )
                   .filter(Boolean);
 
@@ -893,7 +907,7 @@ const BonusDetail = () => {
                     eligible.reduce(
                       (s, i) =>
                         s + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
-                      0
+                      0,
                     )
                   );
                 }, 0);
@@ -926,7 +940,8 @@ const BonusDetail = () => {
                       </div>
                       <div className="p-3 border-r border-gray-100">
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">Einkaufsnummer</span> -{" "}
+                          <span className="font-semibold">Einkaufsnummer</span>{" "}
+                          -{" "}
                           <button
                             onClick={() => navigate(`/bestellungen/${orderId}`)}
                             className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
@@ -1009,8 +1024,7 @@ const BonusDetail = () => {
                       <div className="p-3 border-r border-gray-100">
                         <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                            Gruppenbestellung - {item.orders.length}{" "}
-                            Einkäufe
+                            Gruppenbestellung - {item.orders.length} Einkäufe
                           </span>
                           <svg
                             className={`h-4 w-4 text-gray-500 transition-transform ${
@@ -1101,7 +1115,7 @@ const BonusDetail = () => {
                             (s, i) =>
                               s +
                               (i.priceSubtotalIncl || i.priceUnit * i.quantity),
-                            0
+                            0,
                           );
                           const orderDiscount =
                             (orderEligible * settings.discountRate) / 100;
@@ -1127,7 +1141,9 @@ const BonusDetail = () => {
                                   </span>{" "}
                                   -{" "}
                                   <button
-                                    onClick={() => navigate(`/bestellungen/${orderId}`)}
+                                    onClick={() =>
+                                      navigate(`/bestellungen/${orderId}`)
+                                    }
                                     className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
                                   >
                                     {order.posReference || order.orderId}
@@ -1259,9 +1275,9 @@ const BonusDetail = () => {
                 />
               </svg>
               <span className="text-sm text-blue-800">
-                <strong>{queue.orderCount}</strong> Einkauf(e) in
-                Warteschlange ({queue.orderCount}/
-                {settings.ordersRequiredForDiscount} für automatischen Bonus)
+                <strong>{queue.orderCount}</strong> Einkauf(e) in Warteschlange
+                ({queue.orderCount}/{settings.ordersRequiredForDiscount} für
+                automatischen Bonus)
               </span>
             </div>
             {queue.readyForDiscount && (
@@ -1323,20 +1339,24 @@ const BonusDetail = () => {
             {/* Middle Stats */}
             <div className="flex flex-col gap-4">
               {/* Gesamtbonus Gewährt */}
-              <div className={`rounded-xl border p-6 flex flex-col items-center justify-center flex-1 ${
-                redeemableBonus > 0
-                  ? 'bg-green-50 border-green-200'
-                  : pendingBonus > 0
-                    ? 'bg-orange-50 border-orange-200'
-                    : 'bg-red-50 border-red-200'
-              }`}>
-                <h3 className={`font-bold mb-3 text-sm ${
+              <div
+                className={`rounded-xl border p-6 flex flex-col items-center justify-center flex-1 ${
                   redeemableBonus > 0
-                    ? 'text-green-600'
+                    ? "bg-green-50 border-green-200"
                     : pendingBonus > 0
-                      ? 'text-orange-500'
-                      : 'text-red-600'
-                }`}>
+                      ? "bg-orange-50 border-orange-200"
+                      : "bg-red-50 border-red-200"
+                }`}
+              >
+                <h3
+                  className={`font-bold mb-3 text-sm ${
+                    redeemableBonus > 0
+                      ? "text-green-600"
+                      : pendingBonus > 0
+                        ? "text-orange-500"
+                        : "text-red-600"
+                  }`}
+                >
                   Gesamtbonus Gewährt
                 </h3>
                 {(() => {
@@ -1380,7 +1400,9 @@ const BonusDetail = () => {
                     </button>
                   );
                 })()}
-                <p className="text-xs text-gray-500 mt-2">Klicken zum Kopieren</p>
+                <p className="text-xs text-gray-500 mt-2">
+                  Klicken zum Kopieren
+                </p>
               </div>
 
               {/* Gesamtbestellwert */}
@@ -1415,9 +1437,7 @@ const BonusDetail = () => {
         {/* Notizen - spans full height */}
         <div className="flex-1 bg-white rounded-xl border border-gray-200 p-6 flex flex-col">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">
-              Notizen Hinzufügen
-            </h3>
+            <h3 className="font-semibold text-gray-900">Notizen Hinzufügen</h3>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
@@ -1427,18 +1447,36 @@ const BonusDetail = () => {
                 className="text-gray-400 hover:text-gray-600 transition-colors"
                 title="Historie anzeigen"
               >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
               </button>
-            {hasUnsavedNotes && (
-              <span className="text-xs text-orange-600 font-medium flex items-center gap-1">
-                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
-                </svg>
-                Nicht gespeichert
-              </span>
-            )}
+              {hasUnsavedNotes && (
+                <span className="text-xs text-red-600 font-medium flex items-center gap-1">
+                  <svg
+                    className="h-4 w-4"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Nicht gespeichert
+                </span>
+              )}
             </div>
           </div>
           <textarea
@@ -1446,7 +1484,7 @@ const BonusDetail = () => {
             onChange={(e) => setNotizen(e.target.value)}
             className={`w-full flex-1 border rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 transition-colors ${
               hasUnsavedNotes
-                ? "border-orange-300 focus:ring-orange-200"
+                ? "border-green-300 focus:ring-green-200"
                 : "border-gray-200 focus:ring-gray-200"
             }`}
             placeholder=""
@@ -1457,7 +1495,7 @@ const BonusDetail = () => {
               disabled={saving || !hasUnsavedNotes}
               className={`px-4 py-2 rounded-lg font-medium tracking-wide transition-all duration-500 ease-in-out text-sm ${
                 hasUnsavedNotes
-                  ? "bg-orange-600 text-white hover:bg-orange-700 hover:-translate-y-[1px]"
+                  ? "bg-green-600 text-white hover:bg-green-700 hover:-translate-y-[1px]"
                   : "bg-gray-800 text-white hover:bg-gray-900 cursor-not-allowed opacity-50"
               }`}
             >
@@ -1490,10 +1528,10 @@ const BonusDetail = () => {
               isTooMany
                 ? "bg-blue-50 border-blue-200"
                 : isReadyForManual
-                ? "bg-green-50 border-green-200"
-                : totalItems > 0
-                ? "bg-blue-50 border-blue-200"
-                : "bg-white border-gray-200"
+                  ? "bg-green-50 border-green-200"
+                  : totalItems > 0
+                    ? "bg-blue-50 border-blue-200"
+                    : "bg-white border-gray-200"
             }`}
           >
             <div className="flex items-center justify-between">
@@ -1508,8 +1546,8 @@ const BonusDetail = () => {
                           ? isTooMany
                             ? "bg-blue-500"
                             : isReadyForManual
-                            ? "bg-green-500"
-                            : "bg-blue-500"
+                              ? "bg-green-500"
+                              : "bg-blue-500"
                           : "bg-gray-200"
                       }`}
                     />
@@ -1524,8 +1562,7 @@ const BonusDetail = () => {
                 <div className="flex items-center gap-3">
                   {totalItems === 0 ? (
                     <span className="text-sm text-gray-500">
-                      Wählen Sie genau {MANUAL_MIN_ORDERS} Einkäufe oder
-                      Gruppen
+                      Wählen Sie genau {MANUAL_MIN_ORDERS} Einkäufe oder Gruppen
                     </span>
                   ) : isTooMany ? (
                     <>
@@ -1587,8 +1624,8 @@ const BonusDetail = () => {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
-              {hasSelectedOrders && (
-                <>
+                {hasSelectedOrders && (
+                  <>
                     {selectedOrders.length > 1 && !hasSelectedItems && (
                       <button
                         onClick={() => setShowGroupConfirm(true)}
@@ -1614,15 +1651,15 @@ const BonusDetail = () => {
                         isReadyForManual && !isTooMany
                           ? "bg-green-600 hover:bg-green-700"
                           : isTooMany
-                          ? "bg-red-400 cursor-not-allowed"
-                          : "bg-gray-400 cursor-not-allowed"
+                            ? "bg-red-400 cursor-not-allowed"
+                            : "bg-gray-400 cursor-not-allowed"
                       }`}
                     >
                       {creatingGroup
                         ? "..."
                         : editingGroup
-                        ? "Aktualisieren"
-                        : "Bonusgruppe erstellen"}
+                          ? "Aktualisieren"
+                          : "Bonusgruppe erstellen"}
                     </button>
                     <button
                       onClick={() => setSelectedOrders([])}
@@ -1658,15 +1695,15 @@ const BonusDetail = () => {
                         isReadyForManual && !isTooMany
                           ? "bg-green-600 hover:bg-green-700"
                           : isTooMany
-                          ? "bg-red-400 cursor-not-allowed"
-                          : "bg-gray-400 cursor-not-allowed"
+                            ? "bg-red-400 cursor-not-allowed"
+                            : "bg-gray-400 cursor-not-allowed"
                       }`}
                     >
                       {creatingGroup
                         ? "..."
                         : editingGroup
-                        ? "Aktualisieren"
-                        : "Bonusgruppe erstellen"}
+                          ? "Aktualisieren"
+                          : "Bonusgruppe erstellen"}
                     </button>
                     {/* <button
                       onClick={() => {
@@ -1733,10 +1770,10 @@ const BonusDetail = () => {
                   // Get orders that belong to this group
                   const groupOrderIds =
                     group.orders?.map((o) =>
-                      (o.orderId?._id || o.orderId)?.toString()
+                      (o.orderId?._id || o.orderId)?.toString(),
                     ) || [];
                   const groupOrders = orders.filter((order) =>
-                    groupOrderIds.includes((order._id || order.id)?.toString())
+                    groupOrderIds.includes((order._id || order.id)?.toString()),
                   );
 
                   // If editing this group, don't show it here
@@ -1755,11 +1792,11 @@ const BonusDetail = () => {
                             sum +
                             (item.priceSubtotalIncl ||
                               item.priceUnit * item.quantity),
-                          0
+                          0,
                         )
                       );
                     },
-                    0
+                    0,
                   );
 
                   // Toggle group expansion
@@ -1805,14 +1842,18 @@ const BonusDetail = () => {
                               </span>
                               {(() => {
                                 const uniqueBundles = new Set(
-                                  group.orders?.map(o => Number(o.bundleIndex ?? 0))
+                                  group.orders?.map((o) =>
+                                    Number(o.bundleIndex ?? 0),
+                                  ),
                                 ).size;
                                 return (
-                                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                    uniqueBundles < 3
-                                      ? "bg-orange-100 text-orange-700"
-                                      : "bg-blue-100 text-blue-700"
-                                  }`}>
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                      uniqueBundles < 3
+                                        ? "bg-orange-100 text-orange-700"
+                                        : "bg-blue-100 text-blue-700"
+                                    }`}
+                                  >
                                     {uniqueBundles} Einkäufe
                                   </span>
                                 );
@@ -1834,9 +1875,7 @@ const BonusDetail = () => {
                               </svg>
                             </div>
                             <p className="text-sm mt-1 text-gray-600">
-                              <span className="font-semibold">
-                                Bonusfähig:
-                              </span>{" "}
+                              <span className="font-semibold">Bonusfähig:</span>{" "}
                               € {formatCurrency(groupTotalEligible)}
                             </p>
                             <p className="text-xs text-gray-400 mt-0.5">
@@ -1930,7 +1969,7 @@ const BonusDetail = () => {
                                 const orderData = orders.find(
                                   (ord) =>
                                     (ord._id || ord.id)?.toString() ===
-                                    (o.orderId?._id || o.orderId)?.toString()
+                                    (o.orderId?._id || o.orderId)?.toString(),
                                 );
                                 if (orderData) {
                                   bundleMap[bundleIdx].push({
@@ -1942,7 +1981,7 @@ const BonusDetail = () => {
 
                               // Sort by bundleIndex to maintain order
                               const bundles = Object.entries(bundleMap).sort(
-                                ([a], [b]) => Number(a) - Number(b)
+                                ([a], [b]) => Number(a) - Number(b),
                               );
 
                               return bundles.map(
@@ -1963,7 +2002,7 @@ const BonusDetail = () => {
                                     (sum, order) => {
                                       const eligible =
                                         order.items?.filter(
-                                          (i) => i.discountEligible
+                                          (i) => i.discountEligible,
                                         ) || [];
                                       return (
                                         sum +
@@ -1972,11 +2011,11 @@ const BonusDetail = () => {
                                             s +
                                             (i.priceSubtotalIncl ||
                                               i.priceUnit * i.quantity),
-                                          0
+                                          0,
                                         )
                                       );
                                     },
-                                    0
+                                    0,
                                   );
 
                                   return (
@@ -2020,7 +2059,7 @@ const BonusDetail = () => {
                                             : "";
                                           const discountEligibleItems =
                                             order.items?.filter(
-                                              (item) => item.discountEligible
+                                              (item) => item.discountEligible,
                                             ) || [];
                                           const discountEligibleAmount =
                                             discountEligibleItems.reduce(
@@ -2029,7 +2068,7 @@ const BonusDetail = () => {
                                                 (item.priceSubtotalIncl ||
                                                   item.priceUnit *
                                                     item.quantity),
-                                              0
+                                              0,
                                             );
                                           const isLastOrder =
                                             orderIdx ===
@@ -2068,7 +2107,11 @@ const BonusDetail = () => {
                                                   </span>{" "}
                                                   -{" "}
                                                   <button
-                                                    onClick={() => navigate(`/bestellungen/${(order._id || order.id)?.toString()}`)}
+                                                    onClick={() =>
+                                                      navigate(
+                                                        `/bestellungen/${(order._id || order.id)?.toString()}`,
+                                                      )
+                                                    }
                                                     className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
                                                   >
                                                     {order.posReference ||
@@ -2088,7 +2131,7 @@ const BonusDetail = () => {
                                                   </span>{" "}
                                                   €{" "}
                                                   {formatCurrency(
-                                                    discountEligibleAmount
+                                                    discountEligibleAmount,
                                                   )}
                                                 </p>
                                               </div>
@@ -2119,7 +2162,7 @@ const BonusDetail = () => {
                                       </div>
                                     </div>
                                   );
-                                }
+                                },
                               );
                             })()}
                           </div>
@@ -2132,7 +2175,9 @@ const BonusDetail = () => {
                         {(() => {
                           // Count unique bundles (each bundleIndex represents 1 item/group)
                           const uniqueBundles = new Set(
-                            group.orders?.map(o => Number(o.bundleIndex ?? 0))
+                            group.orders?.map((o) =>
+                              Number(o.bundleIndex ?? 0),
+                            ),
                           ).size;
 
                           if (isRedeemed) {
@@ -2201,7 +2246,9 @@ const BonusDetail = () => {
                           </div>
                         )}
 
-                        <span className={`text-xs font-medium ${isRedeemed ? 'text-red-600' : 'text-green-600'}`}>
+                        <span
+                          className={`text-xs font-medium ${isRedeemed ? "text-red-600" : "text-green-600"}`}
+                        >
                           € {formatCurrency(group.totalDiscount)}
                         </span>
                       </div>
@@ -2215,7 +2262,7 @@ const BonusDetail = () => {
                 const isExpanded = expandedBundles[itemKey];
                 const itemOrders = item.orders
                   .map((orderId) =>
-                    orders.find((o) => (o._id || o.id) === orderId)
+                    orders.find((o) => (o._id || o.id) === orderId),
                   )
                   .filter(Boolean);
 
@@ -2230,7 +2277,7 @@ const BonusDetail = () => {
                     eligible.reduce(
                       (s, i) =>
                         s + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
-                      0
+                      0,
                     )
                   );
                 }, 0);
@@ -2256,7 +2303,7 @@ const BonusDetail = () => {
                   const discountEligibleAmount = discountEligibleItems.reduce(
                     (sum, i) =>
                       sum + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
-                    0
+                    0,
                   );
 
                   return (
@@ -2282,7 +2329,8 @@ const BonusDetail = () => {
                       </div>
                       <div className="p-4 border-r border-gray-100">
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">Einkaufsnummer</span> -{" "}
+                          <span className="font-semibold">Einkaufsnummer</span>{" "}
+                          -{" "}
                           <button
                             onClick={() => navigate(`/bestellungen/${orderId}`)}
                             className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
@@ -2366,8 +2414,8 @@ const BonusDetail = () => {
                               ? "bg-amber-50"
                               : "bg-gray-100"
                             : isItemSelected
-                            ? "bg-amber-50/50"
-                            : "bg-gray-50"
+                              ? "bg-amber-50/50"
+                              : "bg-gray-50"
                         }`}
                         onClick={togglePendingItem}
                       >
@@ -2390,8 +2438,7 @@ const BonusDetail = () => {
                         <div className="p-4 border-r border-gray-100">
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-0.5 bg-amber-200 text-amber-800 rounded text-xs font-medium">
-                              Gruppenbestellung - {item.orders.length}{" "}
-                              Einkäufe
+                              Gruppenbestellung - {item.orders.length} Einkäufe
                             </span>
                             <svg
                               className={`h-4 w-4 text-gray-500 transition-transform ${
@@ -2410,8 +2457,8 @@ const BonusDetail = () => {
                             </svg>
                           </div>
                           <p className="text-sm mt-1 text-gray-600">
-                            <span className="font-semibold">Bonusfähig:</span>{" "}
-                            € {formatCurrency(itemEligible)}
+                            <span className="font-semibold">Bonusfähig:</span> €{" "}
+                            {formatCurrency(itemEligible)}
                           </p>
                           <p className="text-xs text-gray-400 mt-0.5">
                             Erweitern
@@ -2521,7 +2568,7 @@ const BonusDetail = () => {
                             (s, i) =>
                               s +
                               (i.priceSubtotalIncl || i.priceUnit * i.quantity),
-                            0
+                            0,
                           );
                           const isLastOrder =
                             orderIdx === itemOrders.length - 1;
@@ -2545,7 +2592,9 @@ const BonusDetail = () => {
                                   </span>{" "}
                                   -{" "}
                                   <button
-                                    onClick={() => navigate(`/bestellungen/${orderId}`)}
+                                    onClick={() =>
+                                      navigate(`/bestellungen/${orderId}`)
+                                    }
                                     className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
                                   >
                                     {order.posReference || order.orderId}
@@ -2629,7 +2678,7 @@ const BonusDetail = () => {
                       sum +
                       (item.priceSubtotalIncl ||
                         item.priceUnit * item.quantity),
-                    0
+                    0,
                   );
 
                   return (
@@ -2639,8 +2688,8 @@ const BonusDetail = () => {
                         isSelected
                           ? "bg-blue-50"
                           : isInEditingGroup && !isSelected
-                          ? "bg-orange-50"
-                          : "bg-white"
+                            ? "bg-orange-50"
+                            : "bg-white"
                       }`}
                     >
                       {/* Checkbox */}
@@ -2661,7 +2710,8 @@ const BonusDetail = () => {
                       {/* Order Info */}
                       <div className="p-4 border-r border-gray-100">
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">Einkaufsnummer</span> -{" "}
+                          <span className="font-semibold">Einkaufsnummer</span>{" "}
+                          -{" "}
                           <button
                             onClick={() => navigate(`/bestellungen/${orderId}`)}
                             className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
@@ -2722,7 +2772,12 @@ const BonusDetail = () => {
                                   Verfügbar
                                 </span>
                                 <span className="text-xs font-semibold text-orange-500">
-                                  € {formatCurrency((discountEligibleAmount * settings.discountRate) / 100)}
+                                  €{" "}
+                                  {formatCurrency(
+                                    (discountEligibleAmount *
+                                      settings.discountRate) /
+                                      100,
+                                  )}
                                 </span>
                               </div>
                             )}
@@ -2749,10 +2804,10 @@ const BonusDetail = () => {
                   // Get orders that belong to this group
                   const groupOrderIds =
                     group.orders?.map((o) =>
-                      (o.orderId?._id || o.orderId)?.toString()
+                      (o.orderId?._id || o.orderId)?.toString(),
                     ) || [];
                   const groupOrders = orders.filter((order) =>
-                    groupOrderIds.includes((order._id || order.id)?.toString())
+                    groupOrderIds.includes((order._id || order.id)?.toString()),
                   );
 
                   // If editing this group, don't show it here
@@ -2771,11 +2826,11 @@ const BonusDetail = () => {
                             sum +
                             (item.priceSubtotalIncl ||
                               item.priceUnit * item.quantity),
-                          0
+                          0,
                         )
                       );
                     },
-                    0
+                    0,
                   );
 
                   // Toggle group expansion
@@ -2815,7 +2870,9 @@ const BonusDetail = () => {
                               </span>
                               {(() => {
                                 const uniqueBundles = new Set(
-                                  group.orders?.map(o => Number(o.bundleIndex ?? 0))
+                                  group.orders?.map((o) =>
+                                    Number(o.bundleIndex ?? 0),
+                                  ),
                                 ).size;
                                 return (
                                   <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
@@ -2840,9 +2897,7 @@ const BonusDetail = () => {
                               </svg>
                             </div>
                             <p className="text-sm mt-1 text-gray-600">
-                              <span className="font-semibold">
-                                Bonusfähig:
-                              </span>{" "}
+                              <span className="font-semibold">Bonusfähig:</span>{" "}
                               € {formatCurrency(groupTotalEligible)}
                             </p>
                             <p className="text-xs text-gray-400 mt-0.5">
@@ -2921,7 +2976,7 @@ const BonusDetail = () => {
                                 const orderData = orders.find(
                                   (ord) =>
                                     (ord._id || ord.id)?.toString() ===
-                                    (o.orderId?._id || o.orderId)?.toString()
+                                    (o.orderId?._id || o.orderId)?.toString(),
                                 );
                                 if (orderData) {
                                   bundleMap[bundleIdx].push({
@@ -2932,7 +2987,7 @@ const BonusDetail = () => {
                               });
 
                               const bundles = Object.entries(bundleMap).sort(
-                                ([a], [b]) => Number(a) - Number(b)
+                                ([a], [b]) => Number(a) - Number(b),
                               );
 
                               return bundles.map(
@@ -2952,7 +3007,7 @@ const BonusDetail = () => {
                                     (sum, order) => {
                                       const eligible =
                                         order.items?.filter(
-                                          (i) => i.discountEligible
+                                          (i) => i.discountEligible,
                                         ) || [];
                                       return (
                                         sum +
@@ -2961,11 +3016,11 @@ const BonusDetail = () => {
                                             s +
                                             (i.priceSubtotalIncl ||
                                               i.priceUnit * i.quantity),
-                                          0
+                                          0,
                                         )
                                       );
                                     },
-                                    0
+                                    0,
                                   );
 
                                   return (
@@ -3006,7 +3061,7 @@ const BonusDetail = () => {
                                             : "";
                                           const discountEligibleItems =
                                             order.items?.filter(
-                                              (item) => item.discountEligible
+                                              (item) => item.discountEligible,
                                             ) || [];
                                           const discountEligibleAmount =
                                             discountEligibleItems.reduce(
@@ -3015,7 +3070,7 @@ const BonusDetail = () => {
                                                 (item.priceSubtotalIncl ||
                                                   item.priceUnit *
                                                     item.quantity),
-                                              0
+                                              0,
                                             );
                                           const isLastOrder =
                                             orderIdx ===
@@ -3051,7 +3106,11 @@ const BonusDetail = () => {
                                                   </span>{" "}
                                                   -{" "}
                                                   <button
-                                                    onClick={() => navigate(`/bestellungen/${(order._id || order.id)?.toString()}`)}
+                                                    onClick={() =>
+                                                      navigate(
+                                                        `/bestellungen/${(order._id || order.id)?.toString()}`,
+                                                      )
+                                                    }
                                                     className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
                                                   >
                                                     {order.posReference ||
@@ -3071,7 +3130,7 @@ const BonusDetail = () => {
                                                   </span>{" "}
                                                   €{" "}
                                                   {formatCurrency(
-                                                    discountEligibleAmount
+                                                    discountEligibleAmount,
                                                   )}
                                                 </p>
                                               </div>
@@ -3101,7 +3160,7 @@ const BonusDetail = () => {
                                       </div>
                                     </div>
                                   );
-                                }
+                                },
                               );
                             })()}
                           </div>
@@ -3204,7 +3263,7 @@ const BonusDetail = () => {
         onConfirm={() => {
           handleRemoveOrderFromItem(
             removeOrderFromItem.itemIndex,
-            removeOrderFromItem.orderId
+            removeOrderFromItem.orderId,
           );
           setRemoveOrderFromItem(null);
         }}
@@ -3253,13 +3312,25 @@ const BonusDetail = () => {
             <div className="h-full flex flex-col">
               {/* Header */}
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Notizen Historie</h2>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Notizen Historie
+                </h2>
                 <button
                   onClick={() => setShowHistory(false)}
                   className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
                 >
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg
+                    className="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </div>
@@ -3272,34 +3343,54 @@ const BonusDetail = () => {
                   </div>
                 ) : notesHistory.length === 0 ? (
                   <div className="text-center py-12 text-gray-500">
-                    <svg className="h-12 w-12 mx-auto mb-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    <svg
+                      className="h-12 w-12 mx-auto mb-4 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
                     </svg>
                     <p>Keine Historie vorhanden</p>
                   </div>
                 ) : (
                   <div className="space-y-6">
                     {notesHistory.map((entry, idx) => (
-                      <div key={entry.id || entry._id} className="relative pl-6 pb-6 border-l-2 border-blue-500 last:pb-0">
+                      <div
+                        key={entry.id || entry._id}
+                        className="relative pl-6 pb-6 border-l-2 border-blue-500 last:pb-0"
+                      >
                         {/* Timeline dot */}
                         <div className="absolute left-0 top-0 -translate-x-1/2 w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow"></div>
 
                         {/* Entry content */}
                         <div>
                           <div className="flex flex-col mb-2">
-                            <span className="font-semibold text-gray-900">{entry.changedByName}</span>
+                            <span className="font-semibold text-gray-900">
+                              {entry.changedByName}
+                            </span>
                             <span className="text-sm text-gray-500">
-                              {new Date(entry.createdAt).toLocaleString('de-DE', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
+                              {new Date(entry.createdAt).toLocaleString(
+                                "de-DE",
+                                {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}
                             </span>
                           </div>
                           <div className="mt-2 p-4 bg-gray-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap shadow-sm">
-                            {entry.notes || <em className="text-gray-400">Leer</em>}
+                            {entry.notes || (
+                              <em className="text-gray-400">Leer</em>
+                            )}
                           </div>
                         </div>
                       </div>

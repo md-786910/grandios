@@ -74,20 +74,20 @@ const ConfirmModal = ({
         <div className="flex items-center justify-center gap-4 px-5 pb-6">
           <button
             onClick={onConfirm}
-            className="min-w-[100px] px-6 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors text-sm font-medium"
+            className="min-w-[100px] px-6 py-2.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm font-medium"
           >
             {confirmText}
           </button>
           <button
             onClick={onClose}
-            className="min-w-[100px] px-6 py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors text-sm font-medium"
+            className="min-w-[100px] px-6 py-2.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm font-medium"
           >
             {cancelText}
           </button>
         </div>
       </div>
     </div>,
-    portalRef.current
+    portalRef.current,
   );
 };
 
