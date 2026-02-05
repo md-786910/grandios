@@ -88,7 +88,7 @@ const UnsavedChangesModal = ({
           <button
             onClick={onSave}
             disabled={saving}
-            className="w-full py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 active:scale-[0.98] transition-all duration-150 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 active:scale-[0.98] transition-all duration-150 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {saving ? (
               <>
@@ -120,16 +120,16 @@ const UnsavedChangesModal = ({
           >
             Verwerfen
           </button>
-          <button
+          {/* <button
             onClick={onClose}
             className="w-full py-2.5 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg active:scale-[0.98] transition-all duration-150 text-sm font-medium"
           >
             Abbrechen
-          </button>
+          </button> */}
         </div>
       </div>
     </div>,
-    portalRef.current
+    portalRef.current,
   );
 };
 
