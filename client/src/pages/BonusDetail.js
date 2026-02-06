@@ -64,6 +64,7 @@ const BonusDetail = () => {
   });
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null); // {newOrdersCount, totalOrders} or null
   const [saving, setSaving] = useState(false);
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
@@ -214,16 +215,18 @@ const BonusDetail = () => {
 
   const handleSyncOrders = async () => {
     setSyncing(true);
+    setSyncResult(null);
     try {
       const response = await discountsAPI.syncCustomerOrders(id);
-      const { ordersCount } = response.data.data;
-      toast.success(
-        `Sync abgeschlossen. ${ordersCount} Einkäufe synchronisiert.`,
-      );
+      const { newOrdersCount, totalOrders } = response.data.data;
+      setSyncResult({ newOrdersCount, totalOrders });
       await fetchData();
+      // Auto-hide result after 5 seconds
+      setTimeout(() => setSyncResult(null), 5000);
     } catch (error) {
       console.error("Failed to sync customer orders:", error);
-      toast.error("Fehler beim Synchronisieren der Einkäufe");
+      setSyncResult({ error: true });
+      setTimeout(() => setSyncResult(null), 5000);
     } finally {
       setSyncing(false);
     }
@@ -820,7 +823,7 @@ const BonusDetail = () => {
 
       {/* Fixed sync overlay - visible even when scrolled */}
       {syncing && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-blue-600 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-pulse">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-blue-600 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3">
           <svg
             className="animate-spin h-5 w-5 text-white"
             fill="none"
@@ -841,6 +844,52 @@ const BonusDetail = () => {
             />
           </svg>
           <span className="font-medium text-sm">Einkäufe werden synchronisiert...</span>
+        </div>
+      )}
+
+      {/* Fixed sync result banner - visible even when scrolled */}
+      {!syncing && syncResult && (
+        <div
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 ${
+            syncResult.error || syncResult.newOrdersCount === 0
+              ? "bg-red-600 text-white"
+              : "bg-green-600 text-white"
+          }`}
+        >
+          {syncResult.error ? (
+            <>
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              <span className="font-medium text-sm">Fehler beim Synchronisieren</span>
+            </>
+          ) : syncResult.newOrdersCount > 0 ? (
+            <>
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="font-medium text-sm">
+                {syncResult.newOrdersCount} neue Einkäufe gefunden
+              </span>
+            </>
+          ) : (
+            <>
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              <span className="font-medium text-sm">
+                Keine neuen Einkäufe
+              </span>
+            </>
+          )}
+          <button
+            onClick={() => setSyncResult(null)}
+            className="ml-2 hover:opacity-80"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
 

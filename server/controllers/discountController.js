@@ -945,15 +945,28 @@ exports.syncCustomerOrders = async (req, res, next) => {
       });
     }
 
+    // Count orders before sync to detect new ones
+    const ordersBefore = await Order.countDocuments({
+      customerId: customer._id,
+    });
+
     const result = await cascadeSyncService.syncCustomerWithRelatedData(
       customer.contactId
     );
+
+    // Count orders after sync
+    const ordersAfter = await Order.countDocuments({
+      customerId: customer._id,
+    });
+    const newOrdersCount = ordersAfter - ordersBefore;
 
     res.status(200).json({
       success: true,
       message: `Sync completed. ${result.ordersCount} orders synced.`,
       data: {
         ordersCount: result.ordersCount,
+        newOrdersCount,
+        totalOrders: ordersAfter,
       },
     });
   } catch (err) {
