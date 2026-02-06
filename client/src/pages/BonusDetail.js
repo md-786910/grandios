@@ -218,12 +218,12 @@ const BonusDetail = () => {
       const response = await discountsAPI.syncCustomerOrders(id);
       const { ordersCount } = response.data.data;
       toast.success(
-        `Sync abgeschlossen. ${ordersCount} Bestellungen synchronisiert.`
+        `Sync abgeschlossen. ${ordersCount} Einkäufe synchronisiert.`,
       );
       await fetchData();
     } catch (error) {
       console.error("Failed to sync customer orders:", error);
-      toast.error("Fehler beim Synchronisieren der Bestellungen");
+      toast.error("Fehler beim Synchronisieren der Einkäufe");
     } finally {
       setSyncing(false);
     }
@@ -870,7 +870,7 @@ const BonusDetail = () => {
                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                   />
                 </svg>
-                Bestellungen synchronisieren
+                Einkäufe synchronisieren
               </>
             )}
           </button>
@@ -1639,7 +1639,7 @@ const BonusDetail = () => {
                       </span>
                       <span className="text-sm text-blue-600 font-medium">
                         • {MANUAL_MIN_ORDERS} Ausgewählte Einkäufe, die für
-                        Gruppenbestellungen in Frage kommen
+                        Gruppeneinkäufe in Frage kommen
                       </span>
                       {hasSelectedOrders && (
                         <span className="text-xs text-blue-500">
