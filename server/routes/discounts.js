@@ -9,7 +9,8 @@ const {
   getNotesHistory,
   deleteDiscountGroup,
   saveDraftItems,
-  clearDraftItems
+  clearDraftItems,
+  syncCustomerOrders
 } = require('../controllers/discountController');
 const { protect } = require('../middleware/auth');
 
@@ -21,6 +22,9 @@ router.get('/', getDiscounts);
 
 router.route('/:customerId')
   .get(getCustomerDiscount);
+
+router.route('/:customerId/sync')
+  .post(syncCustomerOrders);
 
 router.route('/:customerId/groups')
   .post(createDiscountGroup);

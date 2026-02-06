@@ -183,6 +183,11 @@ export const discountsAPI = {
     apiCall(`/discounts/${customerId}/draft`, {
       method: "DELETE",
     }),
+
+  syncCustomerOrders: (customerId) =>
+    apiCall(`/discounts/${customerId}/sync`, {
+      method: "POST",
+    }),
 };
 
 // Settings API
