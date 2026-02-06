@@ -12,6 +12,9 @@ const Product = require("../models/Product");
 const ProductAttribute = require("../models/ProductAttribute");
 const ProductAttributeValue = require("../models/ProductAttributeValue");
 const DiscountOrder = require("../models/DiscountOrder");
+const Discount = require("../models/Discount");
+const OrderCustomerQueue = require("../models/OrderCustomerQueue");
+const AppSettings = require("../models/AppSettings");
 
 // @desc    Get sync status
 // @route   GET /api/sync/status
@@ -173,6 +176,19 @@ exports.runFullSync = async (req, res, next) => {
   }
 };
 
+// Helper to get order items from either orderLines (WAWI) or items (legacy)
+function getOrderItems(order) {
+  if (order.orderLines && order.orderLines.length > 0) {
+    return order.orderLines.map((line) => ({
+      priceSubtotalIncl:
+        line.priceSubtotalIncl || line.priceUnit * (line.quantity || 1),
+      quantity: line.quantity || 1,
+      discountEligible: line.discountEligible !== false,
+    }));
+  }
+  return order.items || [];
+}
+
 // @desc    Get synced customers with pagination
 // @route   GET /api/sync/data/customers
 // @access  Private
@@ -213,7 +229,7 @@ exports.getCustomers = async (req, res, next) => {
     const sortField = sortFields[sortBy] || "name";
     const sortObj = { [sortField]: sortOrder };
 
-    const [customers, total] = await Promise.all([
+    const [customers, total, settings] = await Promise.all([
       Customer.find(query)
         .collation({ locale: "de", strength: 2 })
         .sort(sortObj)
@@ -221,11 +237,101 @@ exports.getCustomers = async (req, res, next) => {
         .limit(limit)
         .lean(),
       Customer.countDocuments(query),
+      AppSettings.getSettings(),
     ]);
+
+    // Enrich each customer with Bonuspreis data (same as Bonus page)
+    const customerIds = customers.map((c) => c._id);
+
+    const [allDiscountOrders, allQueues, allOrders] = await Promise.all([
+      DiscountOrder.find({ customerId: { $in: customerIds } }).lean(),
+      OrderCustomerQueue.find({ customerId: { $in: customerIds } }).lean(),
+      Order.find({ customerId: { $in: customerIds } })
+        .populate({
+          path: "orderLines",
+          select: "priceSubtotalIncl priceUnit quantity discountEligible",
+        })
+        .lean(),
+    ]);
+
+    // Group by customer
+    const discountOrdersByCustomer = {};
+    const queueByCustomer = {};
+    const ordersByCustomer = {};
+
+    allDiscountOrders.forEach((d) => {
+      const key = d.customerId.toString();
+      if (!discountOrdersByCustomer[key]) discountOrdersByCustomer[key] = [];
+      discountOrdersByCustomer[key].push(d);
+    });
+    allQueues.forEach((q) => {
+      queueByCustomer[q.customerId.toString()] = q;
+    });
+    allOrders.forEach((o) => {
+      const key = o.customerId.toString();
+      if (!ordersByCustomer[key]) ordersByCustomer[key] = [];
+      ordersByCustomer[key].push(o);
+    });
+
+    const enrichedCustomers = customers.map((customer) => {
+      const custId = customer._id.toString();
+      const discountOrders = discountOrdersByCustomer[custId] || [];
+      const queue = queueByCustomer[custId];
+      const orders = ordersByCustomer[custId] || [];
+
+      // Calculate redeemable bonus (groups with 3+ unique bundles, not redeemed)
+      const redeemableBonus = discountOrders.reduce((acc, group) => {
+        if (group.status === "redeemed") return acc;
+        const uniqueBundles = new Set(
+          group.orders?.map((o) => Number(o.bundleIndex ?? 0))
+        ).size;
+        return uniqueBundles >= 3 ? acc + (group.totalDiscount || 0) : acc;
+      }, 0);
+
+      // Get all order IDs already in groups
+      const ordersInGroups = new Set(
+        discountOrders.flatMap(
+          (g) => g.orders?.map((o) => o.orderId?.toString()) || []
+        )
+      );
+
+      // Calculate bonus from orders NOT in any group yet
+      const availableOrdersBonus = orders.reduce((acc, order) => {
+        if (ordersInGroups.has(order._id?.toString())) return acc;
+        const items = getOrderItems(order);
+        const eligibleAmount = items
+          .filter((i) => i.discountEligible)
+          .reduce(
+            (sum, item) =>
+              sum +
+              (item.priceSubtotalIncl || item.priceUnit * item.quantity),
+            0
+          );
+        return acc + (eligibleAmount * settings.discountRate) / 100;
+      }, 0);
+
+      // Pending bonus = incomplete groups + available orders bonus
+      const pendingBonus =
+        discountOrders.reduce((acc, group) => {
+          if (group.status === "redeemed") return acc;
+          const uniqueBundles = new Set(
+            group.orders?.map((o) => Number(o.bundleIndex ?? 0))
+          ).size;
+          return uniqueBundles < 3 ? acc + (group.totalDiscount || 0) : acc;
+        }, 0) + availableOrdersBonus;
+
+      return {
+        ...customer,
+        redeemableBonus,
+        pendingBonus,
+        queueCount: queue ? queue.orderCount : 0,
+        ordersRequiredForDiscount: settings.ordersRequiredForDiscount,
+      };
+    });
 
     res.status(200).json({
       success: true,
-      data: customers,
+      data: enrichedCustomers,
       pagination: {
         page,
         limit,
