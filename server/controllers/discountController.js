@@ -7,6 +7,7 @@ const Product = require("../models/Product");
 const OrderCustomerQueue = require("../models/OrderCustomerQueue");
 const AppSettings = require("../models/AppSettings");
 const NotesHistory = require("../models/NotesHistory");
+const cascadeSyncService = require("../services/cascadingSyncService");
 
 // Helper to get order items from either orderLines (WAWI) or items (legacy)
 function getOrderItems(order) {
@@ -920,5 +921,46 @@ exports.clearDraftItems = async (req, res, next) => {
     });
   } catch (err) {
     next(err);
+  }
+};
+
+// @desc    Sync recent orders for customer from WAWI
+// @route   POST /api/discounts/:customerId/sync
+// @access  Private
+exports.syncCustomerOrders = async (req, res, next) => {
+  try {
+    const customer = await Customer.findById(req.params.customerId);
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    if (!customer.contactId) {
+      return res.status(400).json({
+        success: false,
+        message: "Customer has no WAWI contact ID. Cannot sync.",
+      });
+    }
+
+    const result = await cascadeSyncService.syncCustomerWithRelatedData(
+      customer.contactId
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Sync completed. ${result.ordersCount} orders synced.`,
+      data: {
+        ordersCount: result.ordersCount,
+      },
+    });
+  } catch (err) {
+    console.error("[DiscountSync] Customer sync failed:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message || "Sync failed",
+    });
   }
 };
