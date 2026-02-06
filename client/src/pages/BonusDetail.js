@@ -843,7 +843,9 @@ const BonusDetail = () => {
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
             />
           </svg>
-          <span className="font-medium text-sm">Einkäufe werden synchronisiert...</span>
+          <span className="font-medium text-sm">
+            Einkäufe werden synchronisiert...
+          </span>
         </div>
       )}
 
@@ -858,36 +860,46 @@ const BonusDetail = () => {
         >
           {syncResult.error ? (
             <>
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
-              <span className="font-medium text-sm">Fehler beim Synchronisieren</span>
+              <span className="font-medium text-sm">
+                Fehler beim Synchronisieren
+              </span>
             </>
           ) : syncResult.newOrdersCount > 0 ? (
-            <>
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              <span className="font-medium text-sm">
-                {syncResult.newOrdersCount} neue Einkäufe gefunden
-              </span>
-            </>
+            <span className="font-medium text-sm">
+              {syncResult.newOrdersCount} neue Einkäufe gefunden
+            </span>
           ) : (
-            <>
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              <span className="font-medium text-sm">
-                Keine neuen Einkäufe
-              </span>
-            </>
+            <span className="font-medium text-sm">Keine neuen Einkäufe</span>
           )}
           <button
             onClick={() => setSyncResult(null)}
             className="ml-2 hover:opacity-80"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
