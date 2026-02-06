@@ -1116,13 +1116,13 @@ const Bestellungen = () => {
               <img
                 src={
                   item.image ||
-                  "https://11316b7a2b.wawi.onretail.eu/web/image/product.template/472/image_256"
+                  "https://46e2edf3b8.wawi.onretail.eu/web/image/product.template/472/image_256"
                 }
                 alt={item.productName}
                 className="w-24 h-24 object-cover rounded-lg"
                 onError={(e) => {
                   e.target.src =
-                    "https://11316b7a2b.wawi.onretail.eu/web/image/product.template/472/image_256";
+                    "https://46e2edf3b8.wawi.onretail.eu/web/image/product.template/472/image_256";
                 }}
               />
               <div className="flex-1">
