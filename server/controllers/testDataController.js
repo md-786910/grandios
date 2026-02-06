@@ -3,7 +3,7 @@ const Order = require("../models/Order");
 
 // Default product image from WAWI
 const DEFAULT_PRODUCT_IMAGE =
-  "https://11316b7a2b.wawi.onretail.eu/web/image/product.template/472/image_256";
+  "https://46e2edf3b8.wawi.onretail.eu/web/image/product.template/472/image_256";
 
 // Sample product data for generating test orders (using picsum.photos for realistic product images)
 const sampleProducts = [
@@ -171,7 +171,7 @@ exports.generateTestOrders = async (req, res, next) => {
       const items = generateOrderItems(randomBetween(2, 5));
       const amountTotal = items.reduce(
         (sum, item) => sum + item.priceSubtotalIncl,
-        0
+        0,
       );
       const timestamp = Date.now() + i;
 
@@ -239,7 +239,7 @@ exports.generateCompleteTestData = async (req, res, next) => {
         const items = generateOrderItems(randomBetween(2, 5));
         const amountTotal = items.reduce(
           (sum, item) => sum + item.priceSubtotalIncl,
-          0
+          0,
         );
         const orderTimestamp = timestamp + o + 1000;
 

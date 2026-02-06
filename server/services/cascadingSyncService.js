@@ -178,15 +178,17 @@ async function syncCustomerOrders(customer, partnerId) {
   for (const wawiOrder of orders) {
     try {
       // Sync order
-      const order = await upsertOrder(wawiOrder, customer._id);
-      cascadeStatus.progress.orders++;
 
-      // Sync order lines and products
-      if (wawiOrder.lines && wawiOrder.lines.length > 0) {
-        await syncOrderLinesWithProducts(wawiOrder.lines, order);
+      if (wawiOrder.amount_total > 0) {
+        const order = await upsertOrder(wawiOrder, customer._id);
+        cascadeStatus.progress.orders++;
+
+        // Sync order lines and products
+        if (wawiOrder.lines && wawiOrder.lines.length > 0) {
+          await syncOrderLinesWithProducts(wawiOrder.lines, order);
+        }
+        syncedOrders.push(order);
       }
-
-      syncedOrders.push(order);
     } catch (err) {
       console.error(
         `[CascadeSync] Error syncing order ${wawiOrder.id}:`,
@@ -234,6 +236,10 @@ async function syncOrderLinesWithProducts(lineIds, order) {
   cascadeStatus.currentStep = "orderLines";
   for (const line of lines) {
     try {
+      const discount = line.discount || 0;
+      if (discount > 0) {
+        continue; // Skip syncing this line - it's a discount line, not a product line
+      }
       const orderLine = await upsertOrderLine(line, order);
       orderLineIds.push(orderLine._id);
       cascadeStatus.progress.orderLines++;
@@ -412,20 +418,22 @@ async function checkAndCreateDiscountGroup(customer, orders) {
     group.orders.forEach((o) => ordersInGroups.add(o.orderId.toString()));
   });
 
-  // Filter eligible orders (not in any group, paid, positive amount, no discount)
-  let eligibleOrders = [];
+  // Filter eligible orders (not in any group, positive amount, no line-item discounts)
+  const eligibleOrders = [];
   for (const order of orders) {
-    if (!ordersInGroups.has(order._id.toString()) && order.amountTotal > 0) {
-      // Check if order has any line items with discount > 0
-      const hasDiscount = await orderHasDiscount(order._id);
-      if (!hasDiscount) {
-        eligibleOrders.push(order);
-      }
-    }
+    // Skip if already in a discount group
+    if (ordersInGroups.has(order._id.toString())) continue;
+
+    // Skip if amount is zero or negative
+    if (!order || !order.amountTotal || order.amountTotal <= 0) continue;
+
+    // Skip if order has line items with discounts
+    const hasDiscount = await orderHasDiscount(order._id);
+    if (hasDiscount) continue;
+
+    eligibleOrders.push(order);
   }
-  // console.log("CustomerId", { customer: customer }, { eligibleOrders });
-  // filter order have amount is negative or 0
-  eligibleOrders = eligibleOrders.filter((order) => order?.amountTotal > 0);
+
   // Create discount groups for every 3 orders
   while (eligibleOrders.length >= ORDERS_FOR_DISCOUNT) {
     const groupOrders = eligibleOrders.splice(0, ORDERS_FOR_DISCOUNT);

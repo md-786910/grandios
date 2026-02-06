@@ -99,7 +99,10 @@ exports.getDiscounts = async (req, res, next) => {
     // Get stats for each customer
     const customersWithStats = await Promise.all(
       customers.map(async (customer) => {
-        const orders = await Order.find({ customerId: customer._id });
+        const orders = await Order.find({ customerId: customer._id }).populate({
+          path: "orderLines",
+          select: "priceSubtotalIncl priceUnit quantity discountEligible",
+        });
         const discount = await Discount.findOne({ customerId: customer._id });
         const discountOrders = await DiscountOrder.find({
           customerId: customer._id,
@@ -138,8 +141,9 @@ exports.getDiscounts = async (req, res, next) => {
           // Skip if order is already in a group
           if (ordersInGroups.has(orderId)) return acc;
 
-          // Calculate potential bonus from discount-eligible items
-          const eligibleItems = order.items?.filter((i) => i.discountEligible) || [];
+          // Calculate potential bonus from discount-eligible items using getOrderItems
+          const items = getOrderItems(order);
+          const eligibleItems = items.filter((i) => i.discountEligible);
           const eligibleAmount = eligibleItems.reduce(
             (sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
             0

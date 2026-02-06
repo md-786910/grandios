@@ -16,7 +16,7 @@ import { useUnsavedChanges } from "../context/UnsavedChangesContext";
 
 // Default product image fallback
 const DEFAULT_PRODUCT_IMAGE =
-  "https://11316b7a2b.wawi.onretail.eu/web/image/product.template/472/image_256";
+  "https://46e2edf3b8.wawi.onretail.eu/web/image/product.template/472/image_256";
 
 // Fallback component for broken/missing images
 const ProductImage = ({ src, size = "md", className = "" }) => {
