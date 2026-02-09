@@ -41,6 +41,11 @@ const CustomerSchema = new mongoose.Schema({
     default: 0
   },
   companyType: String,
+  source: {
+    type: String,
+    enum: ['wawi', 'import', 'manual'],
+    default: 'wawi'
+  },
   syncedAt: Date,
   notes: {
     type: String,

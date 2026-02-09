@@ -10,7 +10,7 @@ import toast from "react-hot-toast";
 import Layout from "../components/Layout";
 import ConfirmModal from "../components/ConfirmModal";
 import UnsavedChangesModal from "../components/UnsavedChangesModal";
-import { discountsAPI } from "../services/api";
+import { discountsAPI, purchaseHistoryAPI } from "../services/api";
 import { sanitizeName } from "../utils/helpers";
 import { useUnsavedChanges } from "../context/UnsavedChangesContext";
 
@@ -71,6 +71,9 @@ const BonusDetail = () => {
   const [message, setMessage] = useState({ type: "", text: "" });
   const [editingGroup, setEditingGroup] = useState(null); // Group being edited
   const [discountItems, setDiscountItems] = useState([]); // Items for discount group: [{orders: [id1, id2], isBundle: true}]
+  const [purchaseHistory, setPurchaseHistory] = useState(null); // Old purchase history from Excel
+  const [expandedOldGroups, setExpandedOldGroups] = useState({}); // Track expanded old purchase groups
+  const [redeemOldGroupIndex, setRedeemOldGroupIndex] = useState(null); // Old group index to redeem
   const [expandedBundles, setExpandedBundles] = useState({}); // Track which bundles are expanded: {groupId_bundleIdx: true}
   const [deleteGroupId, setDeleteGroupId] = useState(null); // Group ID to delete (for confirmation modal)
   const [redeemGroupId, setRedeemGroupId] = useState(null); // Group ID to redeem (for confirmation modal)
@@ -140,6 +143,7 @@ const BonusDetail = () => {
         setCustomer(data.customer);
         setOrders(data.orders || []);
         setDiscountGroups(data.discountGroups || []);
+        setPurchaseHistory(data.purchaseHistory || null);
         const notes = data.notes || "";
         setNotizen(notes);
         setOriginalNotizen(notes); // Track original value
@@ -620,6 +624,32 @@ const BonusDetail = () => {
     }
   };
 
+  // Confirm redeem old purchase history group
+  const confirmRedeemOldGroup = async () => {
+    if (redeemOldGroupIndex === null || !purchaseHistory) return;
+
+    try {
+      await purchaseHistoryAPI.redeemGroup(
+        purchaseHistory._id,
+        redeemOldGroupIndex,
+      );
+      setMessage({
+        type: "success",
+        text: "Alter Bonus erfolgreich eingelöst!",
+      });
+      toast.success("Alter Bonus eingelöst.");
+      setRedeemOldGroupIndex(null);
+      await fetchData();
+    } catch (error) {
+      console.error("Failed to redeem old group:", error);
+      setMessage({
+        type: "error",
+        text: error.message || "Fehler beim Einlösen",
+      });
+      setRedeemOldGroupIndex(null);
+    }
+  };
+
   // Delete discount group - show confirmation modal
   const handleDeleteGroup = (groupId) => {
     setDeleteGroupId(groupId);
@@ -711,14 +741,33 @@ const BonusDetail = () => {
     0,
   );
 
+  // Old purchase history stats
+  const oldPurchaseCount =
+    purchaseHistory?.purchaseGroups?.reduce(
+      (acc, g) => acc + g.purchases.filter((p) => p.amount).length,
+      0,
+    ) || 0;
+  const oldTotalValue = purchaseHistory?.totalPurchaseAmount || 0;
+  const oldTotalBonus = purchaseHistory?.totalRabatt || 0;
+  const oldRedeemedBonus = purchaseHistory?.totalRedeemed || 0;
+  const oldGroupCount = purchaseHistory?.groupCount || 0;
+
   // Calculate discount amounts by status
-  const redeemableBonus = discountGroups.reduce((acc, g) => {
-    if (g.status === "redeemed") return acc;
-    const uniqueBundles = new Set(
-      g.orders?.map((o) => Number(o.bundleIndex ?? 0)),
-    ).size;
-    return uniqueBundles >= 3 ? acc + (g.totalDiscount || 0) : acc;
-  }, 0);
+  // Old purchase history: unredeemed bonus
+  const oldRedeemableBonus =
+    purchaseHistory?.purchaseGroups?.reduce(
+      (acc, g) => (g.rabatteinloesung == null ? acc + (g.rabatt || 0) : acc),
+      0,
+    ) || 0;
+
+  const redeemableBonus =
+    discountGroups.reduce((acc, g) => {
+      if (g.status === "redeemed") return acc;
+      const uniqueBundles = new Set(
+        g.orders?.map((o) => Number(o.bundleIndex ?? 0)),
+      ).size;
+      return uniqueBundles >= 3 ? acc + (g.totalDiscount || 0) : acc;
+    }, 0) + oldRedeemableBonus;
 
   // Get all order IDs that are in groups
   const ordersInGroups = new Set(
@@ -916,7 +965,7 @@ const BonusDetail = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={handleSyncOrders}
-            disabled={syncing || !customer?.customerNumber}
+            disabled={syncing || (totalOrders + oldPurchaseCount === 0)}
             className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm flex items-center gap-2"
           >
             {syncing ? (
@@ -1458,7 +1507,10 @@ const BonusDetail = () => {
                 <div className="flex">
                   <span className="text-gray-500 w-32">Kundennummer:</span>
                   <span className="text-gray-900">
-                    {customer.customerNumber || customer.ref || "-"}
+                    {customer.customerNumber ||
+                      customer.ref ||
+                      customer?.customerRef ||
+                      "-"}
                   </span>
                 </div>
                 <div className="flex">
@@ -1565,7 +1617,7 @@ const BonusDetail = () => {
                   Gesamtbestellwert
                 </h3>
                 <p className="text-3xl font-bold text-gray-900">
-                  € {formatCurrency(totalOrderValue)}
+                  € {formatCurrency(totalOrderValue + oldTotalValue)}
                 </p>
               </div>
             </div>
@@ -1577,13 +1629,17 @@ const BonusDetail = () => {
               <h3 className="font-semibold text-gray-600 mb-2 text-sm">
                 Anzahl Der Einkäufe
               </h3>
-              <p className="text-3xl font-bold text-gray-900">{totalOrders}</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {totalOrders + oldPurchaseCount}
+              </p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center min-w-[220px]">
               <h3 className="font-semibold text-gray-600 mb-2 text-sm">
                 Anzahl Der Artikel
               </h3>
-              <p className="text-3xl font-bold text-gray-900">{totalItems}</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {totalItems + oldPurchaseCount}
+              </p>
             </div>
           </div>
         </div>
@@ -1882,7 +1938,7 @@ const BonusDetail = () => {
 
       {/* Orders List with Selection */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {orders.length > 0 ? (
+        {orders.length > 0 || purchaseHistory?.purchaseGroups?.length > 0 ? (
           <>
             <div className="p-4 border-b border-gray-200 bg-gray-50">
               <p className="text-sm text-gray-600">
@@ -3333,6 +3389,241 @@ const BonusDetail = () => {
                     </div>
                   );
                 })}
+
+              {/* Old Purchase History (appended in same section) */}
+              {purchaseHistory &&
+                purchaseHistory.purchaseGroups &&
+                purchaseHistory.purchaseGroups.length > 0 && (
+                  <>
+                    <div className="px-4 py-2 border-b border-gray-200 bg-amber-50/70 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+                          Alte Einkäufe
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          Kundennr.: {purchaseHistory.customerNo} |{" "}
+                          {purchaseHistory.groupCount} Bonusgruppen
+                        </span>
+                        {purchaseHistory.remarks && (
+                          <span className="text-xs text-amber-700">
+                            — {purchaseHistory.remarks}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {[...purchaseHistory.purchaseGroups]
+                      .sort((a, b) => {
+                        const aRedeemed = a.rabatteinloesung != null ? 1 : 0;
+                        const bRedeemed = b.rabatteinloesung != null ? 1 : 0;
+                        return aRedeemed - bRedeemed;
+                      })
+                      .map((group) => {
+                        const groupKey = `old-${group.groupIndex}`;
+                        const isExpanded = expandedOldGroups[groupKey];
+                        const isRedeemed = group.rabatteinloesung != null;
+                        const purchaseTotal = group.purchases.reduce(
+                          (sum, p) => sum + (p.amount || 0),
+                          0,
+                        );
+
+                        const toggleGroup = () => {
+                          setExpandedOldGroups((prev) => ({
+                            ...prev,
+                            [groupKey]: !prev[groupKey],
+                          }));
+                        };
+
+                        return (
+                          <div
+                            key={groupKey}
+                            className="border-b border-gray-200 bg-white flex"
+                          >
+                            {/* Left side - Header and Expanded content */}
+                            <div className="flex-1">
+                              {/* Collapsed Group Header */}
+                              <div
+                                className={`grid grid-cols-[60px_1fr_1fr_100px] cursor-pointer hover:bg-gray-50 transition-colors ${
+                                  isExpanded ? "bg-amber-50/50" : ""
+                                }`}
+                                onClick={toggleGroup}
+                              >
+                                <div className="p-4 flex items-center justify-center border-r border-gray-100">
+                                  <input
+                                    type="checkbox"
+                                    checked={false}
+                                    disabled
+                                    className="w-5 h-5 rounded border-gray-300 cursor-not-allowed"
+                                  />
+                                </div>
+                                <div className="p-4 border-r border-gray-100">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                        isRedeemed
+                                          ? "bg-gray-100 text-gray-600"
+                                          : "bg-green-100 text-green-700"
+                                      }`}
+                                    >
+                                      Bonusgruppe
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+                                      Alte
+                                    </span>
+                                    <svg
+                                      className={`h-4 w-4 text-gray-500 transition-transform ${
+                                        isExpanded ? "rotate-180" : ""
+                                      }`}
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M19 9l-7 7-7-7"
+                                      />
+                                    </svg>
+                                  </div>
+                                  <p className="text-sm mt-1 text-gray-600">
+                                    <span className="font-semibold">
+                                      Bonusfähig:
+                                    </span>{" "}
+                                    € {formatCurrency(purchaseTotal)}
+                                  </p>
+                                  <p className="text-xs text-gray-400 mt-0.5">
+                                    Erweitern
+                                  </p>
+                                </div>
+                                <div className="p-4 border-r border-gray-100">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {group.purchases
+                                      .filter((p) => p.amount)
+                                      .map((purchase, pIdx) => (
+                                        <span
+                                          key={pIdx}
+                                          className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-amber-50 border border-amber-200 text-xs font-medium text-amber-700"
+                                        >
+                                          {purchase.label}
+                                        </span>
+                                      ))}
+                                  </div>
+                                </div>
+                                <div className="p-4 flex items-center justify-center">
+                                  <svg
+                                    className="h-7 w-7 text-gray-400"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.5"
+                                  >
+                                    <rect
+                                      x="6"
+                                      y="2"
+                                      width="14"
+                                      height="16"
+                                      rx="2"
+                                      className="fill-gray-100 stroke-gray-400"
+                                    />
+                                    <rect
+                                      x="4"
+                                      y="4"
+                                      width="14"
+                                      height="16"
+                                      rx="2"
+                                      className="fill-gray-50 stroke-gray-300"
+                                    />
+                                    <rect
+                                      x="2"
+                                      y="6"
+                                      width="14"
+                                      height="16"
+                                      rx="2"
+                                      className="fill-white stroke-gray-400"
+                                    />
+                                  </svg>
+                                </div>
+                              </div>
+
+                              {/* Expanded: show individual purchases */}
+                              {isExpanded && (
+                                <div className="bg-amber-50/30 border-t border-amber-100">
+                                  {group.purchases.map((purchase, pIdx) => (
+                                    <div
+                                      key={pIdx}
+                                      className={`grid grid-cols-[60px_1fr_1fr_100px] ml-8 ${
+                                        pIdx < group.purchases.length - 1
+                                          ? "border-b border-amber-100"
+                                          : ""
+                                      }`}
+                                    >
+                                      <div className="p-3 flex items-center justify-center border-r border-amber-100">
+                                        <span className="text-xs font-medium text-gray-500">
+                                          {purchase.label}
+                                        </span>
+                                      </div>
+                                      <div className="p-3 border-r border-amber-100">
+                                        <p className="text-sm text-gray-900">
+                                          <span className="font-semibold">
+                                            Einkauf
+                                          </span>{" "}
+                                          {pIdx + 1}
+                                        </p>
+                                      </div>
+                                      <div className="p-3 border-r border-amber-100">
+                                        {purchase.amount != null ? (
+                                          <span className="text-sm font-medium text-gray-900">
+                                            € {formatCurrency(purchase.amount)}
+                                          </span>
+                                        ) : (
+                                          <span className="text-sm text-gray-400">
+                                            —
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="p-3"></div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Action Column - matches new discount groups */}
+                            <div className="w-[160px] flex flex-col items-center justify-center gap-2 p-4 border-l border-gray-200 bg-gray-50">
+                              {isRedeemed ? (
+                                <>
+                                  <span className="w-full px-4 py-2 bg-gray-400 text-white rounded-lg text-sm font-medium text-center cursor-not-allowed">
+                                    Eingelöst
+                                  </span>
+                                  <span className="text-xs text-red-600 font-medium">
+                                    €{" "}
+                                    {formatCurrency(
+                                      Math.abs(group.rabatteinloesung),
+                                    )}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setRedeemOldGroupIndex(group.groupIndex);
+                                    }}
+                                    className="w-full px-4 py-2 bg-white text-green-500 border border-green-300 rounded-lg text-sm font-medium hover:bg-green-500 hover:text-white transition-all cursor-pointer"
+                                  >
+                                    Offen
+                                  </button>
+                                  <span className="text-xs text-green-700 font-medium">
+                                    € {formatCurrency(group.rabatt)}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </>
+                )}
             </div>
           </>
         ) : (
@@ -3360,6 +3651,17 @@ const BonusDetail = () => {
         onConfirm={confirmRedeemGroup}
         title="RABATT EINLÖSEN"
         message="Möchten Sie diesen Bonus wirklich einlösen? Diese Aktion kann nicht rückgängig gemacht werden."
+        confirmText="Ja, einlösen"
+        cancelText="Abbrechen"
+      />
+
+      {/* Redeem Old Purchase History Group Confirmation Modal */}
+      <ConfirmModal
+        isOpen={redeemOldGroupIndex !== null}
+        onClose={() => setRedeemOldGroupIndex(null)}
+        onConfirm={confirmRedeemOldGroup}
+        title="ALTEN RABATT EINLÖSEN"
+        message="Möchten Sie diesen alten Bonus wirklich einlösen? Diese Aktion kann nicht rückgängig gemacht werden."
         confirmText="Ja, einlösen"
         cancelText="Abbrechen"
       />

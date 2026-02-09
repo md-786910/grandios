@@ -2,8 +2,8 @@ import React from "react";
 
 const menuItems = [
   {
-    id: "dashboard",
-    label: "Dashboard",
+    id: "Armaturenbrett",
+    label: "Armaturenbrett",
     path: "/dashboard",
     icon: (
       <svg

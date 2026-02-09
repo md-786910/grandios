@@ -15,6 +15,7 @@ const DiscountOrder = require("../models/DiscountOrder");
 const Discount = require("../models/Discount");
 const OrderCustomerQueue = require("../models/OrderCustomerQueue");
 const AppSettings = require("../models/AppSettings");
+const CustomerPurchaseHistory = require("../models/CustomerPurchaseHistory");
 
 // @desc    Get sync status
 // @route   GET /api/sync/status
@@ -206,7 +207,7 @@ exports.getCustomers = async (req, res, next) => {
       const searchConditions = [
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
-        // { ref: { $regex: search, $options: 'i' } },
+        { ref: { $regex: search, $options: "i" } },
       ];
 
       // If search is a number, also search by contactId
@@ -243,7 +244,11 @@ exports.getCustomers = async (req, res, next) => {
     // Enrich each customer with Bonuspreis data (same as Bonus page)
     const customerIds = customers.map((c) => c._id);
 
-    const [allDiscountOrders, allQueues, allOrders] = await Promise.all([
+    // Collect emails and refs for purchase history lookup
+    const customerEmails = customers.filter((c) => c.email).map((c) => c.email.toLowerCase());
+    const customerRefs = customers.filter((c) => c.ref).map((c) => c.ref);
+
+    const [allDiscountOrders, allQueues, allOrders, allPurchaseHistories] = await Promise.all([
       DiscountOrder.find({ customerId: { $in: customerIds } }).lean(),
       OrderCustomerQueue.find({ customerId: { $in: customerIds } }).lean(),
       Order.find({ customerId: { $in: customerIds } })
@@ -252,12 +257,26 @@ exports.getCustomers = async (req, res, next) => {
           select: "priceSubtotalIncl priceUnit quantity discountEligible",
         })
         .lean(),
+      CustomerPurchaseHistory.find({
+        $or: [
+          ...(customerEmails.length > 0 ? [{ email: { $in: customerEmails } }] : []),
+          ...(customerRefs.length > 0 ? [{ customerNo: { $in: customerRefs } }] : []),
+        ],
+      }, { email: 1, customerNo: 1, purchaseGroups: 1 }).lean(),
     ]);
 
     // Group by customer
     const discountOrdersByCustomer = {};
     const queueByCustomer = {};
     const ordersByCustomer = {};
+
+    // Index purchase histories by email and customerNo
+    const phByEmail = {};
+    const phByRef = {};
+    allPurchaseHistories.forEach((ph) => {
+      if (ph.email) phByEmail[ph.email.toLowerCase()] = ph;
+      if (ph.customerNo) phByRef[ph.customerNo] = ph;
+    });
 
     allDiscountOrders.forEach((d) => {
       const key = d.customerId.toString();
@@ -279,6 +298,13 @@ exports.getCustomers = async (req, res, next) => {
       const queue = queueByCustomer[custId];
       const orders = ordersByCustomer[custId] || [];
 
+      // Old purchase history bonus
+      const ph = (customer.email && phByEmail[customer.email.toLowerCase()]) ||
+        (customer.ref && phByRef[customer.ref]) || null;
+      const oldRedeemableBonus = ph?.purchaseGroups
+        ?.filter((g) => g.rabatt > 0 && g.rabatteinloesung == null)
+        .reduce((sum, g) => sum + g.rabatt, 0) || 0;
+
       // Calculate redeemable bonus (groups with 3+ unique bundles, not redeemed)
       const redeemableBonus = discountOrders.reduce((acc, group) => {
         if (group.status === "redeemed") return acc;
@@ -286,7 +312,7 @@ exports.getCustomers = async (req, res, next) => {
           group.orders?.map((o) => Number(o.bundleIndex ?? 0))
         ).size;
         return uniqueBundles >= 3 ? acc + (group.totalDiscount || 0) : acc;
-      }, 0);
+      }, 0) + oldRedeemableBonus;
 
       // Get all order IDs already in groups
       const ordersInGroups = new Set(

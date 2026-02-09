@@ -38,6 +38,7 @@ app.use("/api/queue", require("./routes/queue"));
 app.use("/api/test", require("./routes/test"));
 app.use("/api/wawi", require("./routes/wawi"));
 app.use("/api/sync", require("./routes/sync"));
+app.use("/api/purchase-history", require("./routes/purchaseHistory"));
 
 // Health check
 app.get("/api/health", (req, res) => {

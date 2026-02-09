@@ -296,8 +296,15 @@ const Kunden = () => {
                           {sanitizeName(customer.name).charAt(0)}
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {sanitizeName(customer.name)}
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium text-gray-900">
+                              {sanitizeName(customer.name)}
+                            </span>
+                            {customer.source === "import" && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
+                                Import
+                              </span>
+                            )}
                           </div>
                           <div className="text-sm text-gray-500">
                             {customer.email}
@@ -306,7 +313,7 @@ const Kunden = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
-                      {customer.contactId || "-"}
+                      {customer.contactId || customer?.ref || "-"}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {customer.phone || customer.mobile || "-"}

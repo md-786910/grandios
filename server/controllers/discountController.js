@@ -7,6 +7,7 @@ const Product = require("../models/Product");
 const OrderCustomerQueue = require("../models/OrderCustomerQueue");
 const AppSettings = require("../models/AppSettings");
 const NotesHistory = require("../models/NotesHistory");
+const CustomerPurchaseHistory = require("../models/CustomerPurchaseHistory");
 const cascadeSyncService = require("../services/cascadingSyncService");
 
 // Helper to get order items from either orderLines (WAWI) or items (legacy)
@@ -112,6 +113,23 @@ exports.getDiscounts = async (req, res, next) => {
           customerId: customer._id,
         });
 
+        // Fetch old purchase history for this customer
+        const purchaseHistoryQuery = [];
+        if (customer.email) purchaseHistoryQuery.push({ email: customer.email.toLowerCase() });
+        if (customer.ref) purchaseHistoryQuery.push({ customerNo: customer.ref });
+        let oldRedeemableBonus = 0;
+        if (purchaseHistoryQuery.length > 0) {
+          const ph = await CustomerPurchaseHistory.findOne(
+            { $or: purchaseHistoryQuery },
+            { purchaseGroups: 1 },
+          ).lean();
+          if (ph && ph.purchaseGroups) {
+            oldRedeemableBonus = ph.purchaseGroups
+              .filter((g) => g.rabatt > 0 && g.rabatteinloesung == null)
+              .reduce((sum, g) => sum + g.rabatt, 0);
+          }
+        }
+
         const totalOrderValue = orders.reduce(
           (sum, order) => sum + order.amountTotal,
           0,
@@ -127,7 +145,7 @@ exports.getDiscounts = async (req, res, next) => {
             group.orders?.map((o) => Number(o.bundleIndex ?? 0))
           ).size;
           return uniqueBundles >= 3 ? acc + (group.totalDiscount || 0) : acc;
-        }, 0);
+        }, 0) + oldRedeemableBonus;
 
         // Get all order IDs that are already in groups
         const ordersInGroups = new Set(
@@ -286,6 +304,30 @@ exports.getCustomerDiscount = async (req, res, next) => {
       customerId: customer._id,
     }).populate("orders.orderId", "posReference orderDate amountTotal items");
 
+    // Get old purchase history (imported from Excel) by email or customerRef
+    const purchaseHistoryQuery = [];
+    if (customer.email) {
+      purchaseHistoryQuery.push({ email: customer.email.toLowerCase() });
+    }
+    if (customer.ref) {
+      purchaseHistoryQuery.push({ customerNo: customer.ref });
+    }
+    let purchaseHistory = null;
+    if (purchaseHistoryQuery.length > 0) {
+      const rawHistory = await CustomerPurchaseHistory.findOne(
+        { $or: purchaseHistoryQuery },
+        { customerNo: 1, remarks: 1, purchaseGroups: 1, totalPurchaseAmount: 1, totalRabatt: 1, totalRedeemed: 1 },
+      ).lean();
+      if (rawHistory) {
+        const filtered = rawHistory.purchaseGroups.filter((g) => g.rabatt > 0);
+        purchaseHistory = {
+          ...rawHistory,
+          purchaseGroups: filtered,
+          groupCount: filtered.length,
+        };
+      }
+    }
+
     // Calculate stats
     const totalOrderValue = orders.reduce(
       (sum, order) => sum + order.amountTotal,
@@ -317,6 +359,7 @@ exports.getCustomerDiscount = async (req, res, next) => {
         },
         orders: ordersWithItems,
         discountGroups: discountOrders,
+        purchaseHistory: purchaseHistory || null,
         notes: customer.notes || "",
         // Queue information
         queue: queue
@@ -938,10 +981,27 @@ exports.syncCustomerOrders = async (req, res, next) => {
       });
     }
 
+    // If no contactId, try to resolve from WAWI by email
+    if (!customer.contactId && customer.email) {
+      const wawiApiClient = require("../services/wawiApiClient");
+      const wawiResult = await wawiApiClient.searchRead("res.partner", {
+        fields: ["id"],
+        domain: [
+          ["email", "=", customer.email],
+          ["customer_rank", ">", 0],
+        ],
+        limit: 1,
+      });
+      if (wawiResult.data && wawiResult.data.length > 0) {
+        customer.contactId = wawiResult.data[0].id;
+        await customer.save();
+      }
+    }
+
     if (!customer.contactId) {
       return res.status(400).json({
         success: false,
-        message: "Customer has no WAWI contact ID. Cannot sync.",
+        message: "Customer not found in WAWI. Cannot sync.",
       });
     }
 

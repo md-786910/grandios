@@ -317,6 +317,28 @@ export const wawiAPI = {
   },
 };
 
+// Purchase History API (imported from Excel)
+export const purchaseHistoryAPI = {
+  importFromExcel: () =>
+    apiCall("/purchase-history/import", { method: "POST" }),
+
+  getAll: (page = 1, limit = 10, search = "") => {
+    let url = `/purchase-history?page=${page}&limit=${limit}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    return apiCall(url);
+  },
+
+  getById: (id) => apiCall(`/purchase-history/${id}`),
+
+  getByCustomerId: (customerId) =>
+    apiCall(`/purchase-history/customer/${customerId}`),
+
+  redeemGroup: (id, groupIndex) =>
+    apiCall(`/purchase-history/${id}/groups/${groupIndex}/redeem`, {
+      method: "PUT",
+    }),
+};
+
 export default {
   auth: authAPI,
   dashboard: dashboardAPI,
@@ -328,4 +350,5 @@ export default {
   test: testAPI,
   sync: syncAPI,
   wawi: wawiAPI,
+  purchaseHistory: purchaseHistoryAPI,
 };

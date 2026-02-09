@@ -719,8 +719,14 @@ async function upsertCustomer(wawiCustomer) {
     syncedAt: new Date(),
   };
 
+  // Match by contactId or email
+  const findQuery = [{ contactId: wawiCustomer.id }];
+  if (wawiCustomer.email) {
+    findQuery.push({ email: wawiCustomer.email.toLowerCase() });
+  }
+
   return Customer.findOneAndUpdate(
-    { contactId: wawiCustomer.id },
+    { $or: findQuery },
     customerData,
     { upsert: true, new: true },
   );

@@ -168,9 +168,11 @@ async function syncCustomers(options = {}) {
         try {
           const customerData = mapWawiCustomer(wawiCustomer);
 
-          const existing = await Customer.findOne({
-            contactId: wawiCustomer.id,
-          });
+          const findQuery = [{ contactId: wawiCustomer.id }];
+          if (wawiCustomer.email) {
+            findQuery.push({ email: wawiCustomer.email.toLowerCase() });
+          }
+          const existing = await Customer.findOne({ $or: findQuery });
 
           if (existing) {
             await Customer.findByIdAndUpdate(existing._id, {
@@ -190,7 +192,7 @@ async function syncCustomers(options = {}) {
         } catch (err) {
           console.error(
             `[WawiSync] Error syncing customer ${wawiCustomer.id}:`,
-            err.message
+            err.message,
           );
           syncStatus.results.errors++;
         }
@@ -215,7 +217,7 @@ async function syncCustomers(options = {}) {
   }
 
   console.log(
-    `[WawiSync] Customer sync complete: ${created} created, ${updated} updated`
+    `[WawiSync] Customer sync complete: ${created} created, ${updated} updated`,
   );
   return { total: totalSynced, created, updated };
 }
@@ -269,7 +271,7 @@ async function syncOrders(options = {}) {
           const customer = await Customer.findOne({ contactId: partnerId });
           if (!customer) {
             console.log(
-              `[WawiSync] Skipping order ${wawiOrder.id}: customer ${partnerId} not found`
+              `[WawiSync] Skipping order ${wawiOrder.id}: customer ${partnerId} not found`,
             );
             continue;
           }
@@ -282,7 +284,7 @@ async function syncOrders(options = {}) {
               {
                 fields: ORDER_LINE_FIELDS,
                 domain: [["id", "in", wawiOrder.lines]],
-              }
+              },
             );
             orderLines = linesResult.data || [];
           }
@@ -299,7 +301,7 @@ async function syncOrders(options = {}) {
                 ...orderData,
                 syncedAt: new Date(),
               },
-              { new: true }
+              { new: true },
             );
             updated++;
           } else {
@@ -315,7 +317,7 @@ async function syncOrders(options = {}) {
             const orderLineIds = await syncOrderLinesToCollection(
               orderLines,
               savedOrder._id,
-              wawiOrder.id
+              wawiOrder.id,
             );
             // Update order with references to OrderLine documents
             if (orderLineIds.length > 0) {
@@ -329,7 +331,7 @@ async function syncOrders(options = {}) {
         } catch (err) {
           console.error(
             `[WawiSync] Error syncing order ${wawiOrder.id}:`,
-            err.message
+            err.message,
           );
           syncStatus.results.errors++;
         }
@@ -353,7 +355,7 @@ async function syncOrders(options = {}) {
   }
 
   console.log(
-    `[WawiSync] Order sync complete: ${created} created, ${updated} updated`
+    `[WawiSync] Order sync complete: ${created} created, ${updated} updated`,
   );
   return { total: totalSynced, created, updated };
 }
@@ -413,7 +415,7 @@ async function syncProducts(options = {}) {
         } catch (err) {
           console.error(
             `[WawiSync] Error syncing product ${wawiProduct.id}:`,
-            err.message
+            err.message,
           );
           syncStatus.results.errors++;
         }
@@ -437,7 +439,7 @@ async function syncProducts(options = {}) {
   }
 
   console.log(
-    `[WawiSync] Product sync complete: ${created} created, ${updated} updated`
+    `[WawiSync] Product sync complete: ${created} created, ${updated} updated`,
   );
   return { total: totalSynced, created, updated };
 }
@@ -498,7 +500,7 @@ async function syncProductAttributes(options = {}) {
         } catch (err) {
           console.error(
             `[WawiSync] Error syncing attribute ${wawiAttribute.id}:`,
-            err.message
+            err.message,
           );
           syncStatus.results.errors++;
         }
@@ -522,7 +524,7 @@ async function syncProductAttributes(options = {}) {
   }
 
   console.log(
-    `[WawiSync] Product attribute sync complete: ${created} created, ${updated} updated`
+    `[WawiSync] Product attribute sync complete: ${created} created, ${updated} updated`,
   );
   return { total: totalSynced, created, updated };
 }
@@ -592,7 +594,7 @@ async function syncProductAttributeValues(options = {}) {
         } catch (err) {
           console.error(
             `[WawiSync] Error syncing attribute value ${wawiValue.id}:`,
-            err.message
+            err.message,
           );
           syncStatus.results.errors++;
         }
@@ -616,7 +618,7 @@ async function syncProductAttributeValues(options = {}) {
   }
 
   console.log(
-    `[WawiSync] Product attribute value sync complete: ${created} created, ${updated} updated`
+    `[WawiSync] Product attribute value sync complete: ${created} created, ${updated} updated`,
   );
   return { total: totalSynced, created, updated };
 }
@@ -700,7 +702,7 @@ async function runFullSync(options = {}) {
 async function syncOrderLinesToCollection(
   orderLines,
   orderMongoId,
-  wawiOrderId
+  wawiOrderId,
 ) {
   const orderLineIds = [];
 
@@ -744,7 +746,7 @@ async function syncOrderLinesToCollection(
     } catch (err) {
       console.error(
         `[WawiSync] Error syncing order line ${line.id}:`,
-        err.message
+        err.message,
       );
     }
   }
