@@ -17,6 +17,7 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "https://grandios-bgx4.vercel.app",
+  "http://87.106.111.51",
 ];
 
 app.use(
