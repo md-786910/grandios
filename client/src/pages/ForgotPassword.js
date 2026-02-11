@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { authAPI } from "../services/api";
 import loginBg from "../assets/login-bg.png";
+import appLogo from "../assets/logo/logo.png";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -33,12 +34,11 @@ const ForgotPassword = () => {
         <div className="w-full max-w-md">
           {/* Logo */}
           <div className="text-center mb-12">
-            <h1 className="text-4xl tracking-[0.3em] font-light text-gray-800 mb-1">
-              GRANDIOS
-            </h1>
-            <p className="text-xs tracking-[0.15em] text-gray-500 uppercase">
-              The Curvy Fashion Store
-            </p>
+            <img
+              src={appLogo}
+              alt="Grandios"
+              className="h-14 w-auto object-contain mx-auto"
+            />
           </div>
 
           {/* Title */}
