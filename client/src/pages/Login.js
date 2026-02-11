@@ -42,7 +42,7 @@ const Login = () => {
             <img
               src={appLogo}
               alt="Grandios"
-              className="h-14 w-auto object-contain mx-auto"
+              className="h-12 sm:h-14 md:h-16 w-auto max-w-[260px] object-contain mx-auto"
             />
           </div>
 
