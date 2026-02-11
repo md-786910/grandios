@@ -205,7 +205,7 @@ const Dashboard = () => {
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-sm font-semibold text-gray-900">
-                      Gesamtbestellwert -
+                      Gesamteinkaufswert -
                     </span>
                     <span className="text-sm text-gray-600">
                       € {formatCurrency(order.amountTotal)}

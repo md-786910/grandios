@@ -8,6 +8,7 @@ const OrderCustomerQueue = require("../models/OrderCustomerQueue");
 const AppSettings = require("../models/AppSettings");
 const NotesHistory = require("../models/NotesHistory");
 const CustomerPurchaseHistory = require("../models/CustomerPurchaseHistory");
+const OldPurchase = require("../models/OldPurchase");
 const cascadeSyncService = require("../services/cascadingSyncService");
 
 // Helper to get order items from either orderLines (WAWI) or items (legacy)
@@ -58,7 +59,6 @@ function orderHasEligibleItems(order) {
 // @desc    Get all customer discounts (for Bonus list page)
 // @route   GET /api/discounts
 // @access  Private
-// Only shows customers who have discount groups created (3+ orders)
 exports.getDiscounts = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
@@ -67,12 +67,8 @@ exports.getDiscounts = async (req, res, next) => {
     const startIndex = (page - 1) * limit;
     const settings = await AppSettings.getSettings();
 
-    // Get unique customer IDs that have at least one discount group
-    const customersWithDiscountGroups =
-      await DiscountOrder.distinct("customerId");
-
-    // Build query filter
-    const query = { _id: { $in: customersWithDiscountGroups } };
+    // Build query filter - show all customers
+    const query = {};
 
     // Add search filter if provided
     if (search) {
@@ -92,11 +88,12 @@ exports.getDiscounts = async (req, res, next) => {
     // Total count of customers matching the filter
     const total = await Customer.countDocuments(query);
 
-    // Get customers who have discount groups, with pagination
+    // Get customers matching current query, with pagination
     const customers = await Customer.find(query)
+      .collation({ locale: "de", strength: 2 })
       .skip(startIndex)
       .limit(limit)
-      .sort({ createdAt: -1 });
+      .sort({ name: 1, _id: 1 });
 
     // Get stats for each customer
     const customersWithStats = await Promise.all(
@@ -115,8 +112,10 @@ exports.getDiscounts = async (req, res, next) => {
 
         // Fetch old purchase history for this customer
         const purchaseHistoryQuery = [];
-        if (customer.email) purchaseHistoryQuery.push({ email: customer.email.toLowerCase() });
-        if (customer.ref) purchaseHistoryQuery.push({ customerNo: customer.ref });
+        if (customer.email)
+          purchaseHistoryQuery.push({ email: customer.email.toLowerCase() });
+        if (customer.ref)
+          purchaseHistoryQuery.push({ customerNo: customer.ref });
         let oldRedeemableBonus = 0;
         if (purchaseHistoryQuery.length > 0) {
           const ph = await CustomerPurchaseHistory.findOne(
@@ -139,19 +138,20 @@ exports.getDiscounts = async (req, res, next) => {
         );
 
         // Calculate redeemable and pending bonus amounts
-        const redeemableBonus = discountOrders.reduce((acc, group) => {
-          if (group.status === "redeemed") return acc;
-          const uniqueBundles = new Set(
-            group.orders?.map((o) => Number(o.bundleIndex ?? 0))
-          ).size;
-          return uniqueBundles >= 3 ? acc + (group.totalDiscount || 0) : acc;
-        }, 0) + oldRedeemableBonus;
+        const redeemableBonus =
+          discountOrders.reduce((acc, group) => {
+            if (group.status === "redeemed") return acc;
+            const uniqueBundles = new Set(
+              group.orders?.map((o) => Number(o.bundleIndex ?? 0)),
+            ).size;
+            return uniqueBundles >= 3 ? acc + (group.totalDiscount || 0) : acc;
+          }, 0) + oldRedeemableBonus;
 
         // Get all order IDs that are already in groups
         const ordersInGroups = new Set(
-          discountOrders.flatMap((g) =>
-            g.orders?.map((o) => o.orderId?.toString()) || []
-          )
+          discountOrders.flatMap(
+            (g) => g.orders?.map((o) => o.orderId?.toString()) || [],
+          ),
         );
 
         // Calculate bonus from orders NOT in any group yet
@@ -164,20 +164,22 @@ exports.getDiscounts = async (req, res, next) => {
           const items = getOrderItems(order);
           const eligibleItems = items.filter((i) => i.discountEligible);
           const eligibleAmount = eligibleItems.reduce(
-            (sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
-            0
+            (sum, item) =>
+              sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
+            0,
           );
           const orderBonus = (eligibleAmount * settings.discountRate) / 100;
           return acc + orderBonus;
         }, 0);
 
-        const pendingBonus = discountOrders.reduce((acc, group) => {
-          if (group.status === "redeemed") return acc;
-          const uniqueBundles = new Set(
-            group.orders?.map((o) => Number(o.bundleIndex ?? 0))
-          ).size;
-          return uniqueBundles < 3 ? acc + (group.totalDiscount || 0) : acc;
-        }, 0) + availableOrdersBonus; // Add available orders bonus to pending
+        const pendingBonus =
+          discountOrders.reduce((acc, group) => {
+            if (group.status === "redeemed") return acc;
+            const uniqueBundles = new Set(
+              group.orders?.map((o) => Number(o.bundleIndex ?? 0)),
+            ).size;
+            return uniqueBundles < 3 ? acc + (group.totalDiscount || 0) : acc;
+          }, 0) + availableOrdersBonus; // Add available orders bonus to pending
 
         return {
           id: customer._id,
@@ -205,17 +207,20 @@ exports.getDiscounts = async (req, res, next) => {
       }),
     );
 
-    // Calculate overall stats (only for customers with discount groups)
+    // Calculate overall stats for all customers matching current query
+    const customerIds = await Customer.find(query).distinct("_id");
     const allDiscounts = await Discount.find({
-      customerId: { $in: customersWithDiscountGroups },
+      customerId: { $in: customerIds },
     });
     const allOrders = await Order.find({
-      customerId: { $in: customersWithDiscountGroups },
+      customerId: { $in: customerIds },
     });
     const allQueues = await OrderCustomerQueue.find({
-      customerId: { $in: customersWithDiscountGroups },
+      customerId: { $in: customerIds },
     });
-    const allDiscountOrders = await DiscountOrder.find();
+    const allDiscountOrders = await DiscountOrder.find({
+      customerId: { $in: customerIds },
+    });
 
     const stats = {
       totalCustomers: total,
@@ -271,7 +276,10 @@ exports.getCustomerDiscount = async (req, res, next) => {
     const settings = await AppSettings.getSettings();
 
     // Get customer orders with orderLines populated
-    const orders = await Order.find({ customerId: customer._id })
+    const orders = await Order.find({
+      customerId: customer._id,
+      amountTotal: { $gt: 0 },
+    })
       .populate({
         path: "orderLines",
         populate: {
@@ -316,7 +324,14 @@ exports.getCustomerDiscount = async (req, res, next) => {
     if (purchaseHistoryQuery.length > 0) {
       const rawHistory = await CustomerPurchaseHistory.findOne(
         { $or: purchaseHistoryQuery },
-        { customerNo: 1, remarks: 1, purchaseGroups: 1, totalPurchaseAmount: 1, totalRabatt: 1, totalRedeemed: 1 },
+        {
+          customerNo: 1,
+          remarks: 1,
+          purchaseGroups: 1,
+          totalPurchaseAmount: 1,
+          totalRabatt: 1,
+          totalRedeemed: 1,
+        },
       ).lean();
       if (rawHistory) {
         const filtered = rawHistory.purchaseGroups.filter((g) => g.rabatt > 0);
@@ -326,6 +341,18 @@ exports.getCustomerDiscount = async (req, res, next) => {
           groupCount: filtered.length,
         };
       }
+    }
+
+    // Get individual old purchases (each EK purchase as separate record)
+    // Only get purchases that are NOT part of discount groups
+    let oldPurchases = [];
+    if (purchaseHistoryQuery.length > 0) {
+      oldPurchases = await OldPurchase.find({
+        $or: purchaseHistoryQuery,
+        isInDiscountGroup: false, // Only single purchases, not in discount groups
+      })
+        .sort({ groupIndex: 1, ekIndex: 1 })
+        .lean();
     }
 
     // Calculate stats
@@ -360,6 +387,7 @@ exports.getCustomerDiscount = async (req, res, next) => {
         orders: ordersWithItems,
         discountGroups: discountOrders,
         purchaseHistory: purchaseHistory || null,
+        oldPurchases: oldPurchases || [],
         notes: customer.notes || "",
         // Queue information
         queue: queue
@@ -1011,7 +1039,7 @@ exports.syncCustomerOrders = async (req, res, next) => {
     });
 
     const result = await cascadeSyncService.syncCustomerWithRelatedData(
-      customer.contactId
+      customer.contactId,
     );
 
     // Count orders after sync

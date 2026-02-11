@@ -198,8 +198,22 @@ exports.getCustomers = async (req, res, next) => {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
     const search = req.query.search || "";
-    const sortBy = req.query.sortBy || "name";
-    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
+    const sortByParam = (req.query.sortBy || "name").toString();
+    const sortOrderParam = (req.query.sortOrder || "asc").toString();
+    const sortByList = sortByParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const sortOrderList = sortOrderParam
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const sortCriteria = (sortByList.length ? sortByList : ["name"]).map(
+      (field, index) => ({
+        field,
+        order: sortOrderList[index] === "desc" ? -1 : 1,
+      }),
+    );
     const skip = (page - 1) * limit;
 
     const query = {};
@@ -219,6 +233,233 @@ exports.getCustomers = async (req, res, next) => {
       query.$or = searchConditions;
     }
 
+    const enrichCustomersWithBonusData = async (customers, settings) => {
+      if (!customers.length) return [];
+
+      // Enrich each customer with Bonuspreis data (same as Bonus page)
+      const customerIds = customers.map((c) => c._id);
+
+      // Collect emails and refs for purchase history lookup
+      const customerEmails = customers
+        .filter((c) => c.email)
+        .map((c) => c.email.toLowerCase());
+      const customerRefs = customers.filter((c) => c.ref).map((c) => c.ref);
+
+      const purchaseHistoryPromise =
+        customerEmails.length > 0 || customerRefs.length > 0
+          ? CustomerPurchaseHistory.find(
+              {
+                $or: [
+                  ...(customerEmails.length > 0
+                    ? [{ email: { $in: customerEmails } }]
+                    : []),
+                  ...(customerRefs.length > 0
+                    ? [{ customerNo: { $in: customerRefs } }]
+                    : []),
+                ],
+              },
+              { email: 1, customerNo: 1, purchaseGroups: 1 },
+            ).lean()
+          : Promise.resolve([]);
+
+      const [allDiscountOrders, allQueues, allOrders, allPurchaseHistories] =
+        await Promise.all([
+          DiscountOrder.find({ customerId: { $in: customerIds } }).lean(),
+          OrderCustomerQueue.find({ customerId: { $in: customerIds } }).lean(),
+          Order.find({ customerId: { $in: customerIds } })
+            .populate({
+              path: "orderLines",
+              select: "priceSubtotalIncl priceUnit quantity discountEligible",
+            })
+            .lean(),
+          purchaseHistoryPromise,
+        ]);
+
+      // Group by customer
+      const discountOrdersByCustomer = {};
+      const queueByCustomer = {};
+      const ordersByCustomer = {};
+
+      // Index purchase histories by email and customerNo
+      const phByEmail = {};
+      const phByRef = {};
+      allPurchaseHistories.forEach((ph) => {
+        if (ph.email) phByEmail[ph.email.toLowerCase()] = ph;
+        if (ph.customerNo) phByRef[ph.customerNo] = ph;
+      });
+
+      allDiscountOrders.forEach((d) => {
+        const key = d.customerId.toString();
+        if (!discountOrdersByCustomer[key]) discountOrdersByCustomer[key] = [];
+        discountOrdersByCustomer[key].push(d);
+      });
+      allQueues.forEach((q) => {
+        queueByCustomer[q.customerId.toString()] = q;
+      });
+      allOrders.forEach((o) => {
+        const key = o.customerId.toString();
+        if (!ordersByCustomer[key]) ordersByCustomer[key] = [];
+        ordersByCustomer[key].push(o);
+      });
+
+      return customers.map((customer) => {
+        const custId = customer._id.toString();
+        const discountOrders = discountOrdersByCustomer[custId] || [];
+        const queue = queueByCustomer[custId];
+        const orders = ordersByCustomer[custId] || [];
+
+        // Old purchase history bonus
+        const ph =
+          (customer.email && phByEmail[customer.email.toLowerCase()]) ||
+          (customer.ref && phByRef[customer.ref]) ||
+          null;
+        const oldRedeemableBonus =
+          ph?.purchaseGroups
+            ?.filter((g) => g.rabatt > 0 && g.rabatteinloesung == null)
+            .reduce((sum, g) => sum + g.rabatt, 0) || 0;
+
+        // Calculate redeemable bonus (groups with 3+ unique bundles, not redeemed)
+        const redeemableBonus =
+          discountOrders.reduce((acc, group) => {
+            if (group.status === "redeemed") return acc;
+            const uniqueBundles = new Set(
+              group.orders?.map((o) => Number(o.bundleIndex ?? 0)),
+            ).size;
+            return uniqueBundles >= 3 ? acc + (group.totalDiscount || 0) : acc;
+          }, 0) + oldRedeemableBonus;
+
+        // Get all order IDs already in groups
+        const ordersInGroups = new Set(
+          discountOrders.flatMap(
+            (g) => g.orders?.map((o) => o.orderId?.toString()) || [],
+          ),
+        );
+
+        // Calculate bonus from orders NOT in any group yet
+        const availableOrdersBonus = orders.reduce((acc, order) => {
+          if (ordersInGroups.has(order._id?.toString())) return acc;
+          const items = getOrderItems(order);
+          const eligibleAmount = items
+            .filter((i) => i.discountEligible)
+            .reduce(
+              (sum, item) =>
+                sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
+              0,
+            );
+          return acc + (eligibleAmount * settings.discountRate) / 100;
+        }, 0);
+
+        // Pending bonus = incomplete groups + available orders bonus
+        const pendingBonus =
+          discountOrders.reduce((acc, group) => {
+            if (group.status === "redeemed") return acc;
+            const uniqueBundles = new Set(
+              group.orders?.map((o) => Number(o.bundleIndex ?? 0)),
+            ).size;
+            return uniqueBundles < 3 ? acc + (group.totalDiscount || 0) : acc;
+          }, 0) + availableOrdersBonus;
+
+        return {
+          ...customer,
+          redeemableBonus,
+          pendingBonus,
+          queueCount: queue ? queue.orderCount : 0,
+          ordersRequiredForDiscount: settings.ordersRequiredForDiscount,
+        };
+      });
+    };
+
+    const bonusStatusRank = (customer) =>
+      customer.redeemableBonus > 0 ? 2 : customer.pendingBonus > 0 ? 1 : 0;
+    const bonusDisplayAmount = (customer) =>
+      customer.redeemableBonus > 0
+        ? customer.redeemableBonus
+        : customer.pendingBonus > 0
+          ? customer.pendingBonus
+          : 0;
+
+    const [settings] = await Promise.all([AppSettings.getSettings()]);
+
+    // If sorting includes "Bonus Gewährt", we need in-memory sorting after enrichment.
+    if (sortCriteria.some((c) => c.field === "discountGranted")) {
+      const allCustomers = await Customer.find(query)
+        .collation({ locale: "de", strength: 2 })
+        .sort({ name: 1, _id: 1 })
+        .lean();
+
+      const enrichedCustomers = await enrichCustomersWithBonusData(
+        allCustomers,
+        settings,
+      );
+
+      enrichedCustomers.sort((a, b) => {
+        for (const criterion of sortCriteria) {
+          const { field, order } = criterion;
+
+          if (field === "discountGranted") {
+            const rankA = bonusStatusRank(a);
+            const rankB = bonusStatusRank(b);
+            if (rankA !== rankB) {
+              return order === -1 ? rankB - rankA : rankA - rankB;
+            }
+
+            const amountA = bonusDisplayAmount(a);
+            const amountB = bonusDisplayAmount(b);
+            if (amountA !== amountB) {
+              return order === -1 ? amountB - amountA : amountA - amountB;
+            }
+            continue;
+          }
+
+          if (field === "name") {
+            const cmp = (a.name || "").localeCompare(b.name || "", "de", {
+              sensitivity: "base",
+            });
+            if (cmp !== 0) return order === -1 ? -cmp : cmp;
+            continue;
+          }
+
+          if (field === "customerNumber") {
+            const valueA = a.contactId ?? Number.MAX_SAFE_INTEGER;
+            const valueB = b.contactId ?? Number.MAX_SAFE_INTEGER;
+            if (valueA !== valueB) return order === -1 ? valueB - valueA : valueA - valueB;
+            continue;
+          }
+
+          if (field === "discountRedeemed") {
+            const valueA = a.totalDiscountRedeemed || 0;
+            const valueB = b.totalDiscountRedeemed || 0;
+            if (valueA !== valueB) return order === -1 ? valueB - valueA : valueA - valueB;
+            continue;
+          }
+
+          if (field === "wallet") {
+            const valueA = a.wallet || 0;
+            const valueB = b.wallet || 0;
+            if (valueA !== valueB) return order === -1 ? valueB - valueA : valueA - valueB;
+          }
+        }
+
+        return (a.name || "").localeCompare(b.name || "", "de", {
+          sensitivity: "base",
+        });
+      });
+
+      const total = enrichedCustomers.length;
+      const paginatedCustomers = enrichedCustomers.slice(skip, skip + limit);
+
+      return res.status(200).json({
+        success: true,
+        data: paginatedCustomers,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      });
+    }
+
     // Build sort object based on sortBy parameter
     const sortFields = {
       name: "name",
@@ -227,10 +468,16 @@ exports.getCustomers = async (req, res, next) => {
       discountGranted: "totalDiscountGranted",
       wallet: "wallet",
     };
-    const sortField = sortFields[sortBy] || "name";
-    const sortObj = { [sortField]: sortOrder };
+    const sortObj = sortCriteria.reduce((acc, criterion) => {
+      const mappedField = sortFields[criterion.field];
+      if (mappedField) acc[mappedField] = criterion.order;
+      return acc;
+    }, {});
+    if (Object.keys(sortObj).length === 0) {
+      sortObj.name = 1;
+    }
 
-    const [customers, total, settings] = await Promise.all([
+    const [customers, total] = await Promise.all([
       Customer.find(query)
         .collation({ locale: "de", strength: 2 })
         .sort(sortObj)
@@ -238,122 +485,12 @@ exports.getCustomers = async (req, res, next) => {
         .limit(limit)
         .lean(),
       Customer.countDocuments(query),
-      AppSettings.getSettings(),
     ]);
 
-    // Enrich each customer with Bonuspreis data (same as Bonus page)
-    const customerIds = customers.map((c) => c._id);
-
-    // Collect emails and refs for purchase history lookup
-    const customerEmails = customers.filter((c) => c.email).map((c) => c.email.toLowerCase());
-    const customerRefs = customers.filter((c) => c.ref).map((c) => c.ref);
-
-    const [allDiscountOrders, allQueues, allOrders, allPurchaseHistories] = await Promise.all([
-      DiscountOrder.find({ customerId: { $in: customerIds } }).lean(),
-      OrderCustomerQueue.find({ customerId: { $in: customerIds } }).lean(),
-      Order.find({ customerId: { $in: customerIds } })
-        .populate({
-          path: "orderLines",
-          select: "priceSubtotalIncl priceUnit quantity discountEligible",
-        })
-        .lean(),
-      CustomerPurchaseHistory.find({
-        $or: [
-          ...(customerEmails.length > 0 ? [{ email: { $in: customerEmails } }] : []),
-          ...(customerRefs.length > 0 ? [{ customerNo: { $in: customerRefs } }] : []),
-        ],
-      }, { email: 1, customerNo: 1, purchaseGroups: 1 }).lean(),
-    ]);
-
-    // Group by customer
-    const discountOrdersByCustomer = {};
-    const queueByCustomer = {};
-    const ordersByCustomer = {};
-
-    // Index purchase histories by email and customerNo
-    const phByEmail = {};
-    const phByRef = {};
-    allPurchaseHistories.forEach((ph) => {
-      if (ph.email) phByEmail[ph.email.toLowerCase()] = ph;
-      if (ph.customerNo) phByRef[ph.customerNo] = ph;
-    });
-
-    allDiscountOrders.forEach((d) => {
-      const key = d.customerId.toString();
-      if (!discountOrdersByCustomer[key]) discountOrdersByCustomer[key] = [];
-      discountOrdersByCustomer[key].push(d);
-    });
-    allQueues.forEach((q) => {
-      queueByCustomer[q.customerId.toString()] = q;
-    });
-    allOrders.forEach((o) => {
-      const key = o.customerId.toString();
-      if (!ordersByCustomer[key]) ordersByCustomer[key] = [];
-      ordersByCustomer[key].push(o);
-    });
-
-    const enrichedCustomers = customers.map((customer) => {
-      const custId = customer._id.toString();
-      const discountOrders = discountOrdersByCustomer[custId] || [];
-      const queue = queueByCustomer[custId];
-      const orders = ordersByCustomer[custId] || [];
-
-      // Old purchase history bonus
-      const ph = (customer.email && phByEmail[customer.email.toLowerCase()]) ||
-        (customer.ref && phByRef[customer.ref]) || null;
-      const oldRedeemableBonus = ph?.purchaseGroups
-        ?.filter((g) => g.rabatt > 0 && g.rabatteinloesung == null)
-        .reduce((sum, g) => sum + g.rabatt, 0) || 0;
-
-      // Calculate redeemable bonus (groups with 3+ unique bundles, not redeemed)
-      const redeemableBonus = discountOrders.reduce((acc, group) => {
-        if (group.status === "redeemed") return acc;
-        const uniqueBundles = new Set(
-          group.orders?.map((o) => Number(o.bundleIndex ?? 0))
-        ).size;
-        return uniqueBundles >= 3 ? acc + (group.totalDiscount || 0) : acc;
-      }, 0) + oldRedeemableBonus;
-
-      // Get all order IDs already in groups
-      const ordersInGroups = new Set(
-        discountOrders.flatMap(
-          (g) => g.orders?.map((o) => o.orderId?.toString()) || []
-        )
-      );
-
-      // Calculate bonus from orders NOT in any group yet
-      const availableOrdersBonus = orders.reduce((acc, order) => {
-        if (ordersInGroups.has(order._id?.toString())) return acc;
-        const items = getOrderItems(order);
-        const eligibleAmount = items
-          .filter((i) => i.discountEligible)
-          .reduce(
-            (sum, item) =>
-              sum +
-              (item.priceSubtotalIncl || item.priceUnit * item.quantity),
-            0
-          );
-        return acc + (eligibleAmount * settings.discountRate) / 100;
-      }, 0);
-
-      // Pending bonus = incomplete groups + available orders bonus
-      const pendingBonus =
-        discountOrders.reduce((acc, group) => {
-          if (group.status === "redeemed") return acc;
-          const uniqueBundles = new Set(
-            group.orders?.map((o) => Number(o.bundleIndex ?? 0))
-          ).size;
-          return uniqueBundles < 3 ? acc + (group.totalDiscount || 0) : acc;
-        }, 0) + availableOrdersBonus;
-
-      return {
-        ...customer,
-        redeemableBonus,
-        pendingBonus,
-        queueCount: queue ? queue.orderCount : 0,
-        ordersRequiredForDiscount: settings.ordersRequiredForDiscount,
-      };
-    });
+    const enrichedCustomers = await enrichCustomersWithBonusData(
+      customers,
+      settings,
+    );
 
     res.status(200).json({
       success: true,

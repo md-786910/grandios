@@ -179,16 +179,16 @@ async function syncCustomerOrders(customer, partnerId) {
     try {
       // Sync order
 
-      if (wawiOrder.amount_total > 0) {
-        const order = await upsertOrder(wawiOrder, customer._id);
-        cascadeStatus.progress.orders++;
+      // if (wawiOrder.amount_total > 0) {
+      const order = await upsertOrder(wawiOrder, customer._id);
+      cascadeStatus.progress.orders++;
 
-        // Sync order lines and products
-        if (wawiOrder.lines && wawiOrder.lines.length > 0) {
-          await syncOrderLinesWithProducts(wawiOrder.lines, order);
-        }
-        syncedOrders.push(order);
+      // Sync order lines and products
+      if (wawiOrder.lines && wawiOrder.lines.length > 0) {
+        await syncOrderLinesWithProducts(wawiOrder.lines, order);
       }
+      syncedOrders.push(order);
+      // }
     } catch (err) {
       console.error(
         `[CascadeSync] Error syncing order ${wawiOrder.id}:`,
@@ -725,11 +725,10 @@ async function upsertCustomer(wawiCustomer) {
     findQuery.push({ email: wawiCustomer.email.toLowerCase() });
   }
 
-  return Customer.findOneAndUpdate(
-    { $or: findQuery },
-    customerData,
-    { upsert: true, new: true },
-  );
+  return Customer.findOneAndUpdate({ $or: findQuery }, customerData, {
+    upsert: true,
+    new: true,
+  });
 }
 
 async function upsertOrder(wawiOrder, customerId) {

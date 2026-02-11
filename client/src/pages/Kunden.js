@@ -16,8 +16,32 @@ const Kunden = () => {
 
   // URL-based state
   const currentPage = parseInt(searchParams.get("page") || "1", 10);
-  const sortBy = searchParams.get("sort") || "name";
-  const sortOrder = searchParams.get("order") || "asc";
+  const rawSortBy = searchParams.get("sort") || "";
+  const rawSortOrder = searchParams.get("order") || "";
+  const activeSortFields = rawSortBy
+    .split(",")
+    .map((f) => f.trim())
+    .filter(Boolean);
+  const activeSortOrders = rawSortOrder
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  const getDefaultSortOrder = (field) =>
+    field === "discountGranted" ? "desc" : "asc";
+  const getOppositeSortOrder = (order) => (order === "asc" ? "desc" : "asc");
+  const getFieldSortOrder = (field) => {
+    const index = activeSortFields.indexOf(field);
+    return index >= 0 ? activeSortOrders[index] || getDefaultSortOrder(field) : null;
+  };
+  const sortBy =
+    activeSortFields.length > 0 ? activeSortFields.join(",") : "name";
+  const sortOrder =
+    activeSortFields.length > 0
+      ? activeSortFields
+          .map((field, index) => activeSortOrders[index] || getDefaultSortOrder(field))
+          .join(",")
+      : "asc";
 
   const [itemsPerPage] = useState(20);
   const [pagination, setPagination] = useState({
@@ -74,16 +98,36 @@ const Kunden = () => {
 
   // Handle sort change
   const handleSort = (field) => {
-    if (sortBy === field) {
-      updateParams({ order: sortOrder === "asc" ? "desc" : "asc", page: 1 });
+    const fields = [...activeSortFields];
+    const orders = [...activeSortOrders];
+    const index = fields.indexOf(field);
+    const defaultOrder = getDefaultSortOrder(field);
+
+    if (index >= 0) {
+      const currentOrder = orders[index] || defaultOrder;
+      // 3-state toggle per field: default -> opposite -> remove
+      if (currentOrder === defaultOrder) {
+        orders[index] = getOppositeSortOrder(defaultOrder);
+      } else {
+        fields.splice(index, 1);
+        orders.splice(index, 1);
+      }
     } else {
-      updateParams({ sort: field, order: "asc", page: 1 });
+      fields.push(field);
+      orders.push(defaultOrder);
     }
+
+    updateParams({
+      sort: fields.length ? fields.join(",") : null,
+      order: fields.length ? orders.join(",") : null,
+      page: 1,
+    });
   };
 
   // Sort indicator component
   const SortIcon = ({ field }) => {
-    if (sortBy !== field) {
+    const fieldOrder = getFieldSortOrder(field);
+    if (!fieldOrder) {
       return (
         <svg
           className="w-4 h-4 text-gray-300"
@@ -100,7 +144,7 @@ const Kunden = () => {
         </svg>
       );
     }
-    return sortOrder === "asc" ? (
+    return fieldOrder === "asc" ? (
       <svg
         className="w-4 h-4 text-gray-700"
         fill="none"
@@ -267,8 +311,14 @@ const Kunden = () => {
                     <SortIcon field="wallet" />
                   </div>
                 </th> */}
-                  <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
-                    Bonus Gewährt
+                  <th
+                    className="text-left px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
+                    onClick={() => handleSort("discountGranted")}
+                  >
+                    <div className="flex items-center gap-2">
+                      Bonus Gewährt
+                      <SortIcon field="discountGranted" />
+                    </div>
                   </th>
                   <th
                     className="text-left px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"

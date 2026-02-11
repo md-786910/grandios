@@ -113,9 +113,9 @@ const Header = () => {
   const headerTitle = isBonusTilgen
     ? "Bonus einlösen"
     : isBonusDetail
-    ? "Bonus Details"
+    ? "Bonusdetails"
     : isOrderDetail
-    ? "Einkauf Details"
+    ? "Einkaufsdetails"
     : activeItem?.label || "Verwaltung";
   const headerSubtitle = isBonusTilgen || isBonusDetail
     ? safeCustomerName

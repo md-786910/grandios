@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useUnsavedChanges } from "../context/UnsavedChangesContext";
 import menuItems from "./menuItems";
+import sidebarLogo from "../assets/logo/logo.png";
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -45,13 +46,8 @@ const Sidebar = () => {
   return (
     <div className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-100 flex flex-col z-50">
       {/* Logo */}
-      <div className="px-6 py-8">
-        <h1 className="text-xl tracking-[0.2em] font-medium text-gray-800 text-center">
-          GRANDIOS
-        </h1>
-        <p className="text-[11px] tracking-[0.08em] text-gray-600 uppercase text-center mt-0.5">
-          The Curvy Fashion Store
-        </p>
+      <div className="px-6 py-6 flex justify-center">
+        <img src={sidebarLogo} alt="Grandios" className="h-12 w-auto object-contain" />
       </div>
 
       {/* Menu Items */}

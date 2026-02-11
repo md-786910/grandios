@@ -87,7 +87,7 @@ const BonusTilgen = () => {
                       <span className="font-semibold">Einkaufsdatum</span> - {order.datum}
                     </p>
                     <p className="text-sm text-gray-600 mt-1">
-                      <span className="font-semibold">Gesamtbestellwert Nicht Bonusierter Artikel:</span> €{" "}
+                      <span className="font-semibold">Gesamteinkaufswert nicht bonusierter Artikel:</span> €{" "}
                       {order.gesamtNichtBonusiert}
                     </p>
                   </td>

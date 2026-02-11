@@ -2,6 +2,7 @@ const XLSX = require("xlsx");
 const path = require("path");
 const Customer = require("../models/Customer");
 const CustomerPurchaseHistory = require("../models/CustomerPurchaseHistory");
+const OldPurchase = require("../models/OldPurchase");
 
 function parseNumber(val) {
   if (val === null || val === undefined || val === "") return null;
@@ -29,7 +30,18 @@ function parseGroup(row, startCol, ekStart, isFirstGroup) {
     { label: `EK${ekStart + 2}`, amount: parseNumber(row[startCol + 2]) },
   ];
 
-  const rabatt = parseNumber(row[startCol + 3]) || 0;
+  // Count how many purchases have actual values (non-null)
+  const purchaseCount = purchases.filter(
+    (p) => p.amount !== null && p.amount !== 0,
+  ).length;
+
+  // Only treat as discount group if ALL 3 purchases have amounts
+  // If less than 3 purchases, set rabatt to 0 (single purchase, not a discount group)
+  let rabatt = 0;
+  if (purchaseCount === 3) {
+    rabatt = parseNumber(row[startCol + 3]) || 0;
+  }
+
   const rawRabatteinloesung = parseNumber(row[startCol + 4]);
   // Treat 0 as null (not redeemed), only negative values mean redeemed
   const rabatteinloesung =
@@ -52,6 +64,14 @@ function parseGroup(row, startCol, ekStart, isFirstGroup) {
  * @returns {object} - { imported, updated, skipped, errors, unmatchedEmails }
  */
 async function importPurchaseHistory(filePath) {
+  // clear old purchases before import to avoid duplicates, we will re-create them based on the new data
+  console.log("Deleting old purchase");
+  await OldPurchase.deleteMany({});
+  console.log("old purchase delted");
+  console.log("Deleting customer purchase history");
+  await CustomerPurchaseHistory.deleteMany({});
+  console.log("Delete customer purchase history");
+
   if (!filePath) {
     filePath = path.join(
       __dirname,
@@ -163,8 +183,48 @@ async function importPurchaseHistory(filePath) {
           });
           customerId = newCustomer._id;
           results.customersCreated++;
-          results.unmatchedEmails.push({ customerNo, email, row: rowNum, created: true });
+          results.unmatchedEmails.push({
+            customerNo,
+            email,
+            row: rowNum,
+            created: true,
+          });
         }
+      }
+
+      // Create individual old purchases for each EK value
+      const oldPurchases = [];
+      for (const group of purchaseGroups) {
+        // Check if this group is a discount group (has rabatt > 0)
+        const isDiscountGroup = group.rabatt > 0;
+
+        for (const purchase of group.purchases) {
+          if (purchase.amount !== null && purchase.amount !== 0) {
+            // Extract EK number (e.g., "EK1" -> 1)
+            const ekIndex = parseInt(purchase.label.replace("EK", ""));
+            oldPurchases.push({
+              customerNo,
+              customerId,
+              purchaseLabel: purchase.label,
+              amount: purchase.amount,
+              groupIndex: group.groupIndex,
+              ekIndex,
+              lastName,
+              firstName,
+              email,
+              phone,
+              importedAt: new Date(),
+              source: "excel_import",
+              isInDiscountGroup: isDiscountGroup,
+            });
+          }
+        }
+      }
+
+      // Delete existing old purchases for this customer before inserting new ones
+      if (oldPurchases.length > 0) {
+        await OldPurchase.deleteMany({ customerNo });
+        await OldPurchase.insertMany(oldPurchases);
       }
 
       // Upsert by customerNo

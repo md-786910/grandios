@@ -514,7 +514,7 @@ const Bestellungen = () => {
             </div>
 
             {/* Status Filter */}
-            <select
+            {/* <select
               value={statusFilter}
               onChange={(e) =>
                 updateParams({ status: e.target.value, page: 1 })
@@ -525,7 +525,7 @@ const Bestellungen = () => {
               <option value="pending">Ausstehend</option>
               <option value="available">Offen</option>
               <option value="redeemed">Eingelöst</option>
-            </select>
+            </select> */}
 
             {/* Test Data Button with Dropdown */}
             <div className="relative">
@@ -771,9 +771,9 @@ const Bestellungen = () => {
                       <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
                         Betrag
                       </th>
-                      <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                      {/* <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
                         Status
-                      </th>
+                      </th> */}
                       <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
                         Aktion
                       </th>
@@ -808,13 +808,13 @@ const Bestellungen = () => {
                           <td className="px-6 py-4 text-sm font-medium text-gray-900">
                             € {formatCurrency(order.amountTotal)}
                           </td>
-                          <td className="px-6 py-4">
+                          {/* <td className="px-6 py-4">
                             <span
                               className={`px-3 py-1 text-xs font-medium rounded-full border ${statusInfo.color}`}
                             >
                               {statusInfo.status}
                             </span>
-                          </td>
+                          </td> */}
                           <td className="px-6 py-4">
                             <button
                               onClick={() =>
@@ -1042,7 +1042,7 @@ const Bestellungen = () => {
           {/* Total Order Value */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center">
             <h3 className="font-semibold text-gray-900 mb-4">
-              Gesamtbestellwert
+              Gesamteinkaufswert
             </h3>
             <p className="text-3xl font-bold text-gray-900">
               € {formatCurrency(selectedOrder.amountTotal)}
@@ -1052,7 +1052,7 @@ const Bestellungen = () => {
           {/* Total Without Sales Items */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center">
             <h3 className="font-semibold text-gray-900 mb-4">
-              Gesamtbestellwert Ohne Verkaufsartikel
+              Gesamteinkaufswert ohne Verkaufsartikel
             </h3>
             <p className="text-3xl font-bold text-gray-900">
               € {formatCurrency(discountEligibleAmount)}

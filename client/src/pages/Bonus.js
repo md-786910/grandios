@@ -9,8 +9,12 @@ const Bonus = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchTerm, setSearchTerm] = useState(
+    () => searchParams.get("search") || ""
+  );
+  const [debouncedSearch, setDebouncedSearch] = useState(
+    () => (searchParams.get("search") || "").trim()
+  );
   const [customersData, setCustomersData] = useState([]);
   const [stats, setStats] = useState({
     totalCustomers: 0,
@@ -26,6 +30,7 @@ const Bonus = () => {
   // URL-based state
   const currentPage = parseInt(searchParams.get("page") || "1", 10);
   const statusFilter = searchParams.get("status") || "";
+  const urlSearch = searchParams.get("search") || "";
 
   const [totalItems, setTotalItems] = useState(0);
   const [itemsPerPage] = useState(10);
@@ -48,13 +53,28 @@ const Bonus = () => {
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-      if (searchTerm && currentPage !== 1) {
-        updateParams({ page: 1 });
+      const normalizedSearch = searchTerm.trim();
+      setDebouncedSearch(normalizedSearch);
+
+      const routeSearch = urlSearch.trim();
+      const hasSearchChanged = normalizedSearch !== routeSearch;
+      if (hasSearchChanged || (normalizedSearch && currentPage !== 1)) {
+        updateParams({
+          search: normalizedSearch || null,
+          page: 1,
+        });
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchTerm]);
+  }, [searchTerm, urlSearch, currentPage]);
+
+  // Keep input state in sync with route changes (back/forward navigation)
+  useEffect(() => {
+    setSearchTerm((prev) => (prev === urlSearch ? prev : urlSearch));
+    setDebouncedSearch((prev) =>
+      prev === urlSearch.trim() ? prev : urlSearch.trim()
+    );
+  }, [urlSearch]);
 
   const fetchDiscounts = useCallback(async () => {
     try {
@@ -188,10 +208,10 @@ const Bonus = () => {
           </p>
         </div>
 
-        {/* Gesamtbestellwert */}
+        {/* Gesamteinkaufswert */}
         <div className="bg-green-50 rounded-xl border border-green-100 p-6">
           <h3 className="text-center font-bold text-green-600 mb-2">
-            Gesamtbestellwert
+            Gesamteinkaufswert
           </h3>
           <p className="text-center text-3xl font-bold text-gray-900">
             € {formatCurrency(stats.totalOrderValue)}
@@ -305,7 +325,7 @@ const Bonus = () => {
               {/* Order Values */}
               <div className="min-w-[200px]">
                 <p className="text-sm text-gray-600">
-                  <span className="font-medium">Gesamtbestellwert:</span> €{" "}
+                  <span className="font-medium">Gesamteinkaufswert:</span> €{" "}
                   {formatCurrency(discount.totalOrderValue)}
                 </p>
                 <p className="text-sm text-gray-600">

@@ -72,6 +72,7 @@ const BonusDetail = () => {
   const [editingGroup, setEditingGroup] = useState(null); // Group being edited
   const [discountItems, setDiscountItems] = useState([]); // Items for discount group: [{orders: [id1, id2], isBundle: true}]
   const [purchaseHistory, setPurchaseHistory] = useState(null); // Old purchase history from Excel
+  const [oldPurchases, setOldPurchases] = useState([]); // Individual old purchases from Excel
   const [expandedOldGroups, setExpandedOldGroups] = useState({}); // Track expanded old purchase groups
   const [redeemOldGroupIndex, setRedeemOldGroupIndex] = useState(null); // Old group index to redeem
   const [expandedBundles, setExpandedBundles] = useState({}); // Track which bundles are expanded: {groupId_bundleIdx: true}
@@ -144,6 +145,7 @@ const BonusDetail = () => {
         setOrders(data.orders || []);
         setDiscountGroups(data.discountGroups || []);
         setPurchaseHistory(data.purchaseHistory || null);
+        setOldPurchases(data.oldPurchases || []);
         const notes = data.notes || "";
         setNotizen(notes);
         setOriginalNotizen(notes); // Track original value
@@ -682,10 +684,58 @@ const BonusDetail = () => {
     });
   };
 
+  const copyAmount = async (amount) => {
+    const formattedAmount = `€ ${formatCurrency(amount)}`;
+    if (!navigator.clipboard?.writeText) {
+      toast.error("Kopieren nicht verfügbar.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(formattedAmount);
+      toast.success("Betrag kopiert!");
+    } catch (error) {
+      toast.error("Kopieren fehlgeschlagen.");
+    }
+  };
+
   const formatDate = (date) => {
     if (!date) return "-";
     return new Date(date).toLocaleDateString("de-DE");
   };
+
+  const toTimestamp = (dateValue) => {
+    if (!dateValue) return 0;
+    const timestamp = new Date(dateValue).getTime();
+    return Number.isNaN(timestamp) ? 0 : timestamp;
+  };
+
+  const orderDateById = orders.reduce((acc, order) => {
+    const orderId = (order._id || order.id)?.toString();
+    if (!orderId) return acc;
+
+    // Prefer Einkaufsdatum (orderDate), fallback to createdAt for safety.
+    acc[orderId] = toTimestamp(order.orderDate || order.createdAt);
+    return acc;
+  }, {});
+
+  const getGroupLatestOrderTimestamp = (group) => {
+    const latestFromOrders = (group.orders || []).reduce(
+      (latest, groupOrder) => {
+        const orderId = (
+          groupOrder.orderId?._id || groupOrder.orderId
+        )?.toString();
+        if (!orderId) return latest;
+        return Math.max(latest, orderDateById[orderId] || 0);
+      },
+      0,
+    );
+
+    if (latestFromOrders > 0) return latestFromOrders;
+    return toTimestamp(group.createdAt);
+  };
+
+  const sortGroupsByLatestOrderDateDesc = (a, b) =>
+    getGroupLatestOrderTimestamp(b) - getGroupLatestOrderTimestamp(a);
 
   if (loading) {
     return (
@@ -957,7 +1007,7 @@ const BonusDetail = () => {
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Bonus Details</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Bonusdetails</h1>
           <p className="text-gray-500 text-sm mt-1">
             {sanitizeName(customer?.customerName || customer?.name)}
           </p>
@@ -965,7 +1015,7 @@ const BonusDetail = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={handleSyncOrders}
-            disabled={syncing || (totalOrders + oldPurchaseCount === 0)}
+            disabled={syncing || totalOrders + oldPurchaseCount === 0}
             className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm flex items-center gap-2"
           >
             {syncing ? (
@@ -1566,17 +1616,11 @@ const BonusDetail = () => {
                   Gesamtbonus Gewährt
                 </h3>
                 {(() => {
-                  const handleCopyAmount = (amount) => {
-                    const formattedAmount = `€ ${formatCurrency(amount)}`;
-                    navigator.clipboard.writeText(formattedAmount);
-                    toast.success("Betrag kopiert!");
-                  };
-
                   // Determine which bonus to display and its color
                   if (redeemableBonus > 0) {
                     return (
                       <button
-                        onClick={() => handleCopyAmount(redeemableBonus)}
+                        onClick={() => copyAmount(redeemableBonus)}
                         className="text-4xl font-extrabold text-green-600 hover:text-green-700 cursor-pointer transition-colors"
                         title="Klicken zum Kopieren"
                       >
@@ -1587,7 +1631,7 @@ const BonusDetail = () => {
                   if (pendingBonus > 0) {
                     return (
                       <button
-                        onClick={() => handleCopyAmount(pendingBonus)}
+                        onClick={() => copyAmount(pendingBonus)}
                         className="text-4xl font-extrabold text-orange-500 hover:text-orange-600 cursor-pointer transition-colors"
                         title="Klicken zum Kopieren"
                       >
@@ -1598,7 +1642,7 @@ const BonusDetail = () => {
                   // All redeemed or nothing
                   return (
                     <button
-                      onClick={() => handleCopyAmount(0)}
+                      onClick={() => copyAmount(0)}
                       className="text-4xl font-extrabold text-red-600 hover:text-red-700 cursor-pointer transition-colors"
                       title="Klicken zum Kopieren"
                     >
@@ -1611,10 +1655,10 @@ const BonusDetail = () => {
                 </p>
               </div>
 
-              {/* Gesamtbestellwert */}
+              {/* Gesamteinkaufswert */}
               <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center min-w-[220px] flex-1">
                 <h3 className="font-semibold text-gray-600 mb-2 text-sm">
-                  Gesamtbestellwert
+                  Gesamteinkaufswert
                 </h3>
                 <p className="text-3xl font-bold text-gray-900">
                   € {formatCurrency(totalOrderValue + oldTotalValue)}
@@ -1953,7 +1997,7 @@ const BonusDetail = () => {
             <div className="grid grid-cols-[60px_1fr_1fr_100px_160px] border-b border-gray-200 bg-gray-50">
               <div className="p-3 text-center text-xs font-semibold text-gray-600 uppercase border-r border-gray-200"></div>
               <div className="p-3 text-xs font-semibold text-gray-600 uppercase border-r border-gray-200">
-                Bestelldetails
+                Einkaufsdetails
               </div>
               <div className="p-3 text-xs font-semibold text-gray-600 uppercase border-r border-gray-200">
                 Artikel
@@ -1970,7 +2014,7 @@ const BonusDetail = () => {
               {/* Render ACTIVE discount groups first */}
               {discountGroups
                 .filter((group) => group.status !== "redeemed")
-                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                .sort(sortGroupsByLatestOrderDateDesc)
                 .map((group) => {
                   const isRedeemed = group.status === "redeemed";
                   const isBeingEdited = editingGroup?._id === group._id;
@@ -2456,11 +2500,17 @@ const BonusDetail = () => {
                           </div>
                         )}
 
-                        <span
-                          className={`text-xs font-medium ${isRedeemed ? "text-red-600" : "text-green-600"}`}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyAmount(group.totalDiscount);
+                          }}
+                          title="Klicken zum Kopieren"
+                          className={`text-xs font-medium hover:underline ${isRedeemed ? "text-red-600" : "text-green-600"}`}
                         >
                           € {formatCurrency(group.totalDiscount)}
-                        </span>
+                        </button>
                       </div>
                     </div>
                   );
@@ -3005,7 +3055,7 @@ const BonusDetail = () => {
               {/* Render REDEEMED discount groups at bottom */}
               {discountGroups
                 .filter((group) => group.status === "redeemed")
-                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                .sort(sortGroupsByLatestOrderDateDesc)
                 .map((group) => {
                   const isBeingEdited = editingGroup?._id === group._id;
                   const groupKey = group._id || group.id;
@@ -3382,9 +3432,20 @@ const BonusDetail = () => {
                         <span className="w-full px-4 py-2 bg-gray-400 text-white rounded-lg text-sm font-medium text-center cursor-not-allowed">
                           Eingelöst
                         </span>
-                        <span className="text-xs text-red-600 font-medium">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyAmount(group.totalDiscount);
+                          }}
+                          title="Klicken zum Kopieren"
+                          className="text-xs text-red-600 font-medium hover:underline"
+                        >
                           € {formatCurrency(group.totalDiscount)}
-                        </span>
+                        </button>
+                        <p className="text-[10px] text-gray-500">
+                          Klicken zum Kopieren
+                        </p>
                       </div>
                     </div>
                   );
@@ -3595,12 +3656,25 @@ const BonusDetail = () => {
                                   <span className="w-full px-4 py-2 bg-gray-400 text-white rounded-lg text-sm font-medium text-center cursor-not-allowed">
                                     Eingelöst
                                   </span>
-                                  <span className="text-xs text-red-600 font-medium">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      copyAmount(
+                                        Math.abs(group.rabatteinloesung),
+                                      );
+                                    }}
+                                    title="Klicken zum Kopieren"
+                                    className="text-xs text-red-600 font-medium hover:underline"
+                                  >
                                     €{" "}
                                     {formatCurrency(
                                       Math.abs(group.rabatteinloesung),
                                     )}
-                                  </span>
+                                  </button>
+                                  <p className="text-[10px] text-gray-500">
+                                    Klicken zum Kopieren
+                                  </p>
                                 </>
                               ) : (
                                 <>
@@ -3613,9 +3687,20 @@ const BonusDetail = () => {
                                   >
                                     Offen
                                   </button>
-                                  <span className="text-xs text-green-700 font-medium">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      copyAmount(group.rabatt);
+                                    }}
+                                    title="Klicken zum Kopieren"
+                                    className="text-xs text-green-700 font-medium hover:underline"
+                                  >
                                     € {formatCurrency(group.rabatt)}
-                                  </span>
+                                  </button>
+                                  <p className="text-[10px] text-gray-500">
+                                    Klicken zum Kopieren
+                                  </p>
                                 </>
                               )}
                             </div>
@@ -3624,6 +3709,88 @@ const BonusDetail = () => {
                       })}
                   </>
                 )}
+
+              {/* Individual Old Purchases (from Excel) - Single Purchases NOT in Discount Groups */}
+              {oldPurchases && oldPurchases.length > 0 && (
+                <>
+                  <div className="px-4 py-2 border-b border-gray-200 bg-amber-50/70 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+                        Alte Einzelkäufe
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {oldPurchases.length} Einkäufe (nicht in Bonusgruppen)
+                      </span>
+                    </div>
+                  </div>
+                  {oldPurchases.map((purchase, idx) => (
+                    <div
+                      key={idx}
+                      className="border-b border-gray-200 bg-white"
+                    >
+                      <div className="grid grid-cols-[60px_1fr_1fr_100px_160px]">
+                        {/* Checkbox Column */}
+                        <div className="p-4 flex items-center justify-center border-r border-gray-100">
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            disabled
+                            className="w-5 h-5 rounded border-gray-300 cursor-not-allowed"
+                          />
+                        </div>
+
+                        {/* Order Info */}
+                        <div className="p-4 border-r border-gray-100">
+                          <p className="text-sm text-gray-900">
+                            <span className="font-semibold">
+                              Einkaufsnummer
+                            </span>{" "}
+                            -{" "}
+                            <span className="text-gray-700">
+                              {purchase.purchaseLabel}
+                            </span>
+                          </p>
+                          <p className="text-sm text-gray-900">
+                            <span className="font-semibold">Einkaufsdatum</span>{" "}
+                            -{" "}
+                            {new Date(purchase.importedAt).toLocaleDateString(
+                              "de-DE",
+                            )}
+                          </p>
+                          <p className="text-sm mt-1 text-gray-600">
+                            <span className="font-semibold">Bonusfähig:</span> €{" "}
+                            {formatCurrency(purchase.amount)}
+                          </p>
+                        </div>
+
+                        {/* Product Images (empty for old purchases) */}
+                        <div className="p-4 border-r border-gray-100">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-gray-400">
+                              Gruppe {purchase.groupIndex + 1}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Empty Group Column */}
+                        <div className="p-4 border-r border-gray-100 flex items-center justify-center">
+                          {/* Old purchases have no group icon */}
+                        </div>
+
+                        {/* Status Column */}
+                        <div className="p-4 flex flex-col items-center justify-center bg-gray-50">
+                          <span className="text-xs text-gray-500">
+                            Einzelkauf
+                          </span>
+                          <span className="text-xs text-gray-400 mt-1">
+                            (Alt)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           </>
         ) : (
