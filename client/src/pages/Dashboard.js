@@ -17,7 +17,7 @@ const Dashboard = () => {
 
   const [stats, setStats] = useState([
     {
-      label: "Gesamter gewährter Bonus",
+      label: "Bonus gesamt",
       value: "€ 0,00",
       bgColor: "bg-blue-100",
       labelColor: "text-blue-500",
@@ -68,7 +68,7 @@ const Dashboard = () => {
           const data = statsRes.data.data;
           setStats([
             {
-              label: "Gesamter gewährter Bonus",
+              label: "Bonus gesamt",
               value: `€ ${formatCurrency(data.totalDiscountGranted)}`,
               bgColor: "bg-blue-100",
               labelColor: "text-blue-500",
@@ -205,7 +205,7 @@ const Dashboard = () => {
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-sm font-semibold text-gray-900">
-                      Gesamteinkaufswert -
+                      Einkäufe gesamt -
                     </span>
                     <span className="text-sm text-gray-600">
                       € {formatCurrency(order.amountTotal)}

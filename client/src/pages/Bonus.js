@@ -208,20 +208,20 @@ const Bonus = () => {
           </p>
         </div>
 
-        {/* Gesamteinkaufswert */}
+        {/* Einkäufe gesamt */}
         <div className="bg-green-50 rounded-xl border border-green-100 p-6">
           <h3 className="text-center font-bold text-green-600 mb-2">
-            Gesamteinkaufswert
+            Einkäufe gesamt
           </h3>
           <p className="text-center text-3xl font-bold text-gray-900">
             € {formatCurrency(stats.totalOrderValue)}
           </p>
         </div>
 
-        {/* Gesamter gewährter Bonus */}
+        {/* Bonus gesamt */}
         <div className="bg-blue-50 rounded-xl border border-blue-100 p-6">
           <h3 className="text-center font-bold text-blue-600 mb-2">
-            Gesamter gewährter Bonus
+            Bonus gesamt
           </h3>
           <p className="text-center text-3xl font-bold text-gray-900">
             € {formatCurrency(stats.totalDiscountGranted)}
@@ -325,11 +325,11 @@ const Bonus = () => {
               {/* Order Values */}
               <div className="min-w-[200px]">
                 <p className="text-sm text-gray-600">
-                  <span className="font-medium">Gesamteinkaufswert:</span> €{" "}
+                  <span className="font-medium">Einkäufe gesamt:</span> €{" "}
                   {formatCurrency(discount.totalOrderValue)}
                 </p>
                 <p className="text-sm text-gray-600">
-                  <span className="font-medium">Gesamtbonus Gewährt:</span> €{" "}
+                  <span className="font-medium">Bonus gesamt:</span> €{" "}
                   {formatCurrency(discount.totalDiscountGranted)}
                 </p>
               </div>
