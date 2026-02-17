@@ -221,7 +221,7 @@ const Bonus = () => {
         {/* Bonus gesamt */}
         <div className="bg-blue-50 rounded-xl border border-blue-100 p-6">
           <h3 className="text-center font-bold text-blue-600 mb-2">
-            Gesamtbonus gewährt
+            Bonusguthaben
           </h3>
           <p className="text-center text-3xl font-bold text-gray-900">
             € {formatCurrency(stats.totalDiscountGranted)}

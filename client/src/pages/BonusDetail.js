@@ -1613,7 +1613,7 @@ const BonusDetail = () => {
                         : "text-red-600"
                   }`}
                 >
-                  Gesamtbonus gewährt
+                  Bonusguthaben
                 </h3>
                 {(() => {
                   // Determine which bonus to display and its color
