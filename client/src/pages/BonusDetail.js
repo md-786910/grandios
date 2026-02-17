@@ -1015,7 +1015,7 @@ const BonusDetail = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={handleSyncOrders}
-            disabled={syncing || totalOrders + oldPurchaseCount === 0}
+            disabled={syncing}
             className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm flex items-center gap-2"
           >
             {syncing ? (
