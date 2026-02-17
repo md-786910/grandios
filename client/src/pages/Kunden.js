@@ -32,14 +32,19 @@ const Kunden = () => {
   const getOppositeSortOrder = (order) => (order === "asc" ? "desc" : "asc");
   const getFieldSortOrder = (field) => {
     const index = activeSortFields.indexOf(field);
-    return index >= 0 ? activeSortOrders[index] || getDefaultSortOrder(field) : null;
+    return index >= 0
+      ? activeSortOrders[index] || getDefaultSortOrder(field)
+      : null;
   };
   const sortBy =
     activeSortFields.length > 0 ? activeSortFields.join(",") : "name";
   const sortOrder =
     activeSortFields.length > 0
       ? activeSortFields
-          .map((field, index) => activeSortOrders[index] || getDefaultSortOrder(field))
+          .map(
+            (field, index) =>
+              activeSortOrders[index] || getDefaultSortOrder(field),
+          )
           .join(",")
       : "asc";
 
@@ -316,7 +321,7 @@ const Kunden = () => {
                     onClick={() => handleSort("discountGranted")}
                   >
                     <div className="flex items-center gap-2">
-                      Bonus Gewährt
+                      Bonus gewährt
                       <SortIcon field="discountGranted" />
                     </div>
                   </th>
@@ -325,7 +330,7 @@ const Kunden = () => {
                     onClick={() => handleSort("discountRedeemed")}
                   >
                     <div className="flex items-center gap-2">
-                      Bonus Eingelöst
+                      Bonus eingelöst
                       <SortIcon field="discountRedeemed" />
                     </div>
                   </th>

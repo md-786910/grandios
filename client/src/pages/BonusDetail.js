@@ -1671,7 +1671,7 @@ const BonusDetail = () => {
           <div className="flex gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center w-[350px]">
               <h3 className="font-semibold text-gray-600 mb-2 text-sm">
-                Anzahl Der Einkäufe
+                Anzahl der Einkäufe
               </h3>
               <p className="text-3xl font-bold text-gray-900">
                 {totalOrders + oldPurchaseCount}
@@ -1679,7 +1679,7 @@ const BonusDetail = () => {
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center min-w-[220px]">
               <h3 className="font-semibold text-gray-600 mb-2 text-sm">
-                Anzahl Der Artikel
+                Anzahl der Artikel
               </h3>
               <p className="text-3xl font-bold text-gray-900">
                 {totalItems + oldPurchaseCount}
