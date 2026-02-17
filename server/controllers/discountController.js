@@ -190,6 +190,7 @@ exports.getDiscounts = async (req, res, next) => {
           email: customer.email,
           totalOrderValue,
           totalDiscountGranted: discount ? discount.totalGranted : 0,
+          totalBonusRedeemed: discount ? discount.totalRedeemed : 0,
           discountBalance: discount ? discount.balance : 0,
           redeemable: availableGroups.length > 0,
           discountGroupCount: discountOrders.length,

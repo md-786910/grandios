@@ -10,10 +10,10 @@ const Bonus = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [searchTerm, setSearchTerm] = useState(
-    () => searchParams.get("search") || ""
+    () => searchParams.get("search") || "",
   );
-  const [debouncedSearch, setDebouncedSearch] = useState(
-    () => (searchParams.get("search") || "").trim()
+  const [debouncedSearch, setDebouncedSearch] = useState(() =>
+    (searchParams.get("search") || "").trim(),
   );
   const [customersData, setCustomersData] = useState([]);
   const [stats, setStats] = useState({
@@ -72,7 +72,7 @@ const Bonus = () => {
   useEffect(() => {
     setSearchTerm((prev) => (prev === urlSearch ? prev : urlSearch));
     setDebouncedSearch((prev) =>
-      prev === urlSearch.trim() ? prev : urlSearch.trim()
+      prev === urlSearch.trim() ? prev : urlSearch.trim(),
     );
   }, [urlSearch]);
 
@@ -82,7 +82,7 @@ const Bonus = () => {
       const response = await discountsAPI.getAll(
         currentPage,
         itemsPerPage,
-        debouncedSearch
+        debouncedSearch,
       );
       if (response.data.success) {
         setCustomersData(response.data.data);
@@ -96,7 +96,7 @@ const Bonus = () => {
             customersReadyForDiscount: 0,
             discountRate: 10,
             ordersRequiredForDiscount: 3,
-          }
+          },
         );
       }
     } catch (error) {
@@ -221,7 +221,7 @@ const Bonus = () => {
         {/* Bonus gesamt */}
         <div className="bg-blue-50 rounded-xl border border-blue-100 p-6">
           <h3 className="text-center font-bold text-blue-600 mb-2">
-            Bonus gesamt
+            Gesamtbonus gewährt
           </h3>
           <p className="text-center text-3xl font-bold text-gray-900">
             € {formatCurrency(stats.totalDiscountGranted)}
@@ -263,8 +263,8 @@ const Bonus = () => {
               )}
             </div>
             <div className="text-xs text-blue-600">
-              {stats.ordersRequiredForDiscount} Einkäufe ={" "}
-              {stats.discountRate}% Bonus
+              {stats.ordersRequiredForDiscount} Einkäufe = {stats.discountRate}%
+              Bonus
             </div>
           </div>
         </div>
@@ -302,10 +302,11 @@ const Bonus = () => {
           paginatedCustomers.map((discount, index) => (
             <div
               key={discount.id || discount._id}
-              className={`flex items-center justify-between p-4 ${index !== paginatedCustomers.length - 1
-                ? "border-b border-gray-100"
-                : ""
-                }`}
+              className={`flex items-center justify-between p-4 ${
+                index !== paginatedCustomers.length - 1
+                  ? "border-b border-gray-100"
+                  : ""
+              }`}
             >
               {/* Customer Info */}
               <div className="min-w-[250px]">
@@ -329,8 +330,8 @@ const Bonus = () => {
                   {formatCurrency(discount.totalOrderValue)}
                 </p>
                 <p className="text-sm text-gray-600">
-                  <span className="font-medium">Bonus gesamt:</span> €{" "}
-                  {formatCurrency(discount.totalDiscountGranted)}
+                  <span className="font-medium">Bonus eingelöst:</span> €{" "}
+                  {formatCurrency(discount.totalBonusRedeemed)}
                 </p>
               </div>
 
@@ -339,29 +340,37 @@ const Bonus = () => {
                 {(() => {
                   const redeemable = discount.redeemableBonus || 0;
                   const pending = discount.pendingBonus || 0;
-                  const displayAmount = redeemable > 0 ? redeemable : pending > 0 ? pending : 0;
-                  const colorClass = redeemable > 0
-                    ? 'text-green-600'
-                    : pending > 0
-                      ? 'text-orange-500'
-                      : 'text-red-600';
+                  const displayAmount =
+                    redeemable > 0 ? redeemable : pending > 0 ? pending : 0;
+                  const colorClass =
+                    redeemable > 0
+                      ? "text-green-600"
+                      : pending > 0
+                        ? "text-orange-500"
+                        : "text-red-600";
 
                   return (
                     <div
                       onClick={() => {
-                        navigator.clipboard.writeText(`€ ${formatCurrency(displayAmount)}`);
+                        navigator.clipboard.writeText(
+                          `€ ${formatCurrency(displayAmount)}`,
+                        );
                         toast.success("Betrag kopiert!");
                       }}
                       className="cursor-pointer hover:opacity-80 transition-opacity"
                       title="Klicken zum Kopieren"
                     >
                       <p className="text-sm">
-                        <span className="font-medium text-gray-600">Bonuspreis:</span>{" "}
+                        <span className="font-medium text-gray-600">
+                          Bonuspreis:
+                        </span>{" "}
                         <span className={`font-bold ${colorClass}`}>
                           € {formatCurrency(displayAmount)}
                         </span>
                       </p>
-                      <p className="text-xs text-gray-400 mt-0.5">Klicken zum Kopieren</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Klicken zum Kopieren
+                      </p>
                     </div>
                   );
                 })()}
@@ -381,7 +390,7 @@ const Bonus = () => {
                   onClick={() =>
                     handleViewCustomer(
                       discount.id || discount.customerId,
-                      discount.customerName
+                      discount.customerName,
                     )
                   }
                   className="px-6 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm"
@@ -413,7 +422,9 @@ const Bonus = () => {
           </p>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => updateParams({ page: Math.max(currentPage - 1, 1) })}
+              onClick={() =>
+                updateParams({ page: Math.max(currentPage - 1, 1) })
+              }
               disabled={currentPage === 1}
               className="px-2 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -433,10 +444,11 @@ const Bonus = () => {
                   )}
                   <button
                     onClick={() => updateParams({ page })}
-                    className={`px-3 py-1 text-sm font-medium rounded-lg ${currentPage === page
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
-                      }`}
+                    className={`px-3 py-1 text-sm font-medium rounded-lg ${
+                      currentPage === page
+                        ? "bg-gray-900 text-white"
+                        : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                    }`}
                   >
                     {page}
                   </button>
