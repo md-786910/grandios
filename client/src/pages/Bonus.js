@@ -221,7 +221,7 @@ const Bonus = () => {
         {/* Bonus gesamt */}
         <div className="bg-blue-50 rounded-xl border border-blue-100 p-6">
           <h3 className="text-center font-bold text-blue-600 mb-2">
-            Bonusguthaben
+            Gesamtzahl der Kunden
           </h3>
           <p className="text-center text-3xl font-bold text-gray-900">
             € {formatCurrency(stats.totalDiscountGranted)}
@@ -302,29 +302,29 @@ const Bonus = () => {
           paginatedCustomers.map((discount, index) => (
             <div
               key={discount.id || discount._id}
-              className={`flex items-center justify-between p-4 ${
+              className={`flex items-center gap-6 p-4 ${
                 index !== paginatedCustomers.length - 1
                   ? "border-b border-gray-100"
                   : ""
               }`}
             >
               {/* Customer Info */}
-              <div className="min-w-[250px]">
-                <h4 className="font-semibold text-gray-900">
+              <div className="w-[480px] flex-shrink-0 min-w-0">
+                <h4 className="font-semibold text-gray-900 truncate">
                   {sanitizeName(discount.customerName)}
                 </h4>
                 <p className="text-sm text-gray-600">
                   <span className="font-medium">Kundennummer:</span>{" "}
                   {discount.customerNumber || "-"}
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 truncate">
                   <span className="font-medium">E-Mail:</span>{" "}
                   {discount.email || "-"}
                 </p>
               </div>
 
               {/* Order Values */}
-              <div className="min-w-[200px]">
+              <div className="w-[320px] flex-shrink-0 text-left">
                 <p className="text-sm text-gray-600">
                   <span className="font-medium">Einkäufe gesamt:</span> €{" "}
                   {formatCurrency(discount.totalOrderValue)}
@@ -336,7 +336,7 @@ const Bonus = () => {
               </div>
 
               {/* Bonuspreis & Queue Status */}
-              <div className="min-w-[150px]">
+              <div className="w-[240px] flex-shrink-0 mr-auto">
                 {(() => {
                   const redeemable = discount.redeemableBonus || 0;
                   const pending = discount.pendingBonus || 0;
@@ -385,7 +385,7 @@ const Bonus = () => {
               </div>
 
               {/* Action Button */}
-              <div className="flex flex-col items-start gap-1">
+              <div className="w-[100px] flex-shrink-0 flex flex-col items-end gap-1">
                 <button
                   onClick={() =>
                     handleViewCustomer(
