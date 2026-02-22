@@ -15,36 +15,49 @@ const cascadeSyncService = require("../services/cascadingSyncService");
 function getOrderItems(order) {
   // If order has populated orderLines, use them
   if (order.orderLines && order.orderLines.length > 0) {
-    return order.orderLines.map((line) => ({
-      orderLineId: line.orderLineId || line._id,
-      productId: line.productId,
-      productName: line.fullProductName || line.productName,
-      priceUnit: line.priceUnit || 0,
-      priceSubtotalIncl:
-        line.priceSubtotalIncl || line.priceUnit * (line.quantity || 1),
-      quantity: line.quantity || 1,
-      discount: line.discount || 0,
-      discountEligible: line.discountEligible !== false,
-      image: line.productRef?.image || null,
-    }));
+    return order.orderLines.map((line) => {
+      const item = {
+        orderLineId: line.orderLineId || line._id,
+        productId: line.productId,
+        productName: line.fullProductName || line.productName,
+        priceUnit: line.priceUnit || 0,
+        priceSubtotalIncl:
+          line.priceSubtotalIncl || line.priceUnit * (line.quantity || 1),
+        quantity: line.quantity || 1,
+        discount: line.discount || 0,
+        discountEligible: line.discountEligible !== false,
+        image: line.productRef?.image || null,
+      };
+      // Override discountEligible based on full eligibility check
+      // (excludes negative amounts, Bonus Kundenkarte, vouchers, sale items)
+      if (!isItemEligibleForBonus(item)) {
+        item.discountEligible = false;
+      }
+      return item;
+    });
   }
   // Fallback to legacy items
   return order.items || [];
 }
 
 // Helper to check if an item is eligible for bonus calculation
-// Excludes: items marked as not eligible, Sale items (with existing discount), and vouchers
+// Excludes: items marked as not eligible, Sale items (with existing discount), vouchers,
+// negative amounts (discounts), and "Bonus Kundenkarte" products
 function isItemEligibleForBonus(item) {
   // Must be discount eligible
   if (!item.discountEligible) return false;
+  // Exclude items with negative amounts (discount lines)
+  if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0)
+    return false;
   // Exclude items with existing discounts (Sale items)
   if (item.discount && item.discount > 0) return false;
-  // Exclude vouchers (check product name)
+  // Exclude vouchers and Bonus Kundenkarte (check product name)
   const name = (item.productName || "").toLowerCase();
   if (
     name.includes("gutschein") ||
     name.includes("voucher") ||
-    name.includes("gift")
+    name.includes("gift") ||
+    name.includes("bonus kundenkarte")
   )
     return false;
   return true;
@@ -162,7 +175,7 @@ exports.getDiscounts = async (req, res, next) => {
 
           // Calculate potential bonus from discount-eligible items using getOrderItems
           const items = getOrderItems(order);
-          const eligibleItems = items.filter((i) => i.discountEligible);
+          const eligibleItems = items.filter((i) => isItemEligibleForBonus(i));
           const eligibleAmount = eligibleItems.reduce(
             (sum, item) =>
               sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
@@ -291,12 +304,19 @@ exports.getCustomerDiscount = async (req, res, next) => {
       .sort({ orderDate: -1 });
 
     // Transform orders to include items from orderLines
-    const ordersWithItems = orders.map((order) => {
-      const orderObj = order.toObject();
-      // Add items array from orderLines for frontend compatibility
-      orderObj.items = getOrderItems(order);
-      return orderObj;
-    });
+    // Filter out orders that have no bonus-eligible items
+    const ordersWithItems = orders
+      .map((order) => {
+        const orderObj = order.toObject();
+        // Add items array from orderLines for frontend compatibility
+        orderObj.items = getOrderItems(order);
+        return orderObj;
+      })
+      .filter((order) => {
+        // Exclude orders where no items are eligible for bonus
+        const hasEligible = order.items.some((item) => item.discountEligible);
+        return hasEligible;
+      });
 
     // Get discount wallet
     const discount = await Discount.findOne({ customerId: customer._id });
@@ -551,10 +571,9 @@ exports.createDiscountGroup = async (req, res, next) => {
     // Calculate discount for each order
     const orderItems = orders.map((order) => {
       const items = getOrderItems(order);
-      // Only include items eligible for bonus (excludes Sale items and vouchers)
+      // Only include items eligible for bonus (excludes Sale items, vouchers, negative amounts, Bonus Kundenkarte)
       const eligibleAmount = items
-        .filter((item) => item.discountEligible)
-        // .filter((item) => isItemEligibleForBonus(item))
+        .filter((item) => isItemEligibleForBonus(item))
         .reduce(
           (sum, item) =>
             sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
@@ -722,10 +741,9 @@ exports.updateDiscountGroup = async (req, res, next) => {
     // Calculate discount for each order
     const orderItems = orders.map((order) => {
       const items = getOrderItems(order);
-      // Only include items eligible for bonus (excludes Sale items and vouchers)
+      // Only include items eligible for bonus (excludes Sale items, vouchers, negative amounts, Bonus Kundenkarte)
       const eligibleAmount = items
-        .filter((item) => item.discountEligible)
-        // .filter((item) => isItemEligibleForBonus(item))
+        .filter((item) => isItemEligibleForBonus(item))
         .reduce(
           (sum, item) =>
             sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),

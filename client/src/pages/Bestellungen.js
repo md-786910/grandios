@@ -945,7 +945,8 @@ const Bestellungen = () => {
       sum + (item.priceSubtotalIncl || item.priceUnit) * (item.quantity || 1),
     0,
   );
-  const discountValue = discountEligibleAmount * 0.1;
+  const discountValue =
+    discountEligibleAmount > 0 ? discountEligibleAmount * 0.1 : 0;
 
   return (
     <Layout>
@@ -1186,13 +1187,17 @@ const Bestellungen = () => {
                         </svg>
                       </button>
                     </div>
-                  ) : (
-                    item.discountEligible && (
-                      <span className="text-green-600 text-sm font-medium">
-                        Bonusberechtigt
-                      </span>
-                    )
-                  )}
+                  ) : item.discountEligible &&
+                    (item.priceSubtotalIncl || 0) > 0 ? (
+                    <span className="text-green-600 text-sm font-medium">
+                      Bonusberechtigt
+                    </span>
+                  ) : (item.priceSubtotalIncl || 0) < 0 ||
+                    (item.priceUnit || 0) < 0 ? (
+                    <span className="text-red-500 text-sm font-medium">
+                      Nicht bonusberechtigt
+                    </span>
+                  ) : null}
                 </div>
                 <p className="text-sm text-gray-600 mt-2">
                   Farbe: {item.color || "-"} | Material: {item.material || "-"}

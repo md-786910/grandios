@@ -6,15 +6,18 @@ const Order = require('../models/Order');
 const AppSettings = require('../models/AppSettings');
 
 // Helper to check if an item is eligible for bonus calculation
-// Excludes: items marked as not eligible, Sale items (with existing discount), and vouchers
+// Excludes: items marked as not eligible, Sale items (with existing discount), vouchers,
+// negative amounts (discounts), and "Bonus Kundenkarte" products
 function isItemEligibleForBonus(item) {
   // Must be discount eligible
   if (!item.discountEligible) return false;
+  // Exclude items with negative amounts (discount lines)
+  if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0) return false;
   // Exclude items with existing discounts (Sale items)
   if (item.discount && item.discount > 0) return false;
-  // Exclude vouchers (check product name)
+  // Exclude vouchers and Bonus Kundenkarte (check product name)
   const name = (item.productName || '').toLowerCase();
-  if (name.includes('gutschein') || name.includes('voucher') || name.includes('gift')) return false;
+  if (name.includes('gutschein') || name.includes('voucher') || name.includes('gift') || name.includes('bonus kundenkarte')) return false;
   return true;
 }
 
