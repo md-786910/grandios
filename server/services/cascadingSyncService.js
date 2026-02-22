@@ -178,7 +178,11 @@ async function syncCustomerOrders(customer, partnerId) {
   for (const wawiOrder of orders) {
     try {
       // Sync order
+      if (wawiOrder.pos_reference !== "K2509000401/26-000337") {
+        continue;
+      }
 
+      console.log({ wawiOrder });
       // if (wawiOrder.amount_total > 0) {
       const order = await upsertOrder(wawiOrder, customer._id);
       cascadeStatus.progress.orders++;
@@ -236,10 +240,6 @@ async function syncOrderLinesWithProducts(lineIds, order) {
   cascadeStatus.currentStep = "orderLines";
   for (const line of lines) {
     try {
-      const discount = line.discount || 0;
-      if (discount > 0) {
-        continue; // Skip syncing this line - it's a discount line, not a product line
-      }
       const orderLine = await upsertOrderLine(line, order);
       orderLineIds.push(orderLine._id);
       cascadeStatus.progress.orderLines++;

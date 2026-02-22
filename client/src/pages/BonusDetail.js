@@ -1691,7 +1691,7 @@ const BonusDetail = () => {
         {/* Notizen - spans full height */}
         <div className="flex-1 bg-white rounded-xl border border-gray-200 p-6 flex flex-col">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Notizen Hinzufügen</h3>
+            <h3 className="font-semibold text-gray-900">Notizen hinzufügen</h3>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {

@@ -242,7 +242,7 @@ const Dashboard = () => {
                     onClick={() => navigate(`/bestellungen/${order._id}`)}
                     className="px-4 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm"
                   >
-                    Mehr Anzeigen
+                    Mehr anzeigen
                   </button>
                 </div>
               </div>
