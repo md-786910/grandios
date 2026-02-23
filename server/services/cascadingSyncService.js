@@ -178,9 +178,9 @@ async function syncCustomerOrders(customer, partnerId) {
   for (const wawiOrder of orders) {
     try {
       // Sync order
-      if (wawiOrder.pos_reference !== "K2509000401/26-000337") {
-        continue;
-      }
+      // if (wawiOrder.pos_reference !== "K2211304601/25-000185") {
+      //   continue;
+      // }
 
       console.log({ wawiOrder });
       // if (wawiOrder.amount_total > 0) {
