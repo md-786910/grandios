@@ -46,24 +46,27 @@ const Bestellungen = () => {
   const [itemsPerPage] = useState(10);
   const [totalOrders, setTotalOrders] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [debouncedSearch, setDebouncedSearch] = useState(
-    () => (searchParams.get("search") || "").trim(),
+  const [debouncedSearch, setDebouncedSearch] = useState(() =>
+    (searchParams.get("search") || "").trim(),
   );
 
   // Helper to update URL params
-  const updateParams = useCallback((updates) => {
-    setSearchParams((prev) => {
-      const newParams = new URLSearchParams(prev);
-      Object.entries(updates).forEach(([key, value]) => {
-        if (value === null || value === undefined || value === "") {
-          newParams.delete(key);
-        } else {
-          newParams.set(key, String(value));
-        }
+  const updateParams = useCallback(
+    (updates) => {
+      setSearchParams((prev) => {
+        const newParams = new URLSearchParams(prev);
+        Object.entries(updates).forEach(([key, value]) => {
+          if (value === null || value === undefined || value === "") {
+            newParams.delete(key);
+          } else {
+            newParams.set(key, String(value));
+          }
+        });
+        return newParams;
       });
-      return newParams;
-    });
-  }, [setSearchParams]);
+    },
+    [setSearchParams],
+  );
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -1199,16 +1202,16 @@ const Bestellungen = () => {
                       </button>
                     </div>
                   ) : item.discountEligible &&
+                    Number(item.discount) === 0 &&
                     (item.priceSubtotalIncl || 0) > 0 ? (
                     <span className="text-green-600 text-sm font-medium">
                       Bonusberechtigt
                     </span>
-                  ) : (item.priceSubtotalIncl || 0) < 0 ||
-                    (item.priceUnit || 0) < 0 ? (
+                  ) : (
                     <span className="text-red-500 text-sm font-medium">
                       Nicht bonusberechtigt
                     </span>
-                  ) : null}
+                  )}
                 </div>
                 <p className="text-sm text-gray-600 mt-2">
                   Farbe: {item.color || "-"} | Material: {item.material || "-"}
