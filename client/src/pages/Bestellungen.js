@@ -1106,7 +1106,7 @@ const Bestellungen = () => {
           {/* Total Without Sales Items */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center">
             <h3 className="font-semibold text-gray-900 mb-4">
-              Einkäufe gesamt ohne Verkaufsartikel
+              Einkäufe gesamt ohne Verkaufsartikel/Bonus
             </h3>
             <p className="text-3xl font-bold text-gray-900">
               € {formatCurrency(discountEligibleAmount)}
