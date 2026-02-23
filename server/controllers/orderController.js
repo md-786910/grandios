@@ -22,28 +22,34 @@ exports.getOrders = async (req, res, next) => {
       filter.customerId = req.query.customerId;
     }
 
-    // Search filter (order number)
+    // Search filter: match posReference OR customer name/contactId/ref
     if (search) {
+      // Find matching customer IDs first
+      // contactId is Number, so only match it when search is a valid integer
+      const customerOrConditions = [
+        { name: { $regex: search, $options: 'i' } },
+        { ref: { $regex: search, $options: 'i' } },
+      ];
+      const searchAsNumber = parseInt(search, 10);
+      if (!isNaN(searchAsNumber)) {
+        customerOrConditions.push({ contactId: searchAsNumber });
+      }
+      const matchingCustomers = await Customer.find({
+        $or: customerOrConditions
+      }).select('_id');
+
+      const matchingCustomerIds = matchingCustomers.map(c => c._id);
+
       filter.$or = [
-        { posReference: { $regex: search, $options: 'i' } }
+        { posReference: { $regex: search, $options: 'i' } },
+        ...(matchingCustomerIds.length > 0 ? [{ customerId: { $in: matchingCustomerIds } }] : []),
       ];
     }
 
-    // First get orders with basic filter
+    // Fetch orders with filter
     let orders = await Order.find(filter)
       .populate('customerId', 'name email ref contactId')
       .sort({ orderDate: -1 });
-
-    // If searching, also filter by customer name
-    if (search) {
-      const searchLower = search.toLowerCase();
-      orders = orders.filter(order =>
-        order.posReference?.toLowerCase().includes(searchLower) ||
-        order.customerId?.name?.toLowerCase().includes(searchLower) ||
-        order.customerId?.ref?.toLowerCase().includes(searchLower) ||
-        order.customerId?.contactId?.toLowerCase().includes(searchLower)
-      );
-    }
 
     // Get discount status for all orders
     const orderIds = orders.map(o => o._id);

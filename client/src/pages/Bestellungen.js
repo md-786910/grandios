@@ -20,7 +20,9 @@ const Bestellungen = () => {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(
+    () => searchParams.get("search") || "",
+  );
   const [generatingData, setGeneratingData] = useState(false);
   const [testMessage, setTestMessage] = useState({ type: "", text: "" });
   const [showTestMenu, setShowTestMenu] = useState(false);
@@ -39,14 +41,17 @@ const Bestellungen = () => {
   // URL-based params
   const currentPage = parseInt(searchParams.get("page") || "1", 10);
   const statusFilter = searchParams.get("status") || "";
+  const urlSearch = searchParams.get("search") || "";
 
   const [itemsPerPage] = useState(10);
   const [totalOrders, setTotalOrders] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState(
+    () => (searchParams.get("search") || "").trim(),
+  );
 
   // Helper to update URL params
-  const updateParams = (updates) => {
+  const updateParams = useCallback((updates) => {
     setSearchParams((prev) => {
       const newParams = new URLSearchParams(prev);
       Object.entries(updates).forEach(([key, value]) => {
@@ -58,7 +63,7 @@ const Bestellungen = () => {
       });
       return newParams;
     });
-  };
+  }, [setSearchParams]);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -317,22 +322,34 @@ const Bestellungen = () => {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = Math.min(startIndex + itemsPerPage, totalOrders);
 
-  // Debounce search term
+  // Debounce search term — sync to URL (like Bonus.js)
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-      if (searchTerm && currentPage !== 1) {
-        updateParams({ page: 1 });
+      const normalizedSearch = searchTerm.trim();
+      setDebouncedSearch(normalizedSearch);
+
+      const hasSearchChanged = normalizedSearch !== urlSearch.trim();
+      if (hasSearchChanged || (normalizedSearch && currentPage !== 1)) {
+        updateParams({ search: normalizedSearch || null, page: 1 });
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchTerm]);
+  }, [searchTerm, urlSearch, currentPage, updateParams]);
+
+  // Keep input in sync with URL (back/forward navigation)
+  useEffect(() => {
+    setSearchTerm((prev) => (prev === urlSearch ? prev : urlSearch));
+    setDebouncedSearch((prev) =>
+      prev === urlSearch.trim() ? prev : urlSearch.trim(),
+    );
+  }, [urlSearch]);
 
   // Reset to page 1 when filter changes
   useEffect(() => {
     if (currentPage !== 1) {
       updateParams({ page: 1 });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
   const handlePrevPage = () => {
@@ -416,34 +433,6 @@ const Bestellungen = () => {
     setIsEditMode(false);
   };
 
-  if (loading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center py-12">
-          <svg
-            className="animate-spin h-8 w-8 text-gray-400"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-              fill="none"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-        </div>
-      </Layout>
-    );
-  }
-
   // Orders List View (when no ID)
   if (!id) {
     return (
@@ -474,7 +463,7 @@ const Bestellungen = () => {
             <div className="relative">
               <input
                 type="text"
-                placeholder="Einkaufsnr., Kunde suchen..."
+                placeholder="Einkaufsnr., Kundenname, Kundennr. suchen..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full max-w-xs pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm"
@@ -749,7 +738,29 @@ const Bestellungen = () => {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-          {paginatedOrders.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <svg
+                className="animate-spin h-8 w-8 text-gray-400"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            </div>
+          ) : paginatedOrders.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               Keine Einkäufe gefunden
             </div>
