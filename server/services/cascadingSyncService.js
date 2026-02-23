@@ -178,6 +178,7 @@ async function syncCustomerOrders(customer, partnerId) {
   for (const wawiOrder of orders) {
     try {
       // Sync order
+
       // if (wawiOrder.pos_reference !== "K2211304601/25-000185") {
       //   continue;
       // }
