@@ -36,7 +36,7 @@ const Bonus = () => {
   const [itemsPerPage] = useState(10);
 
   // Helper to update URL params
-  const updateParams = (updates) => {
+  const updateParams = useCallback((updates) => {
     setSearchParams((prev) => {
       const newParams = new URLSearchParams(prev);
       Object.entries(updates).forEach(([key, value]) => {
@@ -48,7 +48,7 @@ const Bonus = () => {
       });
       return newParams;
     });
-  };
+  }, [setSearchParams]);
 
   // Debounce search term
   useEffect(() => {
@@ -66,7 +66,7 @@ const Bonus = () => {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchTerm, urlSearch, currentPage]);
+  }, [searchTerm, urlSearch, currentPage, updateParams]);
 
   // Keep input state in sync with route changes (back/forward navigation)
   useEffect(() => {
@@ -204,7 +204,7 @@ const Bonus = () => {
             Gesamtzahl der Kunden
           </h3>
           <p className="text-center text-3xl font-bold text-gray-900">
-            {formatCurrency(stats.totalCustomers + 1000)}
+            {formatCurrency(stats.totalCustomers)}
           </p>
         </div>
 
