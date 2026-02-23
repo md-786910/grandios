@@ -966,7 +966,10 @@ const Bestellungen = () => {
             line.priceSubtotalIncl || line.priceUnit * line.quantity,
           quantity: line.quantity || 1,
           discount: line.discount || 0,
-          discountEligible: line.discountEligible !== false,
+          discountEligible:
+            line?.discount === 0 &&
+            line.fullProductName !== "Bonus Kundenkarte",
+          // discountEligible: line.discountEligible !== false,
           image: line.productRef?.image || null,
           color:
             line.productRef?.attributeValues?.find(
@@ -987,9 +990,17 @@ const Bestellungen = () => {
       sum + (item.priceSubtotalIncl || item.priceUnit) * (item.quantity || 1),
     0,
   );
+
+  // const totalPurchaseAmountExcudingSalesItems
   const discountValue =
     discountEligibleAmount > 0 ? discountEligibleAmount * 0.1 : 0;
-
+  // console.log({
+  //   discountEligibleItems,
+  //   discountEligibleAmount,
+  //   discountValue,
+  //   a: selectedOrder.orderLines,
+  //   selectedOrder,
+  // });
   return (
     <Layout>
       {/* Header with Order Number and Back Button */}

@@ -183,7 +183,7 @@ async function syncCustomerOrders(customer, partnerId) {
       //   continue;
       // }
 
-      console.log({ wawiOrder });
+      // console.log({ wawiOrder });
       // if (wawiOrder.amount_total > 0) {
       const order = await upsertOrder(wawiOrder, customer._id);
       cascadeStatus.progress.orders++;
