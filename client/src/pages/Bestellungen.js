@@ -868,7 +868,8 @@ const Bestellungen = () => {
           {/* Total Order Value */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center">
             <h3 className="font-semibold text-gray-900 mb-4">
-              Einkäufe gesamt
+              {/* Einkäufe gesamt */}
+              Rechnungssumme
             </h3>
             <p className="text-3xl font-bold text-gray-900">
               € {formatCurrency(selectedOrder.amountTotal)}
@@ -877,9 +878,10 @@ const Bestellungen = () => {
 
           {/* Total Without Sales Items */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center">
-            <h3 className="font-semibold text-gray-900 mb-4">
-              Einkäufe gesamt ohne Verkaufsartikel/Bonus
+            <h3 className="font-semibold text-gray-900">
+              Einkäufe gesamt
             </h3>
+            <p className="text-xs text-gray-400 mb-4">(ohne Sale-Artikel und Bonus)</p>
             <p className="text-3xl font-bold text-gray-900">
               € {formatCurrency(discountEligibleAmount)}
             </p>
