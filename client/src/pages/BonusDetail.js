@@ -1183,7 +1183,7 @@ const BonusDetail = () => {
 
                   return (
                     <div
-                      key={index}
+                      key={item.orders.join("-") || `item-${index}`}
                       className="grid grid-cols-[60px_1fr_1fr_100px_80px] bg-white hover:bg-gray-50"
                     >
                       <div className="p-3 flex items-center justify-center border-r border-gray-100">
@@ -1261,7 +1261,10 @@ const BonusDetail = () => {
 
                 // For bundles (multiple orders grouped with "Als Gruppe")
                 return (
-                  <div key={index} className="bg-white">
+                  <div
+                    key={item.orders.join("-") || `item-${index}`}
+                    className="bg-white"
+                  >
                     {/* Collapsed bundle header */}
                     <div
                       className={`grid grid-cols-[60px_1fr_1fr_100px_80px] cursor-pointer hover:bg-amber-50 transition-colors ${
@@ -3817,7 +3820,7 @@ const BonusDetail = () => {
         isOpen={!!redeemGroupId}
         onClose={() => setRedeemGroupId(null)}
         onConfirm={confirmRedeemGroup}
-        title="RABATT EINLÖSEN"
+        title="BONUS EINLÖSEN"
         message="Möchten Sie diesen Bonus wirklich einlösen? Diese Aktion kann nicht rückgängig gemacht werden."
         confirmText="Ja, einlösen"
         cancelText="Abbrechen"
@@ -3828,7 +3831,7 @@ const BonusDetail = () => {
         isOpen={redeemOldGroupIndex !== null}
         onClose={() => setRedeemOldGroupIndex(null)}
         onConfirm={confirmRedeemOldGroup}
-        title="ALTEN RABATT EINLÖSEN"
+        title="BONUS EINLÖSEN"
         message="Möchten Sie diesen alten Bonus wirklich einlösen? Diese Aktion kann nicht rückgängig gemacht werden."
         confirmText="Ja, einlösen"
         cancelText="Abbrechen"
@@ -3860,7 +3863,7 @@ const BonusDetail = () => {
           }
           setCreateGroupConfirm({ open: false, mode: null });
         }}
-        title="RABATTGRUPPE ERSTELLEN"
+        title="BONUSGRUPPE ERSTELLEN"
         message="Möchten Sie diese Bonusgruppe erstellen?"
         confirmText="Ja, erstellen"
         cancelText="Abbrechen"
