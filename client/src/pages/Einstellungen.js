@@ -10,13 +10,13 @@ const Einstellungen = () => {
     email: "",
     notifications: {
       emailOnNewOrders: true,
-      dailySummary: false
+      dailySummary: false,
     },
     discount: {
       discountRate: 10,
       ordersRequiredForDiscount: 3,
-      autoCreateDiscount: true
-    }
+      autoCreateDiscount: true,
+    },
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -32,8 +32,8 @@ const Einstellungen = () => {
             discount: response.data.data.discount || {
               discountRate: 10,
               ordersRequiredForDiscount: 3,
-              autoCreateDiscount: true
-            }
+              autoCreateDiscount: true,
+            },
           });
         }
       } catch (error) {
@@ -57,7 +57,10 @@ const Einstellungen = () => {
         }
       }
     } catch (error) {
-      setMessage({ type: "error", text: "Fehler beim Speichern der Einstellungen" });
+      setMessage({
+        type: "error",
+        text: "Fehler beim Speichern der Einstellungen",
+      });
       console.error("Failed to save settings:", error);
     } finally {
       setSaving(false);
@@ -68,9 +71,24 @@ const Einstellungen = () => {
     return (
       <Layout>
         <div className="flex items-center justify-center py-12">
-          <svg className="animate-spin h-8 w-8 text-gray-400" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          <svg
+            className="animate-spin h-8 w-8 text-gray-400"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+              fill="none"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
           </svg>
         </div>
       </Layout>
@@ -85,11 +103,13 @@ const Einstellungen = () => {
       </div>
 
       {message.text && (
-        <div className={`mb-6 p-4 rounded-lg ${
-          message.type === "success"
-            ? "bg-green-50 border border-green-200 text-green-700"
-            : "bg-red-50 border border-red-200 text-red-700"
-        }`}>
+        <div
+          className={`mb-6 p-4 rounded-lg ${
+            message.type === "success"
+              ? "bg-green-50 border border-green-200 text-green-700"
+              : "bg-red-50 border border-red-200 text-red-700"
+          }`}
+        >
           {message.text}
         </div>
       )}
@@ -108,7 +128,9 @@ const Einstellungen = () => {
               <input
                 type="text"
                 value={settings.name}
-                onChange={(e) => setSettings({ ...settings, name: e.target.value })}
+                onChange={(e) =>
+                  setSettings({ ...settings, name: e.target.value })
+                }
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
               />
             </div>
@@ -119,7 +141,9 @@ const Einstellungen = () => {
               <input
                 type="email"
                 value={settings.email}
-                onChange={(e) => setSettings({ ...settings, email: e.target.value })}
+                onChange={(e) =>
+                  setSettings({ ...settings, email: e.target.value })
+                }
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
               />
             </div>
@@ -127,7 +151,7 @@ const Einstellungen = () => {
         </div>
 
         {/* Discount Settings */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        {/* <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Bonus Einstellungen
           </h2>
@@ -177,7 +201,7 @@ const Einstellungen = () => {
               </p>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Notification Settings */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -192,13 +216,15 @@ const Einstellungen = () => {
               <input
                 type="checkbox"
                 checked={settings.notifications?.emailOnNewOrders || false}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  notifications: {
-                    ...settings.notifications,
-                    emailOnNewOrders: e.target.checked
-                  }
-                })}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    notifications: {
+                      ...settings.notifications,
+                      emailOnNewOrders: e.target.checked,
+                    },
+                  })
+                }
                 className="w-5 h-5 text-gray-900 border-gray-300 rounded focus:ring-gray-900"
               />
             </label>
@@ -209,13 +235,15 @@ const Einstellungen = () => {
               <input
                 type="checkbox"
                 checked={settings.notifications?.dailySummary || false}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  notifications: {
-                    ...settings.notifications,
-                    dailySummary: e.target.checked
-                  }
-                })}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    notifications: {
+                      ...settings.notifications,
+                      dailySummary: e.target.checked,
+                    },
+                  })
+                }
                 className="w-5 h-5 text-gray-900 border-gray-300 rounded focus:ring-gray-900"
               />
             </label>
