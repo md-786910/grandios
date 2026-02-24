@@ -664,14 +664,14 @@ const BonusDetail = () => {
     try {
       await discountsAPI.deleteGroup(id, deleteGroupId);
       setMessage({ type: "success", text: "Bonusgruppe gelöscht!" });
-      toast.success("Bonusgruppe gelöscht.");
+      toast.success("Bonusgruppe bearbeitet.");
       setDeleteGroupId(null);
       await fetchData();
     } catch (error) {
-      console.error("Failed to delete group:", error);
+      console.error("Failed to edit group:", error);
       setMessage({
         type: "error",
-        text: error.message || "Fehler beim Löschen",
+        text: error.message || "Fehler beim Bearbeiten",
       });
       setDeleteGroupId(null);
     }
@@ -2469,13 +2469,14 @@ const BonusDetail = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleStartEditGroup(group);
+                                // handleStartEditGroup(group);
+                                handleDeleteGroup(group._id);
                               }}
                               className="flex-1 px-2 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-xs hover:bg-[#22c55e] hover:text-white hover:border-none transition-all ease-in-out duration-300 font-medium"
                             >
                               Bearbeiten
                             </button>
-                            <button
+                            {/* <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteGroup(group._id);
@@ -2496,7 +2497,7 @@ const BonusDetail = () => {
                                   d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                                 />
                               </svg>
-                            </button>
+                            </button> */}
                           </div>
                         )}
 
@@ -3805,9 +3806,9 @@ const BonusDetail = () => {
         isOpen={!!deleteGroupId}
         onClose={() => setDeleteGroupId(null)}
         onConfirm={confirmDeleteGroup}
-        title="RABATTGRUPPE LÖSCHEN"
-        message="Möchten Sie diese Bonusgruppe wirklich löschen? Die Einkäufe werden wieder verfügbar."
-        confirmText="Ja, löschen"
+        title="BONUS BEARBEITEN"
+        message="Möchten Sie diese Bonusgruppe wirklich bearbeiten?"
+        confirmText="Ja, bearbeiten"
         cancelText="Abbrechen"
       />
 
