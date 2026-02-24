@@ -750,6 +750,7 @@ const Bestellungen = () => {
           quantity: line.quantity || 1,
           discount: line.discount || 0,
           discountEligible:
+            line.priceSubtotalIncl > 0 &&
             line?.discount === 0 &&
             line.fullProductName !== "Bonus Kundenkarte",
           // discountEligible: line.discountEligible !== false,
@@ -768,6 +769,8 @@ const Bestellungen = () => {
   const discountEligibleItems = orderItems.filter(
     (item) => item.discountEligible,
   );
+
+  console.log(discountEligibleItems);
   const discountEligibleAmount = discountEligibleItems.reduce(
     (sum, item) =>
       sum + (item.priceSubtotalIncl || item.priceUnit) * (item.quantity || 1),
@@ -878,10 +881,10 @@ const Bestellungen = () => {
 
           {/* Total Without Sales Items */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center">
-            <h3 className="font-semibold text-gray-900">
-              Einkäufe gesamt
-            </h3>
-            <p className="text-xs text-gray-400 mb-4">(ohne Sale-Artikel und Bonus)</p>
+            <h3 className="font-semibold text-gray-900">Einkäufe gesamt</h3>
+            <p className="text-xs text-gray-400 mb-4">
+              (ohne Sale-Artikel und Bonus)
+            </p>
             <p className="text-3xl font-bold text-gray-900">
               € {formatCurrency(discountEligibleAmount)}
             </p>
