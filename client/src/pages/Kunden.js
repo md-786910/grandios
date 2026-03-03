@@ -301,12 +301,12 @@ const Kunden = () => {
                       <SortIcon field="customerNumber" />
                     </div>
                   </th>
-                  <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
+                  {/* <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
                     Telefon
                   </th>
                   <th className="text-left px-6 py-4 text-sm font-semibold text-gray-900">
                     Stadt
-                  </th>
+                  </th> */}
                   {/* <th
                   className="text-left px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-50"
                   onClick={() => handleSort("wallet")}
@@ -370,12 +370,12 @@ const Kunden = () => {
                     <td className="px-6 py-4 text-sm text-gray-600">
                       {customer.contactId || customer?.ref || "-"}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
+                    {/* <td className="px-6 py-4 text-sm text-gray-900">
                       {customer.phone || customer.mobile || "-"}
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
                       {customer.address?.city || "-"}
-                    </td>
+                    </td> */}
                     <td className="px-6 py-4">
                       {(() => {
                         const redeemable = customer.redeemableBonus || 0;
