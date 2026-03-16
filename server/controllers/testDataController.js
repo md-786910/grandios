@@ -3,7 +3,7 @@ const Order = require("../models/Order");
 
 // Default product image from WAWI
 const DEFAULT_PRODUCT_IMAGE =
-  "https://46e2edf3b8.wawi.onretail.eu/web/image/product.template/472/image_256";
+  "https://75ea8d4d59.wawi.onretail.eu/web/image/product.template/472/image_256";
 
 // Sample product data for generating test orders (using picsum.photos for realistic product images)
 const sampleProducts = [
