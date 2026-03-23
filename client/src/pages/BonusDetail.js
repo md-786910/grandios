@@ -1134,7 +1134,8 @@ const BonusDetail = () => {
                 }}
                 className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
               >
-                Alle löschen
+                {/* Alle löschen */}
+                Gruppierung aufheben
               </button>
             </div>
           </div>
