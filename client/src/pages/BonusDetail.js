@@ -3910,7 +3910,7 @@ const BonusDetail = () => {
           setSelectedDiscountItems([]);
           setClearAllConfirm(false);
         }}
-        title="ALLE LÖSCHEN"
+        title="Gruppierung aufheben"
         message="Möchten Sie wirklich alle Bonus-Positionen entfernen? Diese Aktion kann nicht rückgängig gemacht werden."
         confirmText="Ja, löschen"
         cancelText="Abbrechen"
