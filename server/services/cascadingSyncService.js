@@ -166,40 +166,46 @@ async function syncCustomerWithRelatedData(contactId) {
  * Sync all orders for a customer
  */
 async function syncCustomerOrders(customer, partnerId) {
-  const ordersResult = await wawiApiClient.searchRead("pos.order", {
-    fields: ORDER_FIELDS,
-    domain: [["partner_id", "=", partnerId]],
-    order: "date_order desc",
-  });
-
-  const orders = ordersResult.data || [];
+  const batchSize = 20;
+  let offset = 0;
+  let hasMore = true;
   const syncedOrders = [];
 
-  for (const wawiOrder of orders) {
-    try {
-      // Sync order
+  while (hasMore) {
+    const ordersResult = await wawiApiClient.searchRead("pos.order", {
+      fields: ORDER_FIELDS,
+      domain: [["partner_id", "=", partnerId]],
+      order: "date_order desc",
+      limit: batchSize,
+      offset,
+    });
 
-      // if (wawiOrder.pos_reference !== "K2211304601/25-000185") {
-      //   continue;
-      // }
+    const orders = ordersResult.data || [];
+    if (orders.length === 0) {
+      break;
+    }
 
-      // console.log({ wawiOrder });
-      // if (wawiOrder.amount_total > 0) {
-      const order = await upsertOrder(wawiOrder, customer._id);
-      cascadeStatus.progress.orders++;
+    for (const wawiOrder of orders) {
+      try {
+        const order = await upsertOrder(wawiOrder, customer._id);
+        cascadeStatus.progress.orders++;
 
-      // Sync order lines and products
-      if (wawiOrder.lines && wawiOrder.lines.length > 0) {
-        await syncOrderLinesWithProducts(wawiOrder.lines, order);
+        if (wawiOrder.lines && wawiOrder.lines.length > 0) {
+          await syncOrderLinesWithProducts(wawiOrder.lines, order);
+        }
+        syncedOrders.push(order);
+      } catch (err) {
+        console.error(
+          `[CascadeSync] Error syncing order ${wawiOrder.id}:`,
+          err.message,
+        );
+        cascadeStatus.errors.push({ orderId: wawiOrder.id, error: err.message });
       }
-      syncedOrders.push(order);
-      // }
-    } catch (err) {
-      console.error(
-        `[CascadeSync] Error syncing order ${wawiOrder.id}:`,
-        err.message,
-      );
-      cascadeStatus.errors.push({ orderId: wawiOrder.id, error: err.message });
+    }
+
+    offset += orders.length;
+    if (orders.length < batchSize) {
+      hasMore = false;
     }
   }
 

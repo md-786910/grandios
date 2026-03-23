@@ -83,8 +83,12 @@ class WawiApiClient {
 
       // Handle 429 (rate limit) or 5xx errors with retry
       if ((response.status === 429 || response.status >= 500) && retryCount < this.maxRetries) {
-        console.log(`[WawiApiClient] ${response.status} received, retrying (attempt ${retryCount + 1}/${this.maxRetries})...`);
-        await this.sleep(this.retryDelay * (retryCount + 1));
+        // Use longer delays for 504 Gateway Timeout (server overloaded)
+        const delay = response.status === 504
+          ? 3000 * (retryCount + 1)
+          : this.retryDelay * (retryCount + 1);
+        console.log(`[WawiApiClient] ${response.status} received, retrying in ${delay}ms (attempt ${retryCount + 1}/${this.maxRetries})...`);
+        await this.sleep(delay);
         return this.request(endpoint, options, retryCount + 1);
       }
 

@@ -231,7 +231,8 @@ const BonusDetail = () => {
       setTimeout(() => setSyncResult(null), 5000);
     } catch (error) {
       console.error("Failed to sync customer orders:", error);
-      setSyncResult({ error: true });
+      const errorMessage = error.response?.data?.message || "Fehler beim Synchronisieren";
+      setSyncResult({ error: true, errorMessage });
       setTimeout(() => setSyncResult(null), 5000);
     } finally {
       setSyncing(false);
@@ -973,7 +974,7 @@ const BonusDetail = () => {
                 />
               </svg>
               <span className="font-medium text-sm">
-                Fehler beim Synchronisieren
+                {syncResult.errorMessage || "Fehler beim Synchronisieren"}
               </span>
             </>
           ) : syncResult.newOrdersCount > 0 ? (
