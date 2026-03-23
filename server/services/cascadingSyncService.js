@@ -82,6 +82,9 @@ const PRODUCT_FIELDS = [
   "image_512",
 ];
 
+// Lightweight fields without image_512 for per-customer sync (faster, avoids 504)
+const PRODUCT_FIELDS_LIGHT = PRODUCT_FIELDS.filter(f => f !== "image_512");
+
 const ATTRIBUTE_FIELDS = [
   "id",
   "name",
@@ -166,7 +169,7 @@ async function syncCustomerWithRelatedData(contactId) {
  * Sync all orders for a customer
  */
 async function syncCustomerOrders(customer, partnerId) {
-  const batchSize = 20;
+  const batchSize = 5;
   let offset = 0;
   let hasMore = true;
   const syncedOrders = [];

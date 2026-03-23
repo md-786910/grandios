@@ -47,6 +47,9 @@ class WawiApiClient {
 
     const url = `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
     try {
       const authHeader = await wawiOAuth.getAuthHeader();
 
@@ -58,6 +61,7 @@ class WawiApiClient {
 
       const config = {
         ...options,
+        signal: controller.signal,
         headers: {
           ...defaultHeaders,
           ...options.headers,
@@ -65,6 +69,7 @@ class WawiApiClient {
       };
 
       const response = await fetch(url, config);
+      clearTimeout(timeoutId);
 
       // Handle 401 - token expired, refresh and retry
       if (response.status === 401) {
@@ -94,6 +99,16 @@ class WawiApiClient {
 
       return this.handleResponse(response);
     } catch (error) {
+      clearTimeout(timeoutId);
+      // Timeout via AbortController
+      if (error.name === 'AbortError') {
+        if (retryCount < this.maxRetries) {
+          console.log(`[WawiApiClient] Request timeout (30s), retrying (attempt ${retryCount + 1}/${this.maxRetries})...`);
+          await this.sleep(3000 * (retryCount + 1));
+          return this.request(endpoint, options, retryCount + 1);
+        }
+        throw new Error('WAWI API request timed out after 30s (max retries reached)');
+      }
       // Network errors - retry
       if (retryCount < this.maxRetries && (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.message.includes('fetch'))) {
         console.log(`[WawiApiClient] Network error, retrying (attempt ${retryCount + 1}/${this.maxRetries})...`);
