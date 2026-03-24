@@ -231,7 +231,8 @@ const BonusDetail = () => {
       setTimeout(() => setSyncResult(null), 5000);
     } catch (error) {
       console.error("Failed to sync customer orders:", error);
-      const errorMessage = error.response?.data?.message || "Fehler beim Synchronisieren";
+      const errorMessage =
+        error.response?.data?.message || "Fehler beim Synchronisieren";
       setSyncResult({ error: true, errorMessage });
       setTimeout(() => setSyncResult(null), 5000);
     } finally {
@@ -3912,8 +3913,8 @@ const BonusDetail = () => {
           setClearAllConfirm(false);
         }}
         title="Gruppierung aufheben"
-        message="Möchten Sie wirklich alle Bonus-Positionen entfernen? Diese Aktion kann nicht rückgängig gemacht werden."
-        confirmText="Ja, löschen"
+        message="Möchten Sie die Gruppierung wirklich aufheben? Dieser Vorgang kann nicht rückgängig gemacht werden."
+        confirmText="Ja"
         cancelText="Abbrechen"
       />
 
