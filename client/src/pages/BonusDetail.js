@@ -224,8 +224,8 @@ const BonusDetail = () => {
     setSyncResult(null);
     try {
       const response = await discountsAPI.syncCustomerOrders(id);
-      const { newOrdersCount, totalOrders } = response.data.data;
-      setSyncResult({ newOrdersCount, totalOrders });
+      const { newOrdersCount, totalOrders, newDiscountGroups } = response.data.data;
+      setSyncResult({ newOrdersCount, totalOrders, newDiscountGroups });
       await fetchData();
       // Auto-hide result after 5 seconds
       setTimeout(() => setSyncResult(null), 5000);
@@ -954,7 +954,7 @@ const BonusDetail = () => {
       {!syncing && syncResult && (
         <div
           className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 ${
-            syncResult.error || syncResult.newOrdersCount === 0
+            syncResult.error || (syncResult.newOrdersCount === 0 && !syncResult.newDiscountGroups)
               ? "bg-red-600 text-white"
               : "bg-green-600 text-white"
           }`}
@@ -978,9 +978,11 @@ const BonusDetail = () => {
                 {syncResult.errorMessage || "Fehler beim Synchronisieren"}
               </span>
             </>
-          ) : syncResult.newOrdersCount > 0 ? (
+          ) : syncResult.newOrdersCount > 0 || syncResult.newDiscountGroups > 0 ? (
             <span className="font-medium text-sm">
-              {syncResult.newOrdersCount} neue Einkäufe gefunden
+              {syncResult.newOrdersCount > 0 && `${syncResult.newOrdersCount} neue Einkäufe gefunden`}
+              {syncResult.newOrdersCount > 0 && syncResult.newDiscountGroups > 0 && ", "}
+              {syncResult.newDiscountGroups > 0 && `${syncResult.newDiscountGroups} Bonusgruppe${syncResult.newDiscountGroups > 1 ? "n" : ""} erstellt`}
             </span>
           ) : (
             <span className="font-medium text-sm">Keine neuen Einkäufe</span>
@@ -2239,9 +2241,30 @@ const BonusDetail = () => {
                                 }
                               });
 
-                              // Sort by bundleIndex to maintain order
+                              // Sort orders within each bundle by date (newest first)
+                              Object.values(bundleMap).forEach((bOrders) =>
+                                bOrders.sort(
+                                  (a, b) =>
+                                    new Date(b.orderDate) -
+                                    new Date(a.orderDate),
+                                ),
+                              );
+
+                              // Sort bundles by newest order date (newest first)
                               const bundles = Object.entries(bundleMap).sort(
-                                ([a], [b]) => Number(a) - Number(b),
+                                ([, aOrders], [, bOrders]) => {
+                                  const aLatest = Math.max(
+                                    ...aOrders.map(
+                                      (o) => new Date(o.orderDate || 0),
+                                    ),
+                                  );
+                                  const bLatest = Math.max(
+                                    ...bOrders.map(
+                                      (o) => new Date(o.orderDate || 0),
+                                    ),
+                                  );
+                                  return bLatest - aLatest;
+                                },
                               );
 
                               return bundles.map(
@@ -3253,8 +3276,30 @@ const BonusDetail = () => {
                                 }
                               });
 
+                              // Sort orders within each bundle by date (newest first)
+                              Object.values(bundleMap).forEach((bOrders) =>
+                                bOrders.sort(
+                                  (a, b) =>
+                                    new Date(b.orderDate) -
+                                    new Date(a.orderDate),
+                                ),
+                              );
+
+                              // Sort bundles by newest order date (newest first)
                               const bundles = Object.entries(bundleMap).sort(
-                                ([a], [b]) => Number(a) - Number(b),
+                                ([, aOrders], [, bOrders]) => {
+                                  const aLatest = Math.max(
+                                    ...aOrders.map(
+                                      (o) => new Date(o.orderDate || 0),
+                                    ),
+                                  );
+                                  const bLatest = Math.max(
+                                    ...bOrders.map(
+                                      (o) => new Date(o.orderDate || 0),
+                                    ),
+                                  );
+                                  return bLatest - aLatest;
+                                },
                               );
 
                               return bundles.map(

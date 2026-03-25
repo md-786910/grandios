@@ -1,11 +1,17 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const connectDB = require("./config/db");
-const { startScheduler } = require("./services/scheduler");
 
 // Load env vars
 dotenv.config({});
+if (process.env.DNS_FIX) {
+  const dns = require("dns");
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+  dns.setDefaultResultOrder("ipv4first");
+}
+
+const connectDB = require("./config/db");
+const { startScheduler } = require("./services/scheduler");
 
 // Connect to database
 connectDB();
@@ -25,7 +31,7 @@ app.use(
   cors({
     origin: allowedOrigins,
     credentials: true,
-  })
+  }),
 );
 app.use(express.json());
 
@@ -53,16 +59,24 @@ app.use(require("./middleware/errorHandler"));
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  const instanceId = process.env.NODE_APP_INSTANCE;
+  console.log(
+    `Server running on port ${PORT} (instance ${instanceId || "standalone"})`,
+  );
 
-  // Start automatic sync scheduler
-  // - Incremental sync: every hour (syncs recent orders, creates customers if new)
-  // - Full daily sync: at 2:00 AM
-  // - Auto-creates discount groups when customer has 3+ orders
-  startScheduler({
-    incrementalIntervalMs: 60 * 60 * 1000, // 1 hour
-    dailyHour: 2,
-    dailyMinute: 0,
-    runImmediately: false, // Set to true to run sync on server start
-  });
+  // Only instance 0 (or standalone mode without PM2) runs the scheduler.
+  // PM2 cluster mode spawns 4 workers; without this guard all 4 would
+  // start duplicate schedulers hitting the WAWI API simultaneously.
+  if (!instanceId || instanceId === "0") {
+    startScheduler({
+      incrementalIntervalMs: 60 * 60 * 1000, // 1 hour
+      dailyHour: 2,
+      dailyMinute: 0,
+      runImmediately: false, // Set to true to run sync on server start
+    });
+  } else {
+    console.log(
+      `[Instance ${instanceId}] Skipping scheduler (handled by instance 0)`,
+    );
+  }
 });

@@ -113,8 +113,55 @@ let cascadeStatus = {
     products: 0,
     discountGroups: 0,
   },
+  skipped: 0,
+  skippedOrders: 0,
+  skippedOrderLines: 0,
   errors: [],
 };
+
+/**
+ * Process items concurrently with a concurrency limit.
+ * Each item is processed by fn(item). Errors are caught per-item
+ * so one failure does not block others.
+ *
+ * @param {Array} items - Items to process
+ * @param {Function} fn - Async function(item) => result
+ * @param {number} concurrency - Max concurrent promises (default: 5)
+ * @returns {Array<{status, value?, reason?}>} - Promise.allSettled results
+ */
+async function processBatch(items, fn, concurrency = 5) {
+  const results = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const chunk = items.slice(i, i + concurrency);
+    const chunkResults = await Promise.allSettled(chunk.map(fn));
+    results.push(...chunkResults);
+  }
+  return results;
+}
+
+/**
+ * Retry an async function up to N times with delay between attempts
+ */
+async function withRetry(fn, retries = 1, delayMs = 1000) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i === retries) throw err;
+      console.log(`[CascadeSync] Retrying after error: ${err.message}`);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+}
+
+/**
+ * Get all local order IDs (WAWI orderId) for a customer.
+ * Used to compare against WAWI and find missing orders.
+ */
+async function getLocalOrderIds(customerId) {
+  const orders = await Order.find({ customerId }).select("orderId").lean();
+  return new Set(orders.map((o) => o.orderId));
+}
 
 /**
  * Get cascade sync status
@@ -126,8 +173,11 @@ function getCascadeStatus() {
 /**
  * Sync a single customer with all related data
  * @param {Number} contactId - WAWI contact ID
+ * @param {Object} options - Sync options
+ * @param {Array|null} options.prefetchedOrders - Pre-fetched orders to process directly
  */
-async function syncCustomerWithRelatedData(contactId) {
+async function syncCustomerWithRelatedData(contactId, options = {}) {
+  const { prefetchedOrders = null } = options;
   cascadeStatus.currentStep = "customer";
 
   try {
@@ -146,17 +196,21 @@ async function syncCustomerWithRelatedData(contactId) {
     const customer = await upsertCustomer(wawiCustomer);
     cascadeStatus.progress.customers++;
 
-    // 2. Sync all orders for this customer
+    // 2. Sync orders (uses ID comparison to only fetch missing orders from WAWI)
     cascadeStatus.currentStep = "orders";
-    const orders = await syncCustomerOrders(customer, contactId);
+    const orders = await syncCustomerOrders(customer, contactId, {
+      prefetchedOrders,
+      forceRefresh: true,
+    });
 
-    // 3. Check and create discount group if needed
+    // 4. Check and create discount group if needed
     cascadeStatus.currentStep = "discount";
-    await checkAndCreateDiscountGroup(customer, orders);
+    const newDiscountGroups = await checkAndCreateDiscountGroup(customer, orders);
 
     return {
       customer,
       ordersCount: orders.length,
+      newDiscountGroups: newDiscountGroups || 0,
       success: true,
     };
   } catch (error) {
@@ -167,60 +221,134 @@ async function syncCustomerWithRelatedData(contactId) {
 
 /**
  * Sync all orders for a customer
+ * Uses ID comparison to guarantee no data is missed from WAWI.
+ * @param {Object} customer - Local customer document
+ * @param {Number} partnerId - WAWI partner/contact ID
+ * @param {Object} options - Sync options
+ * @param {Array|null} options.prefetchedOrders - Pre-fetched orders to process directly (skips WAWI API call)
  */
-async function syncCustomerOrders(customer, partnerId) {
-  const batchSize = 5;
-  let offset = 0;
-  let hasMore = true;
-  const syncedOrders = [];
+async function syncCustomerOrders(customer, partnerId, options = {}) {
+  const { prefetchedOrders = null, forceRefresh = false } = options;
+  const batchSize = 50;
 
-  while (hasMore) {
-    const ordersResult = await wawiApiClient.searchRead("pos.order", {
-      fields: ORDER_FIELDS,
-      domain: [["partner_id", "=", partnerId]],
-      order: "date_order desc",
-      limit: batchSize,
-      offset,
-    });
+  if (prefetchedOrders) {
+    // Use pre-fetched orders directly (from incremental sync) - no API calls needed
+    await processBatch(
+      prefetchedOrders,
+      async (wawiOrder) => {
+        try {
+          await withRetry(async () => {
+            const order = await upsertOrder(wawiOrder, customer._id);
+            cascadeStatus.progress.orders++;
 
-    const orders = ordersResult.data || [];
-    if (orders.length === 0) {
-      break;
-    }
-
-    for (const wawiOrder of orders) {
-      try {
-        const order = await upsertOrder(wawiOrder, customer._id);
-        cascadeStatus.progress.orders++;
-
-        if (wawiOrder.lines && wawiOrder.lines.length > 0) {
-          await syncOrderLinesWithProducts(wawiOrder.lines, order);
+            if (wawiOrder.lines && wawiOrder.lines.length > 0) {
+              await syncOrderLinesWithProducts(wawiOrder.lines, order, { forceRefresh });
+            }
+          });
+        } catch (err) {
+          console.error(
+            `[CascadeSync] Error syncing order ${wawiOrder.id} (after retry):`,
+            err.message,
+          );
+          cascadeStatus.errors.push({
+            orderId: wawiOrder.id,
+            error: err.message,
+          });
         }
-        syncedOrders.push(order);
-      } catch (err) {
-        console.error(
-          `[CascadeSync] Error syncing order ${wawiOrder.id}:`,
-          err.message,
-        );
-        cascadeStatus.errors.push({ orderId: wawiOrder.id, error: err.message });
-      }
+      },
+      10,
+    );
+  } else {
+    // Step 1: Fetch all order IDs from WAWI for this customer (lightweight)
+    let allWawiOrderIds = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const idsResult = await wawiApiClient.searchRead("pos.order", {
+        fields: ["id"],
+        domain: [["partner_id", "=", partnerId]],
+        order: "id asc",
+        limit: 500,
+        offset,
+      });
+
+      const batch = idsResult.data || [];
+      if (batch.length === 0) break;
+      allWawiOrderIds = allWawiOrderIds.concat(batch.map((o) => o.id));
+      offset += batch.length;
+      if (batch.length < 500) hasMore = false;
     }
 
-    offset += orders.length;
-    if (orders.length < batchSize) {
-      hasMore = false;
+    // Step 2: Compare with local DB to find missing orders
+    const localOrderIds = await getLocalOrderIds(customer._id);
+    const missingOrderIds = allWawiOrderIds.filter(
+      (id) => !localOrderIds.has(id),
+    );
+
+    if (missingOrderIds.length === 0) {
+      console.log(
+        `[CascadeSync] Customer ${partnerId}: all ${allWawiOrderIds.length} orders already synced`,
+      );
+      cascadeStatus.skippedOrders++;
+    } else {
+      console.log(
+        `[CascadeSync] Customer ${partnerId}: ${missingOrderIds.length} new orders out of ${allWawiOrderIds.length} total`,
+      );
+
+      // Step 3: Fetch full details only for missing orders (in batches)
+      for (let i = 0; i < missingOrderIds.length; i += batchSize) {
+        const batchIds = missingOrderIds.slice(i, i + batchSize);
+        const ordersResult = await wawiApiClient.searchRead("pos.order", {
+          fields: ORDER_FIELDS,
+          domain: [["id", "in", batchIds]],
+          order: "date_order desc",
+        });
+
+        const orders = ordersResult.data || [];
+        await processBatch(
+          orders,
+          async (wawiOrder) => {
+            try {
+              await withRetry(async () => {
+                const order = await upsertOrder(wawiOrder, customer._id);
+                cascadeStatus.progress.orders++;
+
+                if (wawiOrder.lines && wawiOrder.lines.length > 0) {
+                  await syncOrderLinesWithProducts(wawiOrder.lines, order, { forceRefresh });
+                }
+              });
+            } catch (err) {
+              console.error(
+                `[CascadeSync] Error syncing order ${wawiOrder.id} (after retry):`,
+                err.message,
+              );
+              cascadeStatus.errors.push({
+                orderId: wawiOrder.id,
+                error: err.message,
+              });
+            }
+          },
+          10,
+        );
+      }
     }
   }
 
-  return syncedOrders;
+  // Return ALL local orders for this customer (not just newly synced)
+  // because checkAndCreateDiscountGroup() needs the complete list
+  const allLocalOrders = await Order.find({ customerId: customer._id });
+  return allLocalOrders;
 }
 
 /**
  * Sync order lines and their products
  */
-async function syncOrderLinesWithProducts(lineIds, order) {
+async function syncOrderLinesWithProducts(lineIds, order, options = {}) {
   cascadeStatus.currentStep = "orderLines";
+  const { forceRefresh = false } = options;
 
+  // Always fetch order lines from WAWI to ensure data is up-to-date
   const linesResult = await wawiApiClient.searchRead("pos.order.line", {
     fields: ORDER_LINE_FIELDS,
     domain: [["id", "in", lineIds]],
@@ -240,24 +368,37 @@ async function syncOrderLinesWithProducts(lineIds, order) {
     }
   }
 
-  // Step 2: Sync all products FIRST (so productRef can be set correctly)
+  // Step 2: Sync all products FIRST in parallel (so productRef can be set correctly)
   cascadeStatus.currentStep = "products";
-  for (const productId of productIdsToSync) {
-    await syncProductWithAttributes(productId);
-  }
+  await processBatch(
+    Array.from(productIdsToSync),
+    async (productId) => {
+      await syncProductWithAttributes(productId, forceRefresh);
+    },
+    10,
+  );
 
-  // Step 3: Now create/update order lines with correct productRef
+  // Step 3: Now create/update order lines in parallel with correct productRef
   cascadeStatus.currentStep = "orderLines";
-  for (const line of lines) {
-    try {
-      const orderLine = await upsertOrderLine(line, order);
-      orderLineIds.push(orderLine._id);
-      cascadeStatus.progress.orderLines++;
-    } catch (err) {
-      console.error(
-        `[CascadeSync] Error syncing order line ${line.id}:`,
-        err.message,
-      );
+  const lineResults = await Promise.allSettled(
+    lines.map(async (line) => {
+      try {
+        const orderLine = await upsertOrderLine(line, order);
+        cascadeStatus.progress.orderLines++;
+        return orderLine._id;
+      } catch (err) {
+        console.error(
+          `[CascadeSync] Error syncing order line ${line.id}:`,
+          err.message,
+        );
+        return null;
+      }
+    }),
+  );
+
+  for (const result of lineResults) {
+    if (result.status === "fulfilled" && result.value) {
+      orderLineIds.push(result.value);
     }
   }
 
@@ -270,14 +411,17 @@ async function syncOrderLinesWithProducts(lineIds, order) {
 /**
  * Sync a product with its attributes and values
  */
-async function syncProductWithAttributes(productId) {
+async function syncProductWithAttributes(productId, forceRefresh = false) {
   try {
     // Check if product already exists and was synced recently (within 1 hour)
-    const existingProduct = await Product.findOne({ productId });
-    if (existingProduct && existingProduct.syncedAt) {
-      const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
-      if (existingProduct.syncedAt > hourAgo) {
-        return existingProduct; // Skip if recently synced
+    // Skip cache on forceRefresh (full/manual sync)
+    if (!forceRefresh) {
+      const existingProduct = await Product.findOne({ productId });
+      if (existingProduct && existingProduct.syncedAt) {
+        const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        if (existingProduct.syncedAt > hourAgo) {
+          return existingProduct; // Skip if recently synced
+        }
       }
     }
 
@@ -407,11 +551,39 @@ async function ensureAttributeValue(valueId, attributeId, name) {
 }
 
 /**
- * Check if order has any line items with discount > 0
+ * Check if an item is eligible for bonus (matches discountController logic)
+ * Excludes: items with discount > 0 (Sale items), negative amounts, vouchers, Bonus Kundenkarte
  */
-async function orderHasDiscount(orderId) {
-  const orderLines = await OrderLine.find({ orderId: orderId });
-  return orderLines.some((line) => line.discount && line.discount > 0);
+function isItemEligibleForBonus(item) {
+  if (item.discountEligible === false) return false;
+  if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0)
+    return false;
+  if (item.discount && item.discount > 0) return false;
+  const name = (item.productName || item.fullProductName || "").toLowerCase();
+  if (
+    name.includes("gutschein") ||
+    name.includes("voucher") ||
+    name.includes("gift") ||
+    name.includes("bonus kundenkarte")
+  )
+    return false;
+  return true;
+}
+
+/**
+ * Get eligible bonus amount for an order (sum of only bonus-eligible items)
+ * Returns 0 if no items are eligible
+ */
+async function getOrderEligibleAmount(orderId) {
+  const orderLines = await OrderLine.find({ orderId });
+  let eligibleAmount = 0;
+  for (const line of orderLines) {
+    if (isItemEligibleForBonus(line)) {
+      eligibleAmount +=
+        line.priceSubtotalIncl || line.priceUnit * (line.quantity || 1);
+    }
+  }
+  return eligibleAmount;
 }
 
 /**
@@ -428,8 +600,10 @@ async function checkAndCreateDiscountGroup(customer, orders) {
     group.orders.forEach((o) => ordersInGroups.add(o.orderId.toString()));
   });
 
-  // Filter eligible orders (not in any group, positive amount, no line-item discounts)
+  // Filter eligible orders (not in any group, has eligible items)
+  // Uses per-item eligibility check matching discountController logic
   const eligibleOrders = [];
+  const orderEligibleAmounts = new Map();
   for (const order of orders) {
     // Skip if already in a discount group
     if (ordersInGroups.has(order._id.toString())) continue;
@@ -437,24 +611,36 @@ async function checkAndCreateDiscountGroup(customer, orders) {
     // Skip if amount is zero or negative
     if (!order || !order.amountTotal || order.amountTotal <= 0) continue;
 
-    // Skip if order has line items with discounts
-    const hasDiscount = await orderHasDiscount(order._id);
-    if (hasDiscount) continue;
+    // Calculate eligible amount from individual items (excludes Sale items, vouchers, etc.)
+    const eligibleAmount = await getOrderEligibleAmount(order._id);
+    if (eligibleAmount <= 0) continue;
 
     eligibleOrders.push(order);
+    orderEligibleAmounts.set(order._id.toString(), eligibleAmount);
   }
 
+  // Sort by date oldest first so groups are created chronologically
+  // (oldest purchases get grouped first, newest remain ungrouped until enough accumulate)
+  eligibleOrders.sort((a, b) => new Date(a.orderDate) - new Date(b.orderDate));
+
   // Create discount groups for every 3 orders
+  let groupsCreated = 0;
   while (eligibleOrders.length >= ORDERS_FOR_DISCOUNT) {
     const groupOrders = eligibleOrders.splice(0, ORDERS_FOR_DISCOUNT);
+    // Sort within group: newest first for display (bundleIndex 0 = newest)
+    groupOrders.sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
 
-    const discountOrderItems = groupOrders.map((order, index) => ({
-      orderId: order._id,
-      amount: order.amountTotal,
-      discountRate: DISCOUNT_RATE,
-      discountAmount: order.amountTotal * DISCOUNT_RATE,
-      bundleIndex: index, // Each order is a separate item (not bundled together)
-    }));
+    const discountOrderItems = groupOrders.map((order, index) => {
+      const eligibleAmount =
+        orderEligibleAmounts.get(order._id.toString()) || order.amountTotal;
+      return {
+        orderId: order._id,
+        amount: eligibleAmount,
+        discountRate: DISCOUNT_RATE,
+        discountAmount: eligibleAmount * DISCOUNT_RATE,
+        bundleIndex: index,
+      };
+    });
 
     // Create discount group
     const discountGroup = await DiscountOrder.create({
@@ -465,6 +651,7 @@ async function checkAndCreateDiscountGroup(customer, orders) {
       notes: `Auto-created from ${ORDERS_FOR_DISCOUNT} orders sync`,
     });
 
+    groupsCreated++;
     cascadeStatus.progress.discountGroups++;
     console.log(
       `[CascadeSync] Created discount group for customer ${customer.name}: €${discountGroup.totalDiscount.toFixed(2)}`,
@@ -493,6 +680,8 @@ async function checkAndCreateDiscountGroup(customer, orders) {
       { upsert: true, new: true },
     );
   }
+
+  return groupsCreated;
 }
 
 /**
@@ -516,14 +705,17 @@ async function runFullCascadeSync(options = {}) {
       products: 0,
       discountGroups: 0,
     },
+    skipped: 0,
+    skippedOrders: 0,
+    skippedOrderLines: 0,
     errors: [],
     startTime: new Date(),
-    skipped: 0,
   };
 
   let offset = 0;
   let hasMore = true;
   let consecutiveErrors = 0;
+  let batchRetries = 0;
   const MAX_CONSECUTIVE_ERRORS = 10;
 
   console.log("[CascadeSync] Starting full cascade sync...");
@@ -555,6 +747,7 @@ async function runFullCascadeSync(options = {}) {
         });
 
         consecutiveErrors = 0; // Reset on successful API call
+        batchRetries = 0;
 
         const customers = result.data || [];
         if (customers.length === 0) {
@@ -562,38 +755,55 @@ async function runFullCascadeSync(options = {}) {
           break;
         }
 
-        for (const wawiCustomer of customers) {
-          try {
-            await syncCustomerWithRelatedData(wawiCustomer.id);
-            consecutiveErrors = 0;
-          } catch (err) {
-            console.error(
-              `[CascadeSync] Error syncing customer ${wawiCustomer.id}:`,
-              err.message,
-            );
-            cascadeStatus.errors.push({
-              customerId: wawiCustomer.id,
-              error: err.message,
-            });
-            cascadeStatus.skipped++;
+        await processBatch(
+          customers,
+          async (wawiCustomer) => {
+            try {
+              // Upsert customer from already-fetched data (avoid re-fetching from WAWI)
+              const customer = await upsertCustomer(wawiCustomer);
+              cascadeStatus.progress.customers++;
 
-            // Check for consecutive errors
-            if (
-              err.message.includes("401") ||
-              err.message.includes("Unauthorized")
-            ) {
-              consecutiveErrors++;
-              if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-                console.error(
-                  "[CascadeSync] Too many consecutive auth errors, pausing sync...",
-                );
-                // Wait and try to refresh token
-                await new Promise((resolve) => setTimeout(resolve, 5000));
-                consecutiveErrors = 0;
+              // Sync orders (uses ID comparison - only fetches missing orders)
+              cascadeStatus.currentStep = "orders";
+              const orders = await syncCustomerOrders(
+                customer,
+                wawiCustomer.id,
+                { forceRefresh: true },
+              );
+
+              // Check discount groups
+              cascadeStatus.currentStep = "discount";
+              await checkAndCreateDiscountGroup(customer, orders);
+
+              consecutiveErrors = 0;
+            } catch (err) {
+              console.error(
+                `[CascadeSync] Error syncing customer ${wawiCustomer.id}:`,
+                err.message,
+              );
+              cascadeStatus.errors.push({
+                customerId: wawiCustomer.id,
+                error: err.message,
+              });
+              cascadeStatus.skipped++;
+
+              if (
+                err.message.includes("401") ||
+                err.message.includes("Unauthorized")
+              ) {
+                consecutiveErrors++;
+                if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                  console.error(
+                    "[CascadeSync] Too many consecutive auth errors, pausing sync...",
+                  );
+                  await new Promise((resolve) => setTimeout(resolve, 5000));
+                  consecutiveErrors = 0;
+                }
               }
             }
-          }
-        }
+          },
+          5,
+        );
 
         offset += batchSize;
 
@@ -610,6 +820,7 @@ async function runFullCascadeSync(options = {}) {
           err.message,
         );
         cascadeStatus.errors.push({ batch: offset, error: err.message });
+        batchRetries++;
         consecutiveErrors++;
 
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
@@ -619,9 +830,20 @@ async function runFullCascadeSync(options = {}) {
           break;
         }
 
-        // Wait before retrying next batch
+        // Retry same batch up to 2 times before skipping
+        if (batchRetries >= 2) {
+          console.error(
+            `[CascadeSync] Skipping batch at offset ${offset} after ${batchRetries} retries`,
+          );
+          offset += batchSize;
+          batchRetries = 0;
+        } else {
+          console.log(
+            `[CascadeSync] Retrying batch at offset ${offset} (attempt ${batchRetries + 1})`,
+          );
+        }
+
         await new Promise((resolve) => setTimeout(resolve, 3000));
-        offset += batchSize; // Skip problematic batch
       }
     }
 
@@ -629,6 +851,8 @@ async function runFullCascadeSync(options = {}) {
     cascadeStatus.endTime = new Date();
     console.log("[CascadeSync] Full cascade sync completed:", {
       ...cascadeStatus.progress,
+      skippedOrders: cascadeStatus.skippedOrders,
+      skippedOrderLines: cascadeStatus.skippedOrderLines,
       errors: cascadeStatus.errors.length,
       skipped: cascadeStatus.skipped,
     });
@@ -647,27 +871,44 @@ async function runFullCascadeSync(options = {}) {
  * Sync all product attributes
  */
 async function syncAllAttributes() {
-  const result = await wawiApiClient.searchRead("product.attribute", {
-    fields: ATTRIBUTE_FIELDS,
-    limit: 500,
-  });
+  let offset = 0;
+  let hasMore = true;
+  let totalSynced = 0;
+  const batchSize = 500;
 
-  for (const attr of result.data || []) {
-    await ProductAttribute.findOneAndUpdate(
-      { attributeId: attr.id },
-      {
-        attributeId: attr.id,
-        name: attr.name || "Unknown",
-        displayType: attr.display_type || "radio",
-        createVariant: attr.create_variant || "always",
-        sequence: attr.sequence || 0,
-        syncedAt: new Date(),
-      },
-      { upsert: true },
-    );
+  while (hasMore) {
+    const result = await wawiApiClient.searchRead("product.attribute", {
+      fields: ATTRIBUTE_FIELDS,
+      limit: batchSize,
+      offset,
+      order: "id asc",
+    });
+
+    const batch = result.data || [];
+    if (batch.length === 0) break;
+
+    for (const attr of batch) {
+      await ProductAttribute.findOneAndUpdate(
+        { attributeId: attr.id },
+        {
+          attributeId: attr.id,
+          name: attr.name || "Unknown",
+          displayType: attr.display_type || "radio",
+          createVariant: attr.create_variant || "always",
+          sequence: attr.sequence || 0,
+          syncedAt: new Date(),
+        },
+        { upsert: true },
+      );
+    }
+
+    totalSynced += batch.length;
+    offset += batch.length;
+    if (batch.length < batchSize) hasMore = false;
   }
+
   console.log(
-    `[CascadeSync] Synced ${result.data?.length || 0} product attributes`,
+    `[CascadeSync] Synced ${totalSynced} product attributes`,
   );
 }
 
@@ -675,35 +916,52 @@ async function syncAllAttributes() {
  * Sync all product attribute values
  */
 async function syncAllAttributeValues() {
-  const result = await wawiApiClient.searchRead("product.attribute.value", {
-    fields: ATTRIBUTE_VALUE_FIELDS,
-    limit: 1000,
-  });
+  let offset = 0;
+  let hasMore = true;
+  let totalSynced = 0;
+  const batchSize = 1000;
 
-  for (const val of result.data || []) {
-    const attributeId = Array.isArray(val.attribute_id)
-      ? val.attribute_id[0]
-      : val.attribute_id;
+  while (hasMore) {
+    const result = await wawiApiClient.searchRead("product.attribute.value", {
+      fields: ATTRIBUTE_VALUE_FIELDS,
+      limit: batchSize,
+      offset,
+      order: "id asc",
+    });
 
-    const attribute = await ProductAttribute.findOne({ attributeId });
+    const batch = result.data || [];
+    if (batch.length === 0) break;
 
-    await ProductAttributeValue.findOneAndUpdate(
-      { valueId: val.id },
-      {
-        valueId: val.id,
-        attributeId: attribute?._id,
-        wawiAttributeId: attributeId,
-        name: val.name || "Unknown",
-        htmlColor: val.html_color || undefined,
-        sequence: val.sequence || 0,
-        isCustom: val.is_custom || false,
-        syncedAt: new Date(),
-      },
-      { upsert: true },
-    );
+    for (const val of batch) {
+      const attributeId = Array.isArray(val.attribute_id)
+        ? val.attribute_id[0]
+        : val.attribute_id;
+
+      const attribute = await ProductAttribute.findOne({ attributeId });
+
+      await ProductAttributeValue.findOneAndUpdate(
+        { valueId: val.id },
+        {
+          valueId: val.id,
+          attributeId: attribute?._id,
+          wawiAttributeId: attributeId,
+          name: val.name || "Unknown",
+          htmlColor: val.html_color || undefined,
+          sequence: val.sequence || 0,
+          isCustom: val.is_custom || false,
+          syncedAt: new Date(),
+        },
+        { upsert: true },
+      );
+    }
+
+    totalSynced += batch.length;
+    offset += batch.length;
+    if (batch.length < batchSize) hasMore = false;
   }
+
   console.log(
-    `[CascadeSync] Synced ${result.data?.length || 0} attribute values`,
+    `[CascadeSync] Synced ${totalSynced} attribute values`,
   );
 }
 
@@ -873,9 +1131,11 @@ async function runIncrementalSync(options = {}) {
       products: 0,
       discountGroups: 0,
     },
+    skipped: 0,
+    skippedOrders: 0,
+    skippedOrderLines: 0,
     errors: [],
     startTime: new Date(),
-    skipped: 0,
   };
 
   let consecutiveErrors = 0;
@@ -894,92 +1154,114 @@ async function runIncrementalSync(options = {}) {
       .replace("T", " ")
       .substring(0, 19);
 
-    // Fetch recent orders from WAWI
+    // Fetch recent orders from WAWI (paginated)
     cascadeStatus.currentStep = "fetching_orders";
-    let ordersResult;
-    try {
-      ordersResult = await wawiApiClient.searchRead("pos.order", {
-        fields: ORDER_FIELDS,
-        domain: [["write_date", ">=", cutoffStr]],
-        order: "write_date desc",
-        limit: 500,
-      });
-    } catch (err) {
-      console.error("[CascadeSync] Error fetching orders:", err.message);
-      cascadeStatus.errors.push({
-        step: "fetching_orders",
-        error: err.message,
-      });
-      cascadeStatus.currentStep = "failed";
-      cascadeStatus.isRunning = false;
-      return cascadeStatus;
+    let allRecentOrders = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      let ordersResult;
+      try {
+        ordersResult = await wawiApiClient.searchRead("pos.order", {
+          fields: ORDER_FIELDS,
+          domain: [["write_date", ">=", cutoffStr]],
+          order: "write_date desc",
+          limit: 500,
+          offset,
+        });
+      } catch (err) {
+        console.error("[CascadeSync] Error fetching orders:", err.message);
+        cascadeStatus.errors.push({
+          step: "fetching_orders",
+          error: err.message,
+        });
+        cascadeStatus.currentStep = "failed";
+        cascadeStatus.isRunning = false;
+        return cascadeStatus;
+      }
+
+      const batch = ordersResult.data || [];
+      if (batch.length === 0) break;
+      allRecentOrders = allRecentOrders.concat(batch);
+      offset += batch.length;
+      if (batch.length < 500) hasMore = false;
     }
 
-    const recentOrders = ordersResult.data || [];
     console.log(
-      `[CascadeSync] Found ${recentOrders.length} orders modified in last ${hoursBack} hours`,
+      `[CascadeSync] Found ${allRecentOrders.length} orders modified in last ${hoursBack} hours`,
     );
 
-    if (recentOrders.length === 0) {
+    if (allRecentOrders.length === 0) {
       cascadeStatus.currentStep = "completed";
       cascadeStatus.isRunning = false;
       return cascadeStatus;
     }
 
-    // Get unique customer IDs from orders
-    const customerIds = [
-      ...new Set(
-        recentOrders
-          .map((o) =>
-            Array.isArray(o.partner_id) ? o.partner_id[0] : o.partner_id,
-          )
-          .filter((id) => id),
-      ),
-    ];
+    // Group orders by customer ID
+    const ordersByCustomer = new Map();
+    for (const order of allRecentOrders) {
+      const customerId = Array.isArray(order.partner_id)
+        ? order.partner_id[0]
+        : order.partner_id;
+      if (!customerId) continue;
+      if (!ordersByCustomer.has(customerId)) {
+        ordersByCustomer.set(customerId, []);
+      }
+      ordersByCustomer.get(customerId).push(order);
+    }
 
     console.log(
-      `[CascadeSync] Processing ${customerIds.length} unique customers...`,
+      `[CascadeSync] Processing ${ordersByCustomer.size} unique customers with pre-fetched orders...`,
     );
 
-    // Sync each customer with their related data
-    for (const customerId of customerIds) {
-      try {
-        cascadeStatus.currentStep = `customer_${customerId}`;
-        await syncCustomerWithRelatedData(customerId);
-        consecutiveErrors = 0; // Reset on success
+    // Process each customer with their pre-fetched orders in parallel (no redundant API calls)
+    const customerEntries = Array.from(ordersByCustomer.entries());
+    await processBatch(
+      customerEntries,
+      async ([customerId, customerOrders]) => {
+        try {
+          cascadeStatus.currentStep = `customer_${customerId}`;
+          await syncCustomerWithRelatedData(customerId, {
+            prefetchedOrders: customerOrders,
+          });
+          consecutiveErrors = 0;
 
-        if (onProgress) {
-          onProgress(cascadeStatus.progress);
-        }
-      } catch (err) {
-        console.error(
-          `[CascadeSync] Error syncing customer ${customerId}:`,
-          err.message,
-        );
-        cascadeStatus.errors.push({ customerId, error: err.message });
-        cascadeStatus.skipped++;
+          if (onProgress) {
+            onProgress(cascadeStatus.progress);
+          }
+        } catch (err) {
+          console.error(
+            `[CascadeSync] Error syncing customer ${customerId}:`,
+            err.message,
+          );
+          cascadeStatus.errors.push({ customerId, error: err.message });
+          cascadeStatus.skipped++;
 
-        // Check for auth errors
-        if (
-          err.message.includes("401") ||
-          err.message.includes("Unauthorized")
-        ) {
-          consecutiveErrors++;
-          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-            console.error(
-              "[CascadeSync] Too many consecutive auth errors, pausing...",
-            );
-            await new Promise((resolve) => setTimeout(resolve, 5000));
-            consecutiveErrors = 0;
+          if (
+            err.message.includes("401") ||
+            err.message.includes("Unauthorized")
+          ) {
+            consecutiveErrors++;
+            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+              console.error(
+                "[CascadeSync] Too many consecutive auth errors, pausing...",
+              );
+              await new Promise((resolve) => setTimeout(resolve, 5000));
+              consecutiveErrors = 0;
+            }
           }
         }
-      }
-    }
+      },
+      5,
+    );
 
     cascadeStatus.currentStep = "completed";
     cascadeStatus.endTime = new Date();
     console.log("[CascadeSync] Incremental sync completed:", {
       ...cascadeStatus.progress,
+      skippedOrders: cascadeStatus.skippedOrders,
+      skippedOrderLines: cascadeStatus.skippedOrderLines,
       errors: cascadeStatus.errors.length,
       skipped: cascadeStatus.skipped,
     });

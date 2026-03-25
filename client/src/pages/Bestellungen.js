@@ -332,12 +332,13 @@ const Bestellungen = () => {
       setDebouncedSearch(normalizedSearch);
 
       const hasSearchChanged = normalizedSearch !== urlSearch.trim();
-      if (hasSearchChanged || (normalizedSearch && currentPage !== 1)) {
+      if (hasSearchChanged) {
         updateParams({ search: normalizedSearch || null, page: 1 });
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchTerm, urlSearch, currentPage, updateParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm]);
 
   // Keep input in sync with URL (back/forward navigation)
   useEffect(() => {
@@ -899,7 +900,7 @@ const Bestellungen = () => {
         <div className="flex items-center justify-between mb-6">
           <h3 className="font-semibold text-gray-900 text-lg">Kaufhistorie</h3>
           {/* Hide edit button if order is redeemed */}
-          {selectedOrder.discountStatus !== "redeemed" &&
+          {/* {selectedOrder.discountStatus !== "redeemed" &&
             (isEditMode ? (
               <div className="flex gap-2">
                 <button
@@ -937,7 +938,7 @@ const Bestellungen = () => {
                   />
                 </svg>
               </button>
-            ))}
+            ))} */}
         </div>
 
         <div className="grid grid-cols-2 gap-4">

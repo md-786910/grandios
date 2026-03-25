@@ -1074,6 +1074,7 @@ exports.syncCustomerOrders = async (req, res, next) => {
         ordersCount: result.ordersCount,
         newOrdersCount,
         totalOrders: ordersAfter,
+        newDiscountGroups: result.newDiscountGroups || 0,
       },
     });
   } catch (err) {
