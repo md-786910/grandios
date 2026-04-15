@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 import Layout from "../components/Layout";
 import ConfirmModal from "../components/ConfirmModal";
 import UnsavedChangesModal from "../components/UnsavedChangesModal";
+import RichTextEditor from "../components/RichTextEditor";
 import { discountsAPI, purchaseHistoryAPI } from "../services/api";
 import { sanitizeName } from "../utils/helpers";
 import { useUnsavedChanges } from "../context/UnsavedChangesContext";
@@ -1741,15 +1742,16 @@ const BonusDetail = () => {
               )}
             </div>
           </div>
-          <textarea
+          <RichTextEditor
             value={notizen}
-            onChange={(e) => setNotizen(e.target.value)}
-            className={`w-full flex-1 border rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 transition-colors ${
-              hasUnsavedNotes
-                ? "border-green-300 focus:ring-green-200"
-                : "border-gray-200 focus:ring-gray-200"
-            }`}
+            onChange={setNotizen}
             placeholder=""
+            className={`w-full flex-1 rounded-lg overflow-hidden border transition-colors ${
+              hasUnsavedNotes
+                ? "border-green-300 focus-within:ring-2 focus-within:ring-green-200"
+                : "border-gray-200 focus-within:ring-2 focus-within:ring-gray-200"
+            }`}
+            editorClassName="bg-white"
           />
           <div className="flex justify-end mt-3">
             <button
@@ -4062,11 +4064,16 @@ const BonusDetail = () => {
                               )}
                             </span>
                           </div>
-                          <div className="mt-2 p-4 bg-gray-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap shadow-sm">
-                            {entry.notes || (
+                          {entry.notes ? (
+                            <div
+                              className="mt-2 p-4 bg-gray-50 rounded-lg text-sm text-gray-700 shadow-sm rich-text-content"
+                              dangerouslySetInnerHTML={{ __html: entry.notes }}
+                            />
+                          ) : (
+                            <div className="mt-2 p-4 bg-gray-50 rounded-lg text-sm text-gray-700 shadow-sm">
                               <em className="text-gray-400">Leer</em>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
