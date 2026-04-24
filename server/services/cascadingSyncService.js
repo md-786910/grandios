@@ -83,7 +83,7 @@ const PRODUCT_FIELDS = [
 ];
 
 // Lightweight fields without image_512 for per-customer sync (faster, avoids 504)
-const PRODUCT_FIELDS_LIGHT = PRODUCT_FIELDS.filter(f => f !== "image_512");
+const PRODUCT_FIELDS_LIGHT = PRODUCT_FIELDS.filter((f) => f !== "image_512");
 
 const ATTRIBUTE_FIELDS = [
   "id",
@@ -205,7 +205,10 @@ async function syncCustomerWithRelatedData(contactId, options = {}) {
 
     // 4. Check and create discount group if needed
     cascadeStatus.currentStep = "discount";
-    const newDiscountGroups = await checkAndCreateDiscountGroup(customer, orders);
+    const newDiscountGroups = await checkAndCreateDiscountGroup(
+      customer,
+      orders,
+    );
 
     return {
       customer,
@@ -242,7 +245,9 @@ async function syncCustomerOrders(customer, partnerId, options = {}) {
             cascadeStatus.progress.orders++;
 
             if (wawiOrder.lines && wawiOrder.lines.length > 0) {
-              await syncOrderLinesWithProducts(wawiOrder.lines, order, { forceRefresh });
+              await syncOrderLinesWithProducts(wawiOrder.lines, order, {
+                forceRefresh,
+              });
             }
           });
         } catch (err) {
@@ -315,7 +320,9 @@ async function syncCustomerOrders(customer, partnerId, options = {}) {
                 cascadeStatus.progress.orders++;
 
                 if (wawiOrder.lines && wawiOrder.lines.length > 0) {
-                  await syncOrderLinesWithProducts(wawiOrder.lines, order, { forceRefresh });
+                  await syncOrderLinesWithProducts(wawiOrder.lines, order, {
+                    forceRefresh,
+                  });
                 }
               });
             } catch (err) {
@@ -404,7 +411,12 @@ async function syncOrderLinesWithProducts(lineIds, order, options = {}) {
 
   // Update order with line references
   if (orderLineIds.length > 0) {
-    await Order.findByIdAndUpdate(order._id, { orderLines: orderLineIds });
+    // Get eligible discount amount
+    const discountAmount = await getOrderEligibleAmount(order._id);
+    await Order.findByIdAndUpdate(order._id, {
+      orderLines: orderLineIds,
+      amountTotalBonusApplied: discountAmount,
+    });
   }
 }
 
@@ -551,39 +563,52 @@ async function ensureAttributeValue(valueId, attributeId, name) {
 }
 
 /**
- * Check if an item is eligible for bonus (matches discountController logic)
- * Excludes: items with discount > 0 (Sale items), negative amounts, vouchers, Bonus Kundenkarte
+ * Check if an order line should be excluded from the bonus-eligible amount.
+ * Excludes: items marked ineligible, vouchers / gift cards / Bonus Kundenkarte
+ * (these are payment instruments, not order value), and Sale items
+ * (positive items with a per-line discount).
+ *
+ * Does NOT exclude negative adjustment lines (Sonderrabatt, credit notes) —
+ * those are summed as deductions so the eligible amount reflects what the
+ * customer actually paid.
  */
-function isItemEligibleForBonus(item) {
-  if (item.discountEligible === false) return false;
-  if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0)
-    return false;
-  if (item.discount && item.discount > 0) return false;
+
+function isItemExcludedFromEligibleAmount(item) {
+  if (item.discountEligible === false) return true;
+
   const name = (item.productName || item.fullProductName || "").toLowerCase();
   if (
     name.includes("gutschein") ||
     name.includes("voucher") ||
     name.includes("gift") ||
-    name.includes("bonus kundenkarte")
-  )
-    return false;
-  return true;
+    name.includes("bonus kundenkarte") ||
+    name.includes("sonderrabatt")
+  ) {
+    return true;
+  }
+
+  // Sale items: positive lines that already carry a per-line discount
+  if ((item.discount || 0) > 0 && (item.priceSubtotalIncl || 0) > 0) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
- * Get eligible bonus amount for an order (sum of only bonus-eligible items)
- * Returns 0 if no items are eligible
+ * Get eligible bonus amount for an order.
+ * Sums signed priceSubtotalIncl across non-excluded lines so that
+ * Sonderrabatt and similar negative adjustments reduce the eligible amount.
  */
 async function getOrderEligibleAmount(orderId) {
   const orderLines = await OrderLine.find({ orderId });
   let eligibleAmount = 0;
   for (const line of orderLines) {
-    if (isItemEligibleForBonus(line)) {
-      eligibleAmount +=
-        line.priceSubtotalIncl || line.priceUnit * (line.quantity || 1);
-    }
+    if (isItemExcludedFromEligibleAmount(line)) continue;
+    eligibleAmount +=
+      line.priceSubtotalIncl || line.priceUnit * (line.quantity || 1);
   }
-  return eligibleAmount;
+  return Math.max(0, eligibleAmount);
 }
 
 /**
@@ -907,9 +932,7 @@ async function syncAllAttributes() {
     if (batch.length < batchSize) hasMore = false;
   }
 
-  console.log(
-    `[CascadeSync] Synced ${totalSynced} product attributes`,
-  );
+  console.log(`[CascadeSync] Synced ${totalSynced} product attributes`);
 }
 
 /**
@@ -960,9 +983,7 @@ async function syncAllAttributeValues() {
     if (batch.length < batchSize) hasMore = false;
   }
 
-  console.log(
-    `[CascadeSync] Synced ${totalSynced} attribute values`,
-  );
+  console.log(`[CascadeSync] Synced ${totalSynced} attribute values`);
 }
 
 // Helper functions

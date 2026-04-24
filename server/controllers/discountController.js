@@ -45,21 +45,23 @@ function getOrderItems(order) {
 // negative amounts (discounts), and "Bonus Kundenkarte" products
 function isItemEligibleForBonus(item) {
   // Must be discount eligible
-  if (!item.discountEligible) return false;
+  if (!item?.discountEligible) return false;
   // Exclude items with negative amounts (discount lines)
   if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0)
     return false;
   // Exclude items with existing discounts (Sale items)
   if (item.discount && item.discount > 0) return false;
   // Exclude vouchers and Bonus Kundenkarte (check product name)
-  const name = (item.productName || "").toLowerCase();
+  const lowerName = (item.productName || "").toLowerCase();
   if (
-    name.includes("gutschein") ||
-    name.includes("voucher") ||
-    name.includes("gift") ||
-    name.includes("bonus kundenkarte")
-  )
+    lowerName.includes("gutschein") ||
+    lowerName.includes("voucher") ||
+    lowerName.includes("gift") ||
+    lowerName.includes("bonus kundenkarte") ||
+    lowerName.includes("sonderrabatt")
+  ) {
     return false;
+  }
   return true;
 }
 

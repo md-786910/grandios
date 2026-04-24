@@ -753,7 +753,9 @@ const Bestellungen = () => {
           discountEligible:
             line.priceSubtotalIncl > 0 &&
             line?.discount === 0 &&
-            line.fullProductName !== "Bonus Kundenkarte",
+            !["bonus kundenkarte", "sonderrabatt"].includes(
+              (line.fullProductName || line.productName || "").toLowerCase(),
+            ),
           // discountEligible: line.discountEligible !== false,
           image: line.productRef?.image || null,
           color:

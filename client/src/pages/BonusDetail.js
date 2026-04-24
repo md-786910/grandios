@@ -39,6 +39,37 @@ const ProductImage = ({ src, size = "md", className = "" }) => {
   );
 };
 
+function isItemEligibleForBonus(item) {
+  if (!item.discountEligible) return false;
+  if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0)
+    return false;
+  if (item.discount && item.discount > 0) return false;
+  const lowerName = (item.productName || "").toLowerCase();
+  if (
+    lowerName.includes("gutschein") ||
+    lowerName.includes("voucher") ||
+    lowerName.includes("gift") ||
+    lowerName.includes("bonus kundenkarte") ||
+    lowerName.includes("sonderrabatt")
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function getEligibleAmount(order) {
+  const items = order?.items || [];
+  const ineligibleSum = items
+    .filter(
+      (i) => !isItemEligibleForBonus(i) && (i.priceSubtotalIncl || 0) >= 0,
+    )
+    .reduce(
+      (s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity || 0),
+      0,
+    );
+  return Math.max(0, (order?.amountPaid || 0) - ineligibleSum);
+}
+
 const BonusDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -225,7 +256,8 @@ const BonusDetail = () => {
     setSyncResult(null);
     try {
       const response = await discountsAPI.syncCustomerOrders(id);
-      const { newOrdersCount, totalOrders, newDiscountGroups } = response.data.data;
+      const { newOrdersCount, totalOrders, newDiscountGroups } =
+        response.data.data;
       setSyncResult({ newOrdersCount, totalOrders, newDiscountGroups });
       await fetchData();
       // Auto-hide result after 5 seconds
@@ -837,12 +869,7 @@ const BonusDetail = () => {
     if (ordersInGroups.has(orderId)) return acc;
 
     // Calculate potential bonus from this order
-    const eligible = order.items?.filter((i) => i.discountEligible) || [];
-    const eligibleAmount = eligible.reduce(
-      (sum, item) =>
-        sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
-      0,
-    );
+    const eligibleAmount = getEligibleAmount(order);
     const orderBonus = (eligibleAmount * settings.discountRate) / 100;
     return acc + orderBonus;
   }, 0);
@@ -863,18 +890,7 @@ const BonusDetail = () => {
   // Calculate selected orders discount
   const selectedOrdersTotal = selectedOrders.reduce((acc, orderId) => {
     const order = orders.find((o) => (o._id || o.id) === orderId);
-    if (order) {
-      const eligible = order.items?.filter((i) => i.discountEligible) || [];
-      return (
-        acc +
-        eligible.reduce(
-          (sum, item) =>
-            sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
-          0,
-        )
-      );
-    }
-    return acc;
+    return order ? acc + getEligibleAmount(order) : acc;
   }, 0);
   const selectedDiscount = (selectedOrdersTotal * settings.discountRate) / 100;
 
@@ -890,17 +906,7 @@ const BonusDetail = () => {
       acc +
       item.orders.reduce((sum, orderId) => {
         const order = orders.find((o) => (o._id || o.id) === orderId);
-        if (order) {
-          const eligible = order.items?.filter((i) => i.discountEligible) || [];
-          return (
-            sum +
-            eligible.reduce(
-              (s, i) => s + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
-              0,
-            )
-          );
-        }
-        return sum;
+        return order ? sum + getEligibleAmount(order) : sum;
       }, 0)
     );
   }, 0);
@@ -955,7 +961,8 @@ const BonusDetail = () => {
       {!syncing && syncResult && (
         <div
           className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 ${
-            syncResult.error || (syncResult.newOrdersCount === 0 && !syncResult.newDiscountGroups)
+            syncResult.error ||
+            (syncResult.newOrdersCount === 0 && !syncResult.newDiscountGroups)
               ? "bg-red-600 text-white"
               : "bg-green-600 text-white"
           }`}
@@ -979,11 +986,16 @@ const BonusDetail = () => {
                 {syncResult.errorMessage || "Fehler beim Synchronisieren"}
               </span>
             </>
-          ) : syncResult.newOrdersCount > 0 || syncResult.newDiscountGroups > 0 ? (
+          ) : syncResult.newOrdersCount > 0 ||
+            syncResult.newDiscountGroups > 0 ? (
             <span className="font-medium text-sm">
-              {syncResult.newOrdersCount > 0 && `${syncResult.newOrdersCount} neue Einkäufe gefunden`}
-              {syncResult.newOrdersCount > 0 && syncResult.newDiscountGroups > 0 && ", "}
-              {syncResult.newDiscountGroups > 0 && `${syncResult.newDiscountGroups} Bonusgruppe${syncResult.newDiscountGroups > 1 ? "n" : ""} erstellt`}
+              {syncResult.newOrdersCount > 0 &&
+                `${syncResult.newOrdersCount} neue Einkäufe gefunden`}
+              {syncResult.newOrdersCount > 0 &&
+                syncResult.newDiscountGroups > 0 &&
+                ", "}
+              {syncResult.newDiscountGroups > 0 &&
+                `${syncResult.newDiscountGroups} Bonusgruppe${syncResult.newDiscountGroups > 1 ? "n" : ""} erstellt`}
             </span>
           ) : (
             <span className="font-medium text-sm">Keine neuen Einkäufe</span>
@@ -1158,18 +1170,10 @@ const BonusDetail = () => {
                   .filter(Boolean);
 
                 // Calculate totals
-                const itemEligible = itemOrders.reduce((sum, order) => {
-                  const eligible =
-                    order?.items?.filter((i) => i.discountEligible) || [];
-                  return (
-                    sum +
-                    eligible.reduce(
-                      (s, i) =>
-                        s + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
-                      0,
-                    )
-                  );
-                }, 0);
+                const itemEligible = itemOrders.reduce(
+                  (sum, order) => sum + getEligibleAmount(order),
+                  0,
+                );
                 const itemDiscount =
                   (itemEligible * settings.discountRate) / 100;
 
@@ -1370,15 +1374,7 @@ const BonusDetail = () => {
                       <div className="bg-blue-50/30 border-t border-blue-100">
                         {itemOrders.map((order, orderIdx) => {
                           const orderId = order._id || order.id;
-                          const orderEligible = (
-                            order?.items?.filter((i) => i.discountEligible) ||
-                            []
-                          ).reduce(
-                            (s, i) =>
-                              s +
-                              (i.priceSubtotalIncl || i.priceUnit * i.quantity),
-                            0,
-                          );
+                          const orderEligible = getEligibleAmount(order);
                           const orderDiscount =
                             (orderEligible * settings.discountRate) / 100;
                           const isLastOrder =
@@ -2045,21 +2041,7 @@ const BonusDetail = () => {
 
                   // Calculate total eligible amount for entire group
                   const groupTotalEligible = groupOrders.reduce(
-                    (total, order) => {
-                      const eligible =
-                        order.items?.filter((item) => item.discountEligible) ||
-                        [];
-                      return (
-                        total +
-                        eligible.reduce(
-                          (sum, item) =>
-                            sum +
-                            (item.priceSubtotalIncl ||
-                              item.priceUnit * item.quantity),
-                          0,
-                        )
-                      );
-                    },
+                    (total, order) => total + getEligibleAmount(order),
                     0,
                   );
 
@@ -2284,22 +2266,8 @@ const BonusDetail = () => {
 
                                   // Calculate bundle total eligible
                                   const bundleEligible = bundleOrders.reduce(
-                                    (sum, order) => {
-                                      const eligible =
-                                        order.items?.filter(
-                                          (i) => i.discountEligible,
-                                        ) || [];
-                                      return (
-                                        sum +
-                                        eligible.reduce(
-                                          (s, i) =>
-                                            s +
-                                            (i.priceSubtotalIncl ||
-                                              i.priceUnit * i.quantity),
-                                          0,
-                                        )
-                                      );
-                                    },
+                                    (sum, order) =>
+                                      sum + getEligibleAmount(order),
                                     0,
                                   );
 
@@ -2342,19 +2310,8 @@ const BonusDetail = () => {
                                           const orderSubLabel = isBundle
                                             ? getSubIndex(orderIdx)
                                             : "";
-                                          const discountEligibleItems =
-                                            order.items?.filter(
-                                              (item) => item.discountEligible,
-                                            ) || [];
                                           const discountEligibleAmount =
-                                            discountEligibleItems.reduce(
-                                              (sum, item) =>
-                                                sum +
-                                                (item.priceSubtotalIncl ||
-                                                  item.priceUnit *
-                                                    item.quantity),
-                                              0,
-                                            );
+                                            getEligibleAmount(order);
                                           const isLastOrder =
                                             orderIdx ===
                                             bundleOrders.length - 1;
@@ -2561,18 +2518,10 @@ const BonusDetail = () => {
                 if (itemOrders.length === 0) return null;
 
                 // Calculate totals
-                const itemEligible = itemOrders.reduce((sum, order) => {
-                  const eligible =
-                    order?.items?.filter((i) => i.discountEligible) || [];
-                  return (
-                    sum +
-                    eligible.reduce(
-                      (s, i) =>
-                        s + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
-                      0,
-                    )
-                  );
-                }, 0);
+                const itemEligible = itemOrders.reduce(
+                  (sum, order) => sum + getEligibleAmount(order),
+                  0,
+                );
 
                 // Toggle expansion
                 const togglePendingItem = () => {
@@ -2590,13 +2539,7 @@ const BonusDetail = () => {
                 if (!item.isBundle) {
                   const order = itemOrders[0];
                   const orderId = order._id || order.id;
-                  const discountEligibleItems =
-                    order.items?.filter((i) => i.discountEligible) || [];
-                  const discountEligibleAmount = discountEligibleItems.reduce(
-                    (sum, i) =>
-                      sum + (i.priceSubtotalIncl || i.priceUnit * i.quantity),
-                    0,
-                  );
+                  const discountEligibleAmount = getEligibleAmount(order);
 
                   return (
                     <div
@@ -2853,15 +2796,7 @@ const BonusDetail = () => {
                       <div className="bg-amber-50/30 border-t border-amber-100">
                         {itemOrders.map((order, orderIdx) => {
                           const orderId = order._id || order.id;
-                          const orderEligible = (
-                            order?.items?.filter((i) => i.discountEligible) ||
-                            []
-                          ).reduce(
-                            (s, i) =>
-                              s +
-                              (i.priceSubtotalIncl || i.priceUnit * i.quantity),
-                            0,
-                          );
+                          const orderEligible = getEligibleAmount(order);
                           const isLastOrder =
                             orderIdx === itemOrders.length - 1;
 
@@ -2963,15 +2898,7 @@ const BonusDetail = () => {
                     !isInDiscountItems;
 
                   // Calculate discount eligible amount for this order
-                  const discountEligibleItems =
-                    order.items?.filter((item) => item.discountEligible) || [];
-                  const discountEligibleAmount = discountEligibleItems.reduce(
-                    (sum, item) =>
-                      sum +
-                      (item.priceSubtotalIncl ||
-                        item.priceUnit * item.quantity),
-                    0,
-                  );
+                  const discountEligibleAmount = getEligibleAmount(order);
 
                   return (
                     <div
@@ -3107,21 +3034,7 @@ const BonusDetail = () => {
 
                   // Calculate total eligible amount for entire group
                   const groupTotalEligible = groupOrders.reduce(
-                    (total, order) => {
-                      const eligible =
-                        order.items?.filter((item) => item.discountEligible) ||
-                        [];
-                      return (
-                        total +
-                        eligible.reduce(
-                          (sum, item) =>
-                            sum +
-                            (item.priceSubtotalIncl ||
-                              item.priceUnit * item.quantity),
-                          0,
-                        )
-                      );
-                    },
+                    (total, order) => total + getEligibleAmount(order),
                     0,
                   );
 
@@ -3318,22 +3231,8 @@ const BonusDetail = () => {
                                   };
 
                                   const bundleEligible = bundleOrders.reduce(
-                                    (sum, order) => {
-                                      const eligible =
-                                        order.items?.filter(
-                                          (i) => i.discountEligible,
-                                        ) || [];
-                                      return (
-                                        sum +
-                                        eligible.reduce(
-                                          (s, i) =>
-                                            s +
-                                            (i.priceSubtotalIncl ||
-                                              i.priceUnit * i.quantity),
-                                          0,
-                                        )
-                                      );
-                                    },
+                                    (sum, order) =>
+                                      sum + getEligibleAmount(order),
                                     0,
                                   );
 
@@ -3373,19 +3272,8 @@ const BonusDetail = () => {
                                           const orderSubLabel = isBundle
                                             ? getSubIndex(orderIdx)
                                             : "";
-                                          const discountEligibleItems =
-                                            order.items?.filter(
-                                              (item) => item.discountEligible,
-                                            ) || [];
                                           const discountEligibleAmount =
-                                            discountEligibleItems.reduce(
-                                              (sum, item) =>
-                                                sum +
-                                                (item.priceSubtotalIncl ||
-                                                  item.priceUnit *
-                                                    item.quantity),
-                                              0,
-                                            );
+                                            getEligibleAmount(order);
                                           const isLastOrder =
                                             orderIdx ===
                                             bundleOrders.length - 1;
