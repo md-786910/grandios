@@ -756,6 +756,12 @@ const Bestellungen = () => {
             !["bonus kundenkarte", "sonderrabatt"].includes(
               (line.fullProductName || line.productName || "").toLowerCase(),
             ),
+          totalPurchaseExceptBonusCard: ![
+            "bonus kundenkarte",
+            "sonderrabatt",
+          ].includes(
+            (line.fullProductName || line.productName || "").toLowerCase(),
+          ),
           // discountEligible: line.discountEligible !== false,
           image: line.productRef?.image || null,
           color:
@@ -769,21 +775,55 @@ const Bestellungen = () => {
         }))
       : selectedOrder.items || [];
 
+  console.log("orderItems", orderItems);
+
   const discountEligibleItems = orderItems.filter(
     (item) => item.discountEligible,
   );
 
-  console.log(discountEligibleItems);
-  const discountEligibleAmount = discountEligibleItems.reduce(
-    (sum, item) =>
-      sum + (item.priceSubtotalIncl || item.priceUnit) * (item.quantity || 1),
-    0,
+  // const discountEligibleAmount = discountEligibleItems.reduce(
+  //   (sum, item) =>
+  //     sum + (item.priceSubtotalIncl || item.priceUnit) * (item.quantity || 1),
+  //   0,
+  // );
+
+  const discountEligibleAmount = orderItems.reduce((sum, item) => {
+    const name = (item.productName || "").toLowerCase();
+    const amount =
+      item.priceSubtotalIncl ?? item.priceUnit * (item.quantity || 1);
+
+    // exclude items with discount > 0
+    if ((item.discount || 0) > 0) return sum;
+
+    // subtract bonus card because it is negative
+    if (["sonderrabatt", "bonus kundenkarte"].some((n) => name.includes(n))) {
+      return sum + amount;
+    }
+
+    // exclude other negative items
+    if (amount < 0) return sum;
+
+    return sum + amount;
+  }, 0);
+
+  const totalPurchaseExceptBonusCard = orderItems.filter(
+    (item) => item?.totalPurchaseExceptBonusCard,
   );
+
+  console.log(discountEligibleItems, { discountEligibleAmount });
+  const totalPurchaseExceptBonusCardAmount =
+    totalPurchaseExceptBonusCard.reduce(
+      (sum, item) =>
+        sum + (item.priceSubtotalIncl || item.priceUnit) * (item.quantity || 1),
+      0,
+    );
+
   // console.log("discountEligibleAmount", discountEligibleAmount);
 
   // const totalPurchaseAmountExcudingSalesItems
   const discountValue =
-    selectedOrder?.amountTotal > 0 ? selectedOrder.amountTotal * 0.1 : 0;
+    discountEligibleAmount > 0 ? discountEligibleAmount * 0.1 : 0;
+  // selectedOrder?.amountTotal > 0 ? selectedOrder.amountTotal * 0.1 : 0;
   // console.log({
   //   discountEligibleItems,
   //   discountEligibleAmount,
@@ -876,10 +916,13 @@ const Bestellungen = () => {
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center">
             <h3 className="font-semibold text-gray-900 mb-4">
               {/* Einkäufe gesamt */}
-              Rechnungssumme
+              {/* Rechnungssumme */}
+              bonusberechtigte Rechnung
             </h3>
             <p className="text-3xl font-bold text-gray-900">
-              € {formatCurrency(selectedOrder.amountTotal)}
+              {/* total purchase except bonus card */}€{" "}
+              {formatCurrency(discountEligibleAmount)}
+              {/* {formatCurrency(selectedOrder.amountTotal)} */}
             </p>
           </div>
 
@@ -888,11 +931,13 @@ const Bestellungen = () => {
             <h3 className="font-semibold text-gray-900">Einkäufe gesamt</h3>
 
             <p className="text-3xl font-bold mt-3 text-gray-900">
-              € {formatCurrency(discountEligibleAmount)}
+              {/* € {formatCurrency(discountEligibleAmount)} */}€{" "}
+              {formatCurrency(totalPurchaseExceptBonusCardAmount)}
             </p>
 
             <p className="text-xs text-gray-400 mt-1">
-              (ohne Sale-Artikel und Bonus)
+              {/* (ohne Sale-Artikel und Bonus) */}
+              (ausgenommen Bonuskarte)
             </p>
           </div>
         </div>
