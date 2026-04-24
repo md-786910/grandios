@@ -779,10 +779,11 @@ const Bestellungen = () => {
       sum + (item.priceSubtotalIncl || item.priceUnit) * (item.quantity || 1),
     0,
   );
+  // console.log("discountEligibleAmount", discountEligibleAmount);
 
   // const totalPurchaseAmountExcudingSalesItems
   const discountValue =
-    discountEligibleAmount > 0 ? discountEligibleAmount * 0.1 : 0;
+    selectedOrder?.amountTotal > 0 ? selectedOrder.amountTotal * 0.1 : 0;
   // console.log({
   //   discountEligibleItems,
   //   discountEligibleAmount,
