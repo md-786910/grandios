@@ -917,7 +917,7 @@ const Bestellungen = () => {
             <h3 className="font-semibold text-gray-900 mb-4">
               {/* Einkäufe gesamt */}
               {/* Rechnungssumme */}
-              bonusberechtigte Rechnung
+              Bonusberechtigte Rechungssumme
             </h3>
             <p className="text-3xl font-bold text-gray-900">
               {/* total purchase except bonus card */}€{" "}
