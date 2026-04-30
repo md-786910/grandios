@@ -578,8 +578,7 @@ const Bestellungen = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedOrders.map((order) => {
-                      const statusInfo = getStatusInfo(order);
+                    {paginatedOrders?.map((order) => {
                       return (
                         <tr
                           key={order._id}
@@ -739,41 +738,52 @@ const Bestellungen = () => {
   // Calculate values from order data
   // Use orderLines (from WAWI sync) or items (legacy) - merge both sources
   const customer = selectedOrder.customerId || {};
-  const orderItems =
+  let orderItems =
     selectedOrder.orderLines?.length > 0
-      ? selectedOrder.orderLines.map((line) => ({
-          orderLineId: line.orderLineId || line._id,
-          productId: line.productId,
-          productName: line.fullProductName || line.productName,
-          priceUnit: line.priceUnit,
-          priceSubtotalIncl:
-            line.priceSubtotalIncl || line.priceUnit * line.quantity,
-          quantity: line.quantity || 1,
-          discount: line.discount || 0,
-          discountEligible:
-            line.priceSubtotalIncl > 0 &&
-            line?.discount === 0 &&
-            !["bonus kundenkarte", "sonderrabatt"].includes(
+      ? selectedOrder.orderLines.map((line) => {
+          return {
+            orderLineId: line.orderLineId || line._id,
+            productId: line.productId,
+            productName: line.fullProductName || line.productName,
+            priceUnit: line.priceUnit,
+            priceSubtotalIncl:
+              line.priceSubtotalIncl || line.priceUnit * line.quantity,
+            quantity: line.quantity || 1,
+            discount: line.discount || 0,
+            discountEligible:
+              line.priceSubtotalIncl > 0 &&
+              line?.discount === 0 &&
+              !["bonus kundenkarte", "sonderrabatt"].includes(
+                (line.fullProductName || line.productName || "").toLowerCase(),
+              ),
+            totalPurchaseExceptBonusCard: ![
+              "bonus kundenkarte",
+              "sonderrabatt",
+            ].includes(
               (line.fullProductName || line.productName || "").toLowerCase(),
             ),
-          totalPurchaseExceptBonusCard: ![
-            "bonus kundenkarte",
-            "sonderrabatt",
-          ].includes(
-            (line.fullProductName || line.productName || "").toLowerCase(),
-          ),
-          // discountEligible: line.discountEligible !== false,
-          image: line.productRef?.image || null,
-          color:
-            line.productRef?.attributeValues?.find(
-              (a) => a.attributeName === "Farbe",
-            )?.valueName || null,
-          material:
-            line.productRef?.attributeValues?.find(
-              (a) => a.attributeName === "Material",
-            )?.valueName || null,
-        }))
+            // discountEligible: line.discountEligible !== false,
+            image: line.productRef?.image || null,
+            color:
+              line.productRef?.attributeValues?.find(
+                (a) => a.attributeName === "Farbe",
+              )?.valueName || null,
+            material:
+              line.productRef?.attributeValues?.find(
+                (a) => a.attributeName === "Material",
+              )?.valueName || null,
+          };
+        })
       : selectedOrder.items || [];
+
+  orderItems = orderItems?.filter((line) => {
+    const name = (line.productName || "").toLowerCase();
+    const isInvalid =
+      line?.discount === 0 &&
+      line.priceSubtotalIncl < 0 &&
+      !["bonus kundenkarte", "sonderrabatt"].some((n) => name.includes(n));
+    return !isInvalid; // ✅ always return boolean
+  });
 
   console.log("orderItems", orderItems);
 
