@@ -40,6 +40,14 @@ const CustomerSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  totalReturnAmount: {
+    type: Number,
+    default: 0
+  },
+  totalReturnDeduction: {
+    type: Number,
+    default: 0
+  },
   companyType: String,
   source: {
     type: String,

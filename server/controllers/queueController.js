@@ -1,30 +1,40 @@
-const OrderCustomerQueue = require('../models/OrderCustomerQueue');
-const DiscountOrder = require('../models/DiscountOrder');
-const Discount = require('../models/Discount');
-const Customer = require('../models/Customer');
-const Order = require('../models/Order');
-const AppSettings = require('../models/AppSettings');
+const OrderCustomerQueue = require("../models/OrderCustomerQueue");
+const DiscountOrder = require("../models/DiscountOrder");
+const Discount = require("../models/Discount");
+const Customer = require("../models/Customer");
+const Order = require("../models/Order");
+const AppSettings = require("../models/AppSettings");
 
 // Helper to check if an item is eligible for bonus calculation
-// Excludes: items marked as not eligible, Sale items (with existing discount), vouchers,
-// negative amounts (discounts), and "Bonus Kundenkarte" products
+// Excludes: items marked as not eligible, positive Sale items (with existing discount),
+// vouchers, and "Bonus Kundenkarte" products. Negative-amount lines (returns) remain
+// eligible so they net against purchases in the signed sum.
 function isItemEligibleForBonus(item) {
   // Must be discount eligible
   if (!item.discountEligible) return false;
-  // Exclude items with negative amounts (discount lines)
-  if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0) return false;
-  // Exclude items with existing discounts (Sale items)
-  if (item.discount && item.discount > 0) return false;
+  // Previously dropped any negative-amount line, hiding returns from the
+  // bonus calculation. Now they pass through and net in the signed sum.
+  // if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0) return false;
+  // Exclude positive Sale items (existing discount on purchase)
+  if (item.discount && item.discount > 0 && (item.priceSubtotalIncl || 0) > 0)
+    return false;
   // Exclude vouchers and Bonus Kundenkarte (check product name)
-  const name = (item.productName || '').toLowerCase();
-  if (name.includes('gutschein') || name.includes('voucher') || name.includes('gift') || name.includes('bonus kundenkarte')) return false;
+  const name = (item.productName || "").toLowerCase();
+  if (
+    name.includes("gutschein") ||
+    name.includes("voucher") ||
+    name.includes("gift") ||
+    name.includes("bonus kundenkarte") ||
+    name.includes("sonderrabatt")
+  )
+    return false;
   return true;
 }
 
 // Helper to check if an order has at least one bonus-eligible item
 function orderHasEligibleItems(order) {
   const items = order.items || [];
-  return items.some(item => isItemEligibleForBonus(item));
+  return items.some((item) => isItemEligibleForBonus(item));
 }
 
 // @desc    Add order to customer queue
@@ -35,15 +45,15 @@ exports.addOrderToQueue = async (orderId, customerId) => {
     // First, get the order to check if it has eligible items
     const order = await Order.findById(orderId);
     if (!order) {
-      return { success: false, message: 'Order not found' };
+      return { success: false, message: "Order not found" };
     }
 
     // Check if order has at least one eligible item (not Sale/Voucher only)
     if (!orderHasEligibleItems(order)) {
       return {
         success: false,
-        message: 'Order has no eligible items (only Sale items or vouchers)',
-        skipped: true
+        message: "Order has no eligible items (only Sale items or vouchers)",
+        skipped: true,
       };
     }
 
@@ -53,14 +63,16 @@ exports.addOrderToQueue = async (orderId, customerId) => {
     if (!queue) {
       queue = new OrderCustomerQueue({
         customerId,
-        orders: []
+        orders: [],
       });
     }
 
     // Check if order is already in queue
-    const orderExists = queue.orders.some(o => o.orderId.toString() === orderId.toString());
+    const orderExists = queue.orders.some(
+      (o) => o.orderId.toString() === orderId.toString(),
+    );
     if (orderExists) {
-      return { success: false, message: 'Order already in queue' };
+      return { success: false, message: "Order already in queue" };
     }
 
     // Add order to queue
@@ -75,20 +87,20 @@ exports.addOrderToQueue = async (orderId, customerId) => {
       const result = await exports.processQueue(customerId);
       return {
         success: true,
-        message: 'Order added and discount created',
+        message: "Order added and discount created",
         discountCreated: true,
-        discountResult: result
+        discountResult: result,
       };
     }
 
     return {
       success: true,
-      message: 'Order added to queue',
+      message: "Order added to queue",
       queueCount: queue.orderCount,
-      discountCreated: false
+      discountCreated: false,
     };
   } catch (err) {
-    console.error('Error adding order to queue:', err);
+    console.error("Error adding order to queue:", err);
     throw err;
   }
 };
@@ -101,7 +113,7 @@ exports.processQueue = async (customerId) => {
     const queue = await OrderCustomerQueue.findOne({ customerId });
 
     if (!queue || queue.orderCount < 3) {
-      return { success: false, message: 'Not enough orders in queue' };
+      return { success: false, message: "Not enough orders in queue" };
     }
 
     const settings = await AppSettings.getSettings();
@@ -109,20 +121,20 @@ exports.processQueue = async (customerId) => {
 
     // Take only the required number of orders (default 3)
     const ordersToProcess = queue.orders.slice(0, requiredOrders);
-    const orderIds = ordersToProcess.map(o => o.orderId);
+    const orderIds = ordersToProcess.map((o) => o.orderId);
 
     // Get order details
     const orders = await Order.find({ _id: { $in: orderIds } });
 
     if (orders.length === 0) {
-      return { success: false, message: 'No valid orders found' };
+      return { success: false, message: "No valid orders found" };
     }
 
     // Get customer
     const customer = await Customer.findById(customerId);
 
     if (!customer) {
-      return { success: false, message: 'Customer not found' };
+      return { success: false, message: "Customer not found" };
     }
 
     // Calculate discount for each order
@@ -132,8 +144,12 @@ exports.processQueue = async (customerId) => {
     const orderItems = orders.map((order, index) => {
       const items = order.items || [];
       const eligibleAmount = items
-        .filter(item => isItemEligibleForBonus(item))
-        .reduce((sum, item) => sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity), 0);
+        .filter((item) => isItemEligibleForBonus(item))
+        .reduce(
+          (sum, item) =>
+            sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
+          0,
+        );
 
       const discountAmount = (eligibleAmount * discountRate) / 100;
 
@@ -143,7 +159,7 @@ exports.processQueue = async (customerId) => {
         amount: eligibleAmount,
         discountRate,
         discountAmount,
-        bundleIndex: index  // Each order is a separate item (single order, not bundle)
+        bundleIndex: index, // Each order is a separate item (single order, not bundle)
       };
     });
 
@@ -152,7 +168,7 @@ exports.processQueue = async (customerId) => {
       customerId: customer._id,
       partnerId: customer.contactId,
       orders: orderItems,
-      status: 'available'
+      status: "available",
     });
 
     // Update customer's discount wallet
@@ -161,7 +177,7 @@ exports.processQueue = async (customerId) => {
     if (!discount) {
       discount = await Discount.create({
         customerId: customer._id,
-        partnerId: customer.contactId
+        partnerId: customer.contactId,
       });
     }
 
@@ -169,18 +185,18 @@ exports.processQueue = async (customerId) => {
 
     // Remove processed orders from queue
     queue.orders = queue.orders.filter(
-      o => !orderIds.some(id => id.toString() === o.orderId.toString())
+      (o) => !orderIds.some((id) => id.toString() === o.orderId.toString()),
     );
     await queue.save();
 
     return {
       success: true,
-      message: 'Discount group created',
+      message: "Discount group created",
       discountOrder,
-      totalDiscount: discountOrder.totalDiscount
+      totalDiscount: discountOrder.totalDiscount,
     };
   } catch (err) {
-    console.error('Error processing queue:', err);
+    console.error("Error processing queue:", err);
     throw err;
   }
 };
@@ -191,8 +207,8 @@ exports.processQueue = async (customerId) => {
 exports.getQueues = async (req, res, next) => {
   try {
     const queues = await OrderCustomerQueue.find()
-      .populate('customerId', 'name email ref')
-      .populate('orders.orderId', 'posReference orderDate amountTotal items')
+      .populate("customerId", "name email ref")
+      .populate("orders.orderId", "posReference orderDate amountTotal items")
       .sort({ updatedAt: -1 });
 
     const settings = await AppSettings.getSettings();
@@ -200,10 +216,10 @@ exports.getQueues = async (req, res, next) => {
     // Get stats
     const totalInQueue = await OrderCustomerQueue.countDocuments();
     const readyForDiscount = await OrderCustomerQueue.countDocuments({
-      orderCount: { $gte: settings.ordersRequiredForDiscount }
+      orderCount: { $gte: settings.ordersRequiredForDiscount },
     });
     const pendingOrders = await OrderCustomerQueue.aggregate([
-      { $group: { _id: null, total: { $sum: '$orderCount' } } }
+      { $group: { _id: null, total: { $sum: "$orderCount" } } },
     ]);
 
     res.status(200).json({
@@ -212,9 +228,9 @@ exports.getQueues = async (req, res, next) => {
         totalCustomersInQueue: totalInQueue,
         readyForDiscount,
         totalOrdersInQueue: pendingOrders[0]?.total || 0,
-        ordersRequiredForDiscount: settings.ordersRequiredForDiscount
+        ordersRequiredForDiscount: settings.ordersRequiredForDiscount,
       },
-      data: queues
+      data: queues,
     });
   } catch (err) {
     next(err);
@@ -226,9 +242,11 @@ exports.getQueues = async (req, res, next) => {
 // @access  Private
 exports.getCustomerQueue = async (req, res, next) => {
   try {
-    const queue = await OrderCustomerQueue.findOne({ customerId: req.params.customerId })
-      .populate('customerId', 'name email ref')
-      .populate('orders.orderId', 'posReference orderDate amountTotal items');
+    const queue = await OrderCustomerQueue.findOne({
+      customerId: req.params.customerId,
+    })
+      .populate("customerId", "name email ref")
+      .populate("orders.orderId", "posReference orderDate amountTotal items");
 
     if (!queue) {
       return res.status(200).json({
@@ -237,14 +255,14 @@ exports.getCustomerQueue = async (req, res, next) => {
           customerId: req.params.customerId,
           orders: [],
           orderCount: 0,
-          status: 'pending'
-        }
+          status: "pending",
+        },
       });
     }
 
     res.status(200).json({
       success: true,
-      data: queue
+      data: queue,
     });
   } catch (err) {
     next(err);
@@ -273,24 +291,26 @@ exports.processCustomerQueue = async (req, res, next) => {
 // @access  Private
 exports.removeOrderFromQueue = async (req, res, next) => {
   try {
-    const queue = await OrderCustomerQueue.findOne({ customerId: req.params.customerId });
+    const queue = await OrderCustomerQueue.findOne({
+      customerId: req.params.customerId,
+    });
 
     if (!queue) {
       return res.status(404).json({
         success: false,
-        message: 'Queue not found'
+        message: "Queue not found",
       });
     }
 
     // Remove order from queue
     queue.orders = queue.orders.filter(
-      o => o.orderId.toString() !== req.params.orderId
+      (o) => o.orderId.toString() !== req.params.orderId,
     );
     await queue.save();
 
     res.status(200).json({
       success: true,
-      data: queue
+      data: queue,
     });
   } catch (err) {
     next(err);
@@ -302,11 +322,13 @@ exports.removeOrderFromQueue = async (req, res, next) => {
 // @access  Private
 exports.clearCustomerQueue = async (req, res, next) => {
   try {
-    await OrderCustomerQueue.findOneAndDelete({ customerId: req.params.customerId });
+    await OrderCustomerQueue.findOneAndDelete({
+      customerId: req.params.customerId,
+    });
 
     res.status(200).json({
       success: true,
-      message: 'Queue cleared'
+      message: "Queue cleared",
     });
   } catch (err) {
     next(err);

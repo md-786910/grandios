@@ -42,15 +42,20 @@ function getOrderItems(order) {
 
 // Helper to check if an item is eligible for bonus calculation
 // Excludes: items marked as not eligible, Sale items (with existing discount), vouchers,
-// negative amounts (discounts), and "Bonus Kundenkarte" products
+// and "Bonus Kundenkarte" products. Negative-amount lines (returns / Sonderrabatt)
+// remain eligible so they net against purchases in the signed sum.
 function isItemEligibleForBonus(item) {
   // Must be discount eligible
   if (!item?.discountEligible) return false;
-  // Exclude items with negative amounts (discount lines)
-  if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0)
+  // Previously short-circuited on any negative amount, which dropped returns
+  // and Sonderrabatt entirely; we now let them through so they net in the
+  // signed sum used by getOrderEligibleAmount and the Einkäufe detail view.
+  // if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0)
+  //   return false;
+  // Exclude items with existing discounts (Sale items) — only when positive,
+  // so a refunded sale item (negative qty + negative amount) can still net.
+  if (item.discount && item.discount > 0 && (item.priceSubtotalIncl || 0) > 0)
     return false;
-  // Exclude items with existing discounts (Sale items)
-  if (item.discount && item.discount > 0) return false;
   // Exclude vouchers and Bonus Kundenkarte (check product name)
   const lowerName = (item.productName || "").toLowerCase();
   if (
@@ -399,6 +404,8 @@ exports.getCustomerDiscount = async (req, res, next) => {
           email: customer.email,
           phone: customer.phone || customer.mobile,
           address: customer.address,
+          totalReturnAmount: customer.totalReturnAmount || 0,
+          totalReturnDeduction: customer.totalReturnDeduction || 0,
         },
         stats: {
           totalOrderValue,

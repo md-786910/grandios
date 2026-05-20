@@ -1594,6 +1594,22 @@ const BonusDetail = () => {
                     <div>{customer.address?.country}</div>
                   </div>
                 </div>
+                {(customer.totalReturnAmount || 0) > 0 && (
+                  <>
+                    <div className="flex pt-3 border-t border-gray-100">
+                      <span className="text-gray-500 w-32">Rückgaben:</span>
+                      <span className="text-red-600 font-medium">
+                        -€ {formatCurrency(customer.totalReturnAmount)}
+                      </span>
+                    </div>
+                    <div className="flex">
+                      <span className="text-gray-500 w-32">Bonusabzug:</span>
+                      <span className="text-red-600 font-medium">
+                        -€ {formatCurrency(customer.totalReturnDeduction)}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 

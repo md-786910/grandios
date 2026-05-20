@@ -83,6 +83,10 @@ const OrderSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    bonusDeductionApplied: {
+      type: Boolean,
+      default: false,
+    },
     items: [OrderItemSchema],
     // Reference to separate OrderLine collection for advanced queries
     orderLines: [

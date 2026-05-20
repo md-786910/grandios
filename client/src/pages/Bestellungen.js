@@ -776,14 +776,19 @@ const Bestellungen = () => {
         })
       : selectedOrder.items || [];
 
-  orderItems = orderItems?.filter((line) => {
-    const name = (line.productName || "").toLowerCase();
-    const isInvalid =
-      line?.discount === 0 &&
-      line.priceSubtotalIncl < 0 &&
-      !["bonus kundenkarte", "sonderrabatt"].some((n) => name.includes(n));
-    return !isInvalid; // ✅ always return boolean
-  });
+  // Previously filtered out return lines (discount===0 && priceSubtotalIncl<0
+  // && !sonderrabatt/bonus kundenkarte) so they didn't show up in the detail.
+  // Now we keep them visible AND let them net into the eligible amount below,
+  // so a mixed receipt (purchase + return) reflects the true net total and a
+  // pure-return receipt produces a negative bonus to deduct from the balance.
+  // orderItems = orderItems?.filter((line) => {
+  //   const name = (line.productName || "").toLowerCase();
+  //   const isInvalid =
+  //     line?.discount === 0 &&
+  //     line.priceSubtotalIncl < 0 &&
+  //     !["bonus kundenkarte", "sonderrabatt"].some((n) => name.includes(n));
+  //   return !isInvalid; // ✅ always return boolean
+  // });
 
   console.log("orderItems", orderItems);
 
@@ -797,22 +802,30 @@ const Bestellungen = () => {
   //   0,
   // );
 
+  // Previous netting logic excluded plain returns (amount<0 and not a
+  // Sonderrabatt/Bonus Kundenkarte name) — that's why mixed receipts
+  // registered the gross purchase amount instead of the net.
+  // const discountEligibleAmount = orderItems.reduce((sum, item) => {
+  //   const name = (item.productName || "").toLowerCase();
+  //   const amount =
+  //     item.priceSubtotalIncl ?? item.priceUnit * (item.quantity || 1);
+  //   if ((item.discount || 0) > 0) return sum;
+  //   if (["sonderrabatt", "bonus kundenkarte"].some((n) => name.includes(n))) {
+  //     return sum + amount;
+  //   }
+  //   if (amount < 0) return sum;
+  //   return sum + amount;
+  // }, 0);
+
   const discountEligibleAmount = orderItems.reduce((sum, item) => {
-    const name = (item.productName || "").toLowerCase();
     const amount =
       item.priceSubtotalIncl ?? item.priceUnit * (item.quantity || 1);
 
-    // exclude items with discount > 0
-    if ((item.discount || 0) > 0) return sum;
+    // exclude positive Sale items (existing per-line discount); a refunded
+    // sale item (negative qty + negative amount) is still netted.
+    if ((item.discount || 0) > 0 && amount > 0) return sum;
 
-    // subtract bonus card because it is negative
-    if (["sonderrabatt", "bonus kundenkarte"].some((n) => name.includes(n))) {
-      return sum + amount;
-    }
-
-    // exclude other negative items
-    if (amount < 0) return sum;
-
+    // net everything else (purchases, returns, Sonderrabatt, Bonus Kundenkarte)
     return sum + amount;
   }, 0);
 

@@ -598,7 +598,8 @@ function isItemExcludedFromEligibleAmount(item) {
 /**
  * Get eligible bonus amount for an order.
  * Sums signed priceSubtotalIncl across non-excluded lines so that
- * Sonderrabatt and similar negative adjustments reduce the eligible amount.
+ * Sonderrabatt, returned items and similar negative adjustments reduce
+ * the eligible amount. May return a negative value for pure-return receipts.
  */
 async function getOrderEligibleAmount(orderId) {
   const orderLines = await OrderLine.find({ orderId });
@@ -608,7 +609,10 @@ async function getOrderEligibleAmount(orderId) {
     eligibleAmount +=
       line.priceSubtotalIncl || line.priceUnit * (line.quantity || 1);
   }
-  return Math.max(0, eligibleAmount);
+  // Previously clamped to 0 (Math.max(0, eligibleAmount)) which hid pure-return
+  // receipts from the bonus program entirely. Returning the signed total lets
+  // checkAndCreateDiscountGroup route negative orders into a balance deduction.
+  return eligibleAmount;
 }
 
 /**
@@ -625,23 +629,61 @@ async function checkAndCreateDiscountGroup(customer, orders) {
     group.orders.forEach((o) => ordersInGroups.add(o.orderId.toString()));
   });
 
-  // Filter eligible orders (not in any group, has eligible items)
-  // Uses per-item eligibility check matching discountController logic
+  // Filter eligible orders (not in any group, has eligible items).
+  // Pure-return receipts (negative eligible amount) bypass bundling and
+  // deduct directly from the customer's wallet / Discount.balance.
+  //
+  // Previous logic skipped any order with amountTotal<=0 or eligibleAmount<=0,
+  // which silently dropped pure-return receipts from the bonus program:
+  //   if (!order || !order.amountTotal || order.amountTotal <= 0) continue;
+  //   const eligibleAmount = await getOrderEligibleAmount(order._id);
+  //   if (eligibleAmount <= 0) continue;
   const eligibleOrders = [];
   const orderEligibleAmounts = new Map();
   for (const order of orders) {
+    if (!order) continue;
     // Skip if already in a discount group
     if (ordersInGroups.has(order._id.toString())) continue;
 
-    // Skip if amount is zero or negative
-    if (!order || !order.amountTotal || order.amountTotal <= 0) continue;
-
-    // Calculate eligible amount from individual items (excludes Sale items, vouchers, etc.)
+    // Calculate eligible amount from individual items (signed; excludes Sale items, vouchers, etc.)
     const eligibleAmount = await getOrderEligibleAmount(order._id);
-    if (eligibleAmount <= 0) continue;
 
-    eligibleOrders.push(order);
-    orderEligibleAmounts.set(order._id.toString(), eligibleAmount);
+    if (eligibleAmount > 0) {
+      eligibleOrders.push(order);
+      orderEligibleAmounts.set(order._id.toString(), eligibleAmount);
+      continue;
+    }
+
+    if (eligibleAmount < 0 && !order.bonusDeductionApplied) {
+      const returnAmount = Math.abs(eligibleAmount);
+      const deduction = returnAmount * DISCOUNT_RATE;
+
+      await Customer.findByIdAndUpdate(customer._id, {
+        $inc: {
+          wallet: -deduction,
+          totalReturnAmount: returnAmount,
+          totalReturnDeduction: deduction,
+        },
+      });
+
+      await Discount.findOneAndUpdate(
+        { customerId: customer._id },
+        {
+          $inc: { balance: -deduction },
+          partnerId: customer.contactId,
+          status: 1,
+        },
+        { upsert: true, new: true },
+      );
+
+      await Order.findByIdAndUpdate(order._id, {
+        bonusDeductionApplied: true,
+      });
+
+      console.log(
+        `[CascadeSync] Applied return deduction for customer ${customer.name}: -€${deduction.toFixed(2)} (return €${returnAmount.toFixed(2)})`,
+      );
+    }
   }
 
   // Sort by date oldest first so groups are created chronologically
