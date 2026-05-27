@@ -13,12 +13,18 @@ const NotesHistorySchema = new mongoose.Schema({
   },
   changedBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    ref: 'User'
+    // Not required: system-generated entries have no user author
   },
   changedByName: {
     type: String,
-    required: true  // Denormalized for performance
+    required: true  // Denormalized for performance; "System" for system entries
+  },
+  // Distinguishes manual user notes from system-generated audit entries
+  source: {
+    type: String,
+    enum: ['user', 'system'],
+    default: 'user'
   }
 }, {
   timestamps: true  // Automatically adds createdAt and updatedAt

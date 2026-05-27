@@ -71,10 +71,13 @@ const Bestellungen = () => {
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
+      // Fetch off the URL search param (source of truth) rather than the
+      // debounced state, which lags behind when returning from the detail
+      // page and would otherwise trigger a stale unfiltered fetch.
       const response = await ordersAPI.getAll(
         currentPage,
         itemsPerPage,
-        debouncedSearch,
+        urlSearch.trim(),
         statusFilter,
       );
       if (response.data.success) {
@@ -87,7 +90,7 @@ const Bestellungen = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, itemsPerPage, debouncedSearch, statusFilter]);
+  }, [currentPage, itemsPerPage, urlSearch, statusFilter]);
 
   const fetchCustomers = useCallback(
     async (page = 1, reset = false) => {
@@ -834,18 +837,31 @@ const Bestellungen = () => {
   );
 
   console.log(discountEligibleItems, { discountEligibleAmount });
+  // Previous formula multiplied priceSubtotalIncl (which already includes the
+  // quantity and its sign) by quantity again — double-negating returns
+  // (-79.90 * -1 = +79.90) and inflating multi-qty lines. Use the signed line
+  // subtotal directly so a pure-return receipt totals negative.
+  // const totalPurchaseExceptBonusCardAmount =
+  //   totalPurchaseExceptBonusCard.reduce(
+  //     (sum, item) =>
+  //       sum + (item.priceSubtotalIncl || item.priceUnit) * (item.quantity || 1),
+  //     0,
+  //   );
   const totalPurchaseExceptBonusCardAmount =
     totalPurchaseExceptBonusCard.reduce(
       (sum, item) =>
-        sum + (item.priceSubtotalIncl || item.priceUnit) * (item.quantity || 1),
+        sum + (item.priceSubtotalIncl ?? item.priceUnit * (item.quantity || 1)),
       0,
     );
 
   // console.log("discountEligibleAmount", discountEligibleAmount);
 
   // const totalPurchaseAmountExcudingSalesItems
-  const discountValue =
-    discountEligibleAmount > 0 ? discountEligibleAmount * 0.1 : 0;
+  // Previously clamped to 0 for negative totals; now we allow negative bonus
+  // so pure-return receipts visibly show the deduction amount in the tile.
+  // const discountValue =
+  //   discountEligibleAmount > 0 ? discountEligibleAmount * 0.1 : 0;
+  const discountValue = discountEligibleAmount * 0.1;
   // selectedOrder?.amountTotal > 0 ? selectedOrder.amountTotal * 0.1 : 0;
   // console.log({
   //   discountEligibleItems,
@@ -876,9 +892,37 @@ const Bestellungen = () => {
       <div className="flex gap-4 mb-6">
         {/* Customer Details - Left Column */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 w-[400px]">
-          <h3 className="text-center font-semibold text-gray-900 mb-6">
-            Kundendetails
-          </h3>
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <h3 className="text-center font-semibold text-gray-900">
+              Kundendetails
+            </h3>
+            {(customer?._id || customer?.id) && (
+              <button
+                type="button"
+                title="Bonusdetails öffnen"
+                onClick={() =>
+                  navigate(`/bonus/${customer._id || customer.id}`, {
+                    state: { customerName: customer.name },
+                  })
+                }
+                className="text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
           <div className="space-y-3 text-sm">
             <div className="flex">
               <span className="text-gray-500 w-36">Kundennummer:</span>
@@ -1099,7 +1143,14 @@ const Bestellungen = () => {
                     </span>
                   ) : (
                     <span className="text-red-500 text-sm font-medium">
-                      Nicht bonusberechtigt
+                      {Number(item.discount) === 0 &&
+                      (item.priceSubtotalIncl || 0) < 0 &&
+                      (item.quantity || 0) < 0 &&
+                      !["bonus kundenkarte", "sonderrabatt"].some((n) =>
+                        (item.productName || "").toLowerCase().includes(n),
+                      )
+                        ? "Nicht bonusberechtigt (Rückgabe)"
+                        : "Nicht bonusberechtigt"}
                     </span>
                   )}
                 </div>

@@ -13,6 +13,7 @@ const ProductAttribute = require("../models/ProductAttribute");
 const ProductAttributeValue = require("../models/ProductAttributeValue");
 const Discount = require("../models/Discount");
 const DiscountOrder = require("../models/DiscountOrder");
+const NotesHistory = require("../models/NotesHistory");
 const wawiApiClient = require("./wawiApiClient");
 
 // Field definitions for WAWI API
@@ -564,25 +565,23 @@ async function ensureAttributeValue(valueId, attributeId, name) {
 
 /**
  * Check if an order line should be excluded from the bonus-eligible amount.
- * Excludes: items marked ineligible, vouchers / gift cards / Bonus Kundenkarte
- * (these are payment instruments, not order value), and Sale items
- * (positive items with a per-line discount).
+ * Excludes: items marked ineligible, true payment vouchers / gift cards
+ * (Gutschein / Voucher / Gift), and Sale items (positive items with a
+ * per-line discount).
  *
- * Does NOT exclude negative adjustment lines (Sonderrabatt, credit notes) —
- * those are summed as deductions so the eligible amount reflects what the
- * customer actually paid.
+ * Does NOT exclude negative adjustment lines (Sonderrabatt, Bonus Kundenkarte,
+ * credit notes) — those are summed as deductions so the eligible amount
+ * reflects what the customer actually paid. Excluding them (they are negative)
+ * would inflate the base and over-credit the bonus.
  */
 
 function isItemExcludedFromEligibleAmount(item) {
   if (item.discountEligible === false) return true;
-
   const name = (item.productName || item.fullProductName || "").toLowerCase();
   if (
     name.includes("gutschein") ||
     name.includes("voucher") ||
-    name.includes("gift") ||
-    name.includes("bonus kundenkarte") ||
-    name.includes("sonderrabatt")
+    name.includes("gift")
   ) {
     return true;
   }
@@ -605,7 +604,9 @@ async function getOrderEligibleAmount(orderId) {
   const orderLines = await OrderLine.find({ orderId });
   let eligibleAmount = 0;
   for (const line of orderLines) {
-    if (isItemExcludedFromEligibleAmount(line)) continue;
+    if (isItemExcludedFromEligibleAmount(line)) {
+      continue;
+    }
     eligibleAmount +=
       line.priceSubtotalIncl || line.priceUnit * (line.quantity || 1);
   }
@@ -629,9 +630,46 @@ async function checkAndCreateDiscountGroup(customer, orders) {
     group.orders.forEach((o) => ordersInGroups.add(o.orderId.toString()));
   });
 
+  // Recompute stored amounts for existing non-redeemed groups so the eligible
+  // base / discount stay consistent with the current calculation (e.g. after
+  // the Sonderrabatt/Bonus Kundenkarte netting fix). Redeemed groups are left
+  // untouched to preserve historical payouts.
+  for (const group of existingGroups) {
+    if (group.status === "redeemed") continue;
+
+    const oldTotal = group.totalDiscount || 0;
+    for (const line of group.orders) {
+      const amount = await getOrderEligibleAmount(line.orderId);
+      line.amount = amount;
+      line.discountAmount = amount * (line.discountRate || DISCOUNT_RATE);
+    }
+    await group.save(); // pre-save hook recomputes totalDiscount / totalAmount
+    const newTotal = group.totalDiscount || 0;
+
+    const delta = newTotal - oldTotal;
+    if (Math.abs(delta) >= 0.005) {
+      await Customer.findByIdAndUpdate(customer._id, {
+        $inc: { wallet: delta, totalDiscountGranted: delta },
+      });
+      await Discount.findOneAndUpdate(
+        { customerId: customer._id },
+        {
+          $inc: { balance: delta, totalGranted: delta },
+          partnerId: customer.contactId,
+          status: 1,
+        },
+        { upsert: true, new: true },
+      );
+      console.log(
+        `[CascadeSync] Recomputed group ${group._id} for ${customer.name}: €${oldTotal.toFixed(2)} → €${newTotal.toFixed(2)} (Δ €${delta.toFixed(2)})`,
+      );
+    }
+  }
+
   // Filter eligible orders (not in any group, has eligible items).
   // Pure-return receipts (negative eligible amount) bypass bundling and
-  // deduct directly from the customer's wallet / Discount.balance.
+  // accrue a pending bonus deduction on the customer, applied at the next
+  // manual redemption (wallet/balance are NOT touched here).
   //
   // Previous logic skipped any order with amountTotal<=0 or eligibleAmount<=0,
   // which silently dropped pure-return receipts from the bonus program:
@@ -655,37 +693,38 @@ async function checkAndCreateDiscountGroup(customer, orders) {
     }
 
     if (eligibleAmount < 0 && !order.bonusDeductionApplied) {
+      // Pure-return receipt: do NOT touch wallet/balance here. Accumulate the
+      // bonus owed back on the customer; it is subtracted at the next manual
+      // redemption (see redeemDiscountGroup).
+      console.log({ eligibleAmount });
       const returnAmount = Math.abs(eligibleAmount);
       const deduction = returnAmount * DISCOUNT_RATE;
 
-      await Customer.findByIdAndUpdate(customer._id, {
-        $inc: {
-          wallet: -deduction,
-          totalReturnAmount: returnAmount,
-          totalReturnDeduction: deduction,
-        },
-      });
-
-      await Discount.findOneAndUpdate(
-        { customerId: customer._id },
-        {
-          $inc: { balance: -deduction },
-          partnerId: customer.contactId,
-          status: 1,
-        },
-        { upsert: true, new: true },
+      const updatedCustomer = await Customer.findByIdAndUpdate(
+        customer._id,
+        { $inc: { pendingReturnDeduction: deduction } },
+        { new: true },
       );
 
       await Order.findByIdAndUpdate(order._id, {
         bonusDeductionApplied: true,
       });
 
+      // System-generated audit entry so the origin of the deduction is traceable
+      const newPending = updatedCustomer?.pendingReturnDeduction || deduction;
+      await NotesHistory.create({
+        customerId: customer._id,
+        notes: `Rückgabe erfasst: Beleg ${order.posReference || order.orderId} über −€${returnAmount.toFixed(2)}. Offener Bonusabzug erhöht um €${deduction.toFixed(2)} auf €${newPending.toFixed(2)}.`,
+        changedByName: "System",
+        source: "system",
+      });
+
       console.log(
-        `[CascadeSync] Applied return deduction for customer ${customer.name}: -€${deduction.toFixed(2)} (return €${returnAmount.toFixed(2)})`,
+        `[CascadeSync] Accrued return deduction for customer ${customer.name}: +€${deduction.toFixed(2)} pending (return €${returnAmount.toFixed(2)})`,
       );
     }
   }
-
+  console.log({ eligibleOrders });
   // Sort by date oldest first so groups are created chronologically
   // (oldest purchases get grouped first, newest remain ungrouped until enough accumulate)
   eligibleOrders.sort((a, b) => new Date(a.orderDate) - new Date(b.orderDate));
@@ -699,7 +738,7 @@ async function checkAndCreateDiscountGroup(customer, orders) {
 
     const discountOrderItems = groupOrders.map((order, index) => {
       const eligibleAmount =
-        orderEligibleAmounts.get(order._id.toString()) || order.amountTotal;
+        orderEligibleAmounts.get(order._id.toString()) ?? 0;
       return {
         orderId: order._id,
         amount: eligibleAmount,
@@ -709,6 +748,7 @@ async function checkAndCreateDiscountGroup(customer, orders) {
       };
     });
 
+    console.log({ discountOrderItems });
     // Create discount group
     const discountGroup = await DiscountOrder.create({
       customerId: customer._id,
@@ -1376,4 +1416,5 @@ module.exports = {
   runIncrementalSync,
   syncOrCreateCustomer,
   checkAndCreateDiscountGroup,
+  getOrderEligibleAmount,
 };

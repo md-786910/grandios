@@ -9,6 +9,8 @@ const ConfirmModal = ({
   message = "Sind Sie sicher?",
   confirmText = "Ja",
   cancelText = "Stornieren",
+  children = null,
+  confirmDisabled = false,
 }) => {
   const [mounted, setMounted] = useState(false);
   const portalRef = useRef(null);
@@ -68,13 +70,15 @@ const ConfirmModal = ({
         {/* Content */}
         <div className="px-5 py-8">
           <p className="text-center text-gray-700 text-sm">{message}</p>
+          {children}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-center gap-4 px-5 pb-6">
           <button
             onClick={onConfirm}
-            className="min-w-[100px] px-6 py-2.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm font-medium"
+            disabled={confirmDisabled}
+            className="min-w-[100px] px-6 py-2.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-600"
           >
             {confirmText}
           </button>

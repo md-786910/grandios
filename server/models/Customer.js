@@ -40,10 +40,12 @@ const CustomerSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  totalReturnAmount: {
+  // Bonus € accrued from returns, awaiting subtraction at the next redemption
+  pendingReturnDeduction: {
     type: Number,
     default: 0
   },
+  // Cumulative bonus € actually deducted at redemption (historical record)
   totalReturnDeduction: {
     type: Number,
     default: 0

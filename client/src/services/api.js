@@ -148,9 +148,12 @@ export const discountsAPI = {
       body: JSON.stringify({ orderIds, discountRate, manualOverride }),
     }),
 
-  redeemGroup: (customerId, groupId) =>
+  redeemGroup: (customerId, groupId, deductionAmount) =>
     apiCall(`/discounts/${customerId}/groups/${groupId}/redeem`, {
       method: "PUT",
+      body: JSON.stringify(
+        deductionAmount === undefined ? {} : { deductionAmount },
+      ),
     }),
 
   deleteGroup: (customerId, groupId) =>

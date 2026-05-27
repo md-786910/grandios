@@ -18,7 +18,7 @@ mongoose.connect(process.env.MONGODB_URI);
 // Mock data
 const adminUser = {
   email: "admin@grandios.com",
-  password: "password123",
+  password: "74GS1w£:Yju<",
   name: "Admin User",
   role: "admin",
   notifications: {
@@ -114,7 +114,8 @@ const products = [
     productId: 101,
     productName: "Premium T-Shirt",
     priceUnit: 50.0,
-    image: "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=60&h=60&fit=crop",
+    image:
+      "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=60&h=60&fit=crop",
     color: "Black",
     material: "Cotton",
   },
@@ -122,7 +123,8 @@ const products = [
     productId: 102,
     productName: "Leather Bag",
     priceUnit: 120.0,
-    image: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=60&h=60&fit=crop",
+    image:
+      "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=60&h=60&fit=crop",
     color: "Brown",
     material: "Leather",
   },
@@ -130,7 +132,8 @@ const products = [
     productId: 103,
     productName: "Denim Jeans",
     priceUnit: 80.0,
-    image: "https://images.unsplash.com/photo-1542272604-787c3835535d?w=60&h=60&fit=crop",
+    image:
+      "https://images.unsplash.com/photo-1542272604-787c3835535d?w=60&h=60&fit=crop",
     color: "Blue",
     material: "Denim",
   },
@@ -138,7 +141,8 @@ const products = [
     productId: 104,
     productName: "Wool Sweater",
     priceUnit: 95.0,
-    image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=60&h=60&fit=crop",
+    image:
+      "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=60&h=60&fit=crop",
     color: "Gray",
     material: "Wool",
   },
@@ -146,7 +150,8 @@ const products = [
     productId: 105,
     productName: "Cotton Dress",
     priceUnit: 75.0,
-    image: "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=60&h=60&fit=crop",
+    image:
+      "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=60&h=60&fit=crop",
     color: "White",
     material: "Cotton",
   },
@@ -154,7 +159,8 @@ const products = [
     productId: 106,
     productName: "Summer Hat",
     priceUnit: 35.0,
-    image: "https://images.unsplash.com/photo-1521369909029-2afed882baee?w=60&h=60&fit=crop",
+    image:
+      "https://images.unsplash.com/photo-1521369909029-2afed882baee?w=60&h=60&fit=crop",
     color: "Beige",
     material: "Straw",
   },
@@ -162,7 +168,8 @@ const products = [
     productId: 107,
     productName: "Sneakers",
     priceUnit: 110.0,
-    image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=60&h=60&fit=crop",
+    image:
+      "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=60&h=60&fit=crop",
     color: "Red",
     material: "Canvas",
   },
@@ -170,7 +177,8 @@ const products = [
     productId: 108,
     productName: "Silk Scarf",
     priceUnit: 45.0,
-    image: "https://images.unsplash.com/photo-1601924638867-3a6de6b7a500?w=60&h=60&fit=crop",
+    image:
+      "https://images.unsplash.com/photo-1601924638867-3a6de6b7a500?w=60&h=60&fit=crop",
     color: "Multi",
     material: "Silk",
   },
@@ -208,8 +216,18 @@ const customerOrders = {
       state: "paid",
       items: [
         { ...products[3], orderLineId: 1, quantity: 1, discountEligible: true }, // 95
-        { ...products[5], orderLineId: 2, quantity: 1, discountEligible: false }, // 35 (sale item)
-        { ...products[7], orderLineId: 3, quantity: 1, discountEligible: false }, // 45 (sale item)
+        {
+          ...products[5],
+          orderLineId: 2,
+          quantity: 1,
+          discountEligible: false,
+        }, // 35 (sale item)
+        {
+          ...products[7],
+          orderLineId: 3,
+          quantity: 1,
+          discountEligible: false,
+        }, // 45 (sale item)
       ],
     },
   ],
@@ -224,7 +242,12 @@ const customerOrders = {
       state: "paid",
       items: [
         { ...products[2], orderLineId: 1, quantity: 1, discountEligible: true }, // 80
-        { ...products[5], orderLineId: 2, quantity: 2, discountEligible: false }, // 35 x 2 = 70 (sale)
+        {
+          ...products[5],
+          orderLineId: 2,
+          quantity: 2,
+          discountEligible: false,
+        }, // 35 x 2 = 70 (sale)
       ],
     },
     {
@@ -234,7 +257,12 @@ const customerOrders = {
       state: "paid",
       items: [
         { ...products[4], orderLineId: 1, quantity: 1, discountEligible: true }, // 75
-        { ...products[7], orderLineId: 2, quantity: 1, discountEligible: false }, // 45 (sale)
+        {
+          ...products[7],
+          orderLineId: 2,
+          quantity: 1,
+          discountEligible: false,
+        }, // 45 (sale)
       ],
     },
   ],
@@ -317,7 +345,12 @@ const customerOrders = {
       orderDate: new Date("2024-09-20"),
       state: "completed",
       items: [
-        { ...products[4], orderLineId: 1, quantity: 2, discountEligible: false }, // Already used
+        {
+          ...products[4],
+          orderLineId: 1,
+          quantity: 2,
+          discountEligible: false,
+        }, // Already used
       ],
     },
   ],
@@ -330,8 +363,18 @@ const customerOrders = {
       orderDate: new Date("2024-11-30"),
       state: "paid",
       items: [
-        { ...products[5], orderLineId: 1, quantity: 3, discountEligible: false }, // 35 x 3 = 105 (sale)
-        { ...products[7], orderLineId: 2, quantity: 2, discountEligible: false }, // 45 x 2 = 90 (sale)
+        {
+          ...products[5],
+          orderLineId: 1,
+          quantity: 3,
+          discountEligible: false,
+        }, // 35 x 3 = 105 (sale)
+        {
+          ...products[7],
+          orderLineId: 2,
+          quantity: 2,
+          discountEligible: false,
+        }, // 45 x 2 = 90 (sale)
       ],
     },
   ],
@@ -356,89 +399,95 @@ const seedDB = async () => {
     console.log("Admin user created: admin@grandios.com / password123");
 
     // Create customers
-    const createdCustomers = await Customer.insertMany(customers);
-    console.log(`Created ${createdCustomers.length} customers`);
+    // const createdCustomers = await Customer.insertMany(customers);
+    // console.log(`Created ${createdCustomers.length} customers`);
 
     // Create orders for each customer
-    for (const customer of createdCustomers) {
-      const ordersData = customerOrders[customer.contactId] || [];
+    // for (const customer of createdCustomers) {
+    //   const ordersData = customerOrders[customer.contactId] || [];
 
-      for (const orderData of ordersData) {
-        // Calculate item totals
-        const items = orderData.items.map((item) => ({
-          orderLineId: item.orderLineId,
-          productId: item.productId,
-          productName: item.productName,
-          priceUnit: item.priceUnit,
-          quantity: item.quantity,
-          discount: 0,
-          priceSubtotal: item.priceUnit,
-          priceSubtotalIncl: item.priceUnit, // Simplified for testing
-          image: item.image,
-          color: item.color,
-          material: item.material,
-          discountEligible: item.discountEligible,
-        }));
+    //   for (const orderData of ordersData) {
+    //     // Calculate item totals
+    //     const items = orderData.items.map((item) => ({
+    //       orderLineId: item.orderLineId,
+    //       productId: item.productId,
+    //       productName: item.productName,
+    //       priceUnit: item.priceUnit,
+    //       quantity: item.quantity,
+    //       discount: 0,
+    //       priceSubtotal: item.priceUnit,
+    //       priceSubtotalIncl: item.priceUnit, // Simplified for testing
+    //       image: item.image,
+    //       color: item.color,
+    //       material: item.material,
+    //       discountEligible: item.discountEligible,
+    //     }));
 
-        const amountTotal = items.reduce(
-          (sum, item) => sum + item.priceSubtotalIncl * item.quantity,
-          0
-        );
+    //     const amountTotal = items.reduce(
+    //       (sum, item) => sum + item.priceSubtotalIncl * item.quantity,
+    //       0,
+    //     );
 
-        await Order.create({
-          orderId: orderData.orderId,
-          posReference: orderData.posReference,
-          customerId: customer._id,
-          partnerId: customer.contactId,
-          orderDate: orderData.orderDate,
-          amountTotal,
-          amountPaid: amountTotal,
-          amountTax: amountTotal * 0.19,
-          state: orderData.state,
-          cashier: "Admin",
-          isInvoiced: orderData.state === "completed",
-          isRefunded: false,
-          items,
-        });
-      }
+    //     await Order.create({
+    //       orderId: orderData.orderId,
+    //       posReference: orderData.posReference,
+    //       customerId: customer._id,
+    //       partnerId: customer.contactId,
+    //       orderDate: orderData.orderDate,
+    //       amountTotal,
+    //       amountPaid: amountTotal,
+    //       amountTax: amountTotal * 0.19,
+    //       state: orderData.state,
+    //       cashier: "Admin",
+    //       isInvoiced: orderData.state === "completed",
+    //       isRefunded: false,
+    //       items,
+    //     });
+    //   }
 
-      // Calculate discount eligible amount for this customer
-      const customerOrdersData = customerOrders[customer.contactId] || [];
-      let totalDiscountEligible = 0;
+    //   // Calculate discount eligible amount for this customer
+    //   const customerOrdersData = customerOrders[customer.contactId] || [];
+    //   let totalDiscountEligible = 0;
 
-      for (const orderData of customerOrdersData) {
-        for (const item of orderData.items) {
-          if (item.discountEligible) {
-            totalDiscountEligible += item.priceUnit * item.quantity;
-          }
-        }
-      }
+    //   for (const orderData of customerOrdersData) {
+    //     for (const item of orderData.items) {
+    //       if (item.discountEligible) {
+    //         totalDiscountEligible += item.priceUnit * item.quantity;
+    //       }
+    //     }
+    //   }
 
-      const discountBalance = totalDiscountEligible * 0.1; // 10% discount
+    //   const discountBalance = totalDiscountEligible * 0.1; // 10% discount
 
-      // Create discount wallet for customer
-      await Discount.create({
-        customerId: customer._id,
-        partnerId: customer.contactId,
-        balance: discountBalance,
-        status: 1,
-        totalGranted: discountBalance,
-        totalRedeemed: 0,
-      });
+    //   // Create discount wallet for customer
+    //   await Discount.create({
+    //     customerId: customer._id,
+    //     partnerId: customer.contactId,
+    //     balance: discountBalance,
+    //     status: 1,
+    //     totalGranted: discountBalance,
+    //     totalRedeemed: 0,
+    //   });
 
-      console.log(
-        `Created orders for ${customer.name}: ${customerOrdersData.length} orders, discount balance: €${discountBalance.toFixed(2)}`
-      );
-    }
+    //   console.log(
+    //     `Created orders for ${customer.name}: ${customerOrdersData.length} orders, discount balance: €${discountBalance.toFixed(2)}`,
+    //   );
+    // }
 
     console.log("\n✅ Database seeded successfully!");
     console.log("\n--- Test Data Summary ---");
     console.log("Customer 1 (Jane Doe): 3 orders, €39.50 discount available");
     console.log("Customer 2 (John Smith): 2 orders, €15.50 discount available");
-    console.log("Customer 3 (Maria Schmidt): 4 orders, €37.50 discount available (great for grouping test)");
-    console.log("Customer 4 (Peter Müller): 1 large order, €48.00 discount available");
+    console.log(
+      "Customer 3 (Maria Schmidt): 4 orders, €37.50 discount available (great for grouping test)",
+    );
+    console.log(
+      "Customer 4 (Peter Müller): 1 large order, €48.00 discount available",
+    );
     console.log("Customer 5 (Anna Weber): 2 orders, €8.50 discount available");
-    console.log("Customer 6 (Thomas Fischer): 1 order, €0.00 discount (all sale items)");
+    console.log(
+      "Customer 6 (Thomas Fischer): 1 order, €0.00 discount (all sale items)",
+    );
     console.log("\n--- Login Credentials ---");
     console.log("Email: admin@grandios.com");
     console.log("Password: password123");

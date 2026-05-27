@@ -110,6 +110,7 @@ const BonusDetail = () => {
   const [expandedBundles, setExpandedBundles] = useState({}); // Track which bundles are expanded: {groupId_bundleIdx: true}
   const [deleteGroupId, setDeleteGroupId] = useState(null); // Group ID to delete (for confirmation modal)
   const [redeemGroupId, setRedeemGroupId] = useState(null); // Group ID to redeem (for confirmation modal)
+  const [redeemDeductionInput, setRedeemDeductionInput] = useState(""); // Editable return-deduction to apply on redeem
   const [showGroupConfirm, setShowGroupConfirm] = useState(false); // Confirmation for "Als Gruppe" action
   const [createGroupConfirm, setCreateGroupConfirm] = useState({
     open: false,
@@ -638,6 +639,17 @@ const BonusDetail = () => {
 
   // Redeem discount group - show confirmation modal
   const handleRedeemGroup = (groupId) => {
+    // Pre-fill the deduction input with what can be applied now:
+    // min(open return deduction, this group's bonus).
+    const group = discountGroups.find(
+      (g) => (g._id || g.id)?.toString() === groupId?.toString(),
+    );
+    const gross = group?.totalDiscount || 0;
+    const pending = customer?.pendingReturnDeduction || 0;
+    const defaultDeduction = Math.min(pending, gross);
+    setRedeemDeductionInput(
+      pending > 0 ? defaultDeduction.toFixed(2) : "",
+    );
     setRedeemGroupId(groupId);
   };
 
@@ -645,11 +657,16 @@ const BonusDetail = () => {
   const confirmRedeemGroup = async () => {
     if (!redeemGroupId) return;
 
+    const pending = customer?.pendingReturnDeduction || 0;
+    const deductionAmount =
+      pending > 0 ? Number(redeemDeductionInput) : undefined;
+
     try {
-      await discountsAPI.redeemGroup(id, redeemGroupId);
+      await discountsAPI.redeemGroup(id, redeemGroupId, deductionAmount);
       setMessage({ type: "success", text: "Bonus erfolgreich eingelöst!" });
       toast.success("Bonus eingelöst.");
       setRedeemGroupId(null);
+      setRedeemDeductionInput("");
       await fetchData();
     } catch (error) {
       console.error("Failed to redeem group:", error);
@@ -658,6 +675,7 @@ const BonusDetail = () => {
         text: error.message || "Fehler beim Einlösen",
       });
       setRedeemGroupId(null);
+      setRedeemDeductionInput("");
     }
   };
 
@@ -1594,21 +1612,23 @@ const BonusDetail = () => {
                     <div>{customer.address?.country}</div>
                   </div>
                 </div>
-                {(customer.totalReturnAmount || 0) > 0 && (
-                  <>
-                    <div className="flex pt-3 border-t border-gray-100">
-                      <span className="text-gray-500 w-32">Rückgaben:</span>
-                      <span className="text-red-600 font-medium">
-                        -€ {formatCurrency(customer.totalReturnAmount)}
-                      </span>
+                {(customer.pendingReturnDeduction || 0) > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-red-700">
+                          Offener Bonusabzug
+                        </span>
+                        <span className="text-sm font-semibold text-red-600">
+                          -€ {formatCurrency(customer.pendingReturnDeduction)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-red-500/80 leading-snug">
+                        Aus Rückgaben entstanden. Wird bei der nächsten
+                        Bonuseinlösung automatisch verrechnet.
+                      </p>
                     </div>
-                    <div className="flex">
-                      <span className="text-gray-500 w-32">Bonusabzug:</span>
-                      <span className="text-red-600 font-medium">
-                        -€ {formatCurrency(customer.totalReturnDeduction)}
-                      </span>
-                    </div>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
@@ -2055,9 +2075,24 @@ const BonusDetail = () => {
                   // If editing this group, don't show it here
                   if (isBeingEdited) return null;
 
+                  // Use the STORED eligible base for grouped orders so the
+                  // displayed Bonusfähig always equals discount / rate. The
+                  // stored amounts are the single source of truth written by
+                  // the sync / group-creation flow.
+                  const storedAmountByOrderId = {};
+                  (group.orders || []).forEach((o) => {
+                    const oid = (o.orderId?._id || o.orderId)?.toString();
+                    if (oid)
+                      storedAmountByOrderId[oid] =
+                        (storedAmountByOrderId[oid] || 0) + (o.amount || 0);
+                  });
+                  const getStoredEligible = (order) =>
+                    storedAmountByOrderId[(order._id || order.id)?.toString()] ??
+                    getEligibleAmount(order);
+
                   // Calculate total eligible amount for entire group
                   const groupTotalEligible = groupOrders.reduce(
-                    (total, order) => total + getEligibleAmount(order),
+                    (total, order) => total + getStoredEligible(order),
                     0,
                   );
 
@@ -2283,7 +2318,7 @@ const BonusDetail = () => {
                                   // Calculate bundle total eligible
                                   const bundleEligible = bundleOrders.reduce(
                                     (sum, order) =>
-                                      sum + getEligibleAmount(order),
+                                      sum + getStoredEligible(order),
                                     0,
                                   );
 
@@ -2327,7 +2362,7 @@ const BonusDetail = () => {
                                             ? getSubIndex(orderIdx)
                                             : "";
                                           const discountEligibleAmount =
-                                            getEligibleAmount(order);
+                                            getStoredEligible(order);
                                           const isLastOrder =
                                             orderIdx ===
                                             bundleOrders.length - 1;
@@ -3048,9 +3083,24 @@ const BonusDetail = () => {
                   // If editing this group, don't show it here
                   if (isBeingEdited) return null;
 
+                  // Use the STORED eligible base for grouped orders so the
+                  // displayed Bonusfähig always equals discount / rate. The
+                  // stored amounts are the single source of truth written by
+                  // the sync / group-creation flow.
+                  const storedAmountByOrderId = {};
+                  (group.orders || []).forEach((o) => {
+                    const oid = (o.orderId?._id || o.orderId)?.toString();
+                    if (oid)
+                      storedAmountByOrderId[oid] =
+                        (storedAmountByOrderId[oid] || 0) + (o.amount || 0);
+                  });
+                  const getStoredEligible = (order) =>
+                    storedAmountByOrderId[(order._id || order.id)?.toString()] ??
+                    getEligibleAmount(order);
+
                   // Calculate total eligible amount for entire group
                   const groupTotalEligible = groupOrders.reduce(
-                    (total, order) => total + getEligibleAmount(order),
+                    (total, order) => total + getStoredEligible(order),
                     0,
                   );
 
@@ -3248,7 +3298,7 @@ const BonusDetail = () => {
 
                                   const bundleEligible = bundleOrders.reduce(
                                     (sum, order) =>
-                                      sum + getEligibleAmount(order),
+                                      sum + getStoredEligible(order),
                                     0,
                                   );
 
@@ -3289,7 +3339,7 @@ const BonusDetail = () => {
                                             ? getSubIndex(orderIdx)
                                             : "";
                                           const discountEligibleAmount =
-                                            getEligibleAmount(order);
+                                            getStoredEligible(order);
                                           const isLastOrder =
                                             orderIdx ===
                                             bundleOrders.length - 1;
@@ -3770,15 +3820,67 @@ const BonusDetail = () => {
       />
 
       {/* Redeem Confirmation Modal */}
-      <ConfirmModal
-        isOpen={!!redeemGroupId}
-        onClose={() => setRedeemGroupId(null)}
-        onConfirm={confirmRedeemGroup}
-        title="BONUS EINLÖSEN"
-        message="Möchten Sie diesen Bonus wirklich einlösen? Diese Aktion kann nicht rückgängig gemacht werden."
-        confirmText="Ja, einlösen"
-        cancelText="Abbrechen"
-      />
+      {(() => {
+        const pending = customer?.pendingReturnDeduction || 0;
+        const hasDeduction = pending > 0;
+        const value = Number(redeemDeductionInput);
+        const invalid =
+          hasDeduction &&
+          (redeemDeductionInput === "" ||
+            Number.isNaN(value) ||
+            value < 0 ||
+            value > pending + 0.005);
+        return (
+          <ConfirmModal
+            isOpen={!!redeemGroupId}
+            onClose={() => {
+              setRedeemGroupId(null);
+              setRedeemDeductionInput("");
+            }}
+            onConfirm={confirmRedeemGroup}
+            title="BONUS EINLÖSEN"
+            message="Möchten Sie diesen Bonus wirklich einlösen? Diese Aktion kann nicht rückgängig gemacht werden."
+            confirmText="Ja, einlösen"
+            cancelText="Abbrechen"
+            confirmDisabled={invalid}
+          >
+            {hasDeduction && (
+              <div className="mt-5 text-left">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">
+                    Bonusabzug verrechnen
+                  </label>
+                  <span className="text-xs text-gray-400">
+                    offen €{formatCurrency(pending)}
+                  </span>
+                </div>
+                <div
+                  className={`mt-1.5 flex items-center rounded-md border px-3 ${
+                    invalid
+                      ? "border-red-400 focus-within:ring-1 focus-within:ring-red-400"
+                      : "border-gray-300 focus-within:ring-1 focus-within:ring-green-500"
+                  }`}
+                >
+                  <span className="text-gray-400 text-sm">€</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max={pending}
+                    step="0.01"
+                    value={redeemDeductionInput}
+                    onChange={(e) => setRedeemDeductionInput(e.target.value)}
+                    className="w-full py-2 pl-2 text-sm focus:outline-none"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-400 leading-snug">
+                  Restbetrag bleibt offen und wird bei der nächsten Einlösung
+                  verrechnet.
+                </p>
+              </div>
+            )}
+          </ConfirmModal>
+        );
+      })()}
 
       {/* Redeem Old Purchase History Group Confirmation Modal */}
       <ConfirmModal
@@ -3941,19 +4043,32 @@ const BonusDetail = () => {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {notesHistory.map((entry, idx) => (
+                    {notesHistory.map((entry, idx) => {
+                      const isSystem = entry.source === "system";
+                      return (
                       <div
                         key={entry.id || entry._id}
-                        className="relative pl-6 pb-6 border-l-2 border-blue-500 last:pb-0"
+                        className={`relative pl-6 pb-6 border-l-2 last:pb-0 ${
+                          isSystem ? "border-gray-400" : "border-blue-500"
+                        }`}
                       >
                         {/* Timeline dot */}
-                        <div className="absolute left-0 top-0 -translate-x-1/2 w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow"></div>
+                        <div
+                          className={`absolute left-0 top-0 -translate-x-1/2 w-4 h-4 rounded-full border-2 border-white shadow ${
+                            isSystem ? "bg-gray-400" : "bg-blue-500"
+                          }`}
+                        ></div>
 
                         {/* Entry content */}
                         <div>
                           <div className="flex flex-col mb-2">
                             <span className="font-semibold text-gray-900">
                               {entry.changedByName}
+                              {isSystem && (
+                                <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500 font-normal">
+                                  System
+                                </span>
+                              )}
                             </span>
                             <span className="text-sm text-gray-500">
                               {new Date(entry.createdAt).toLocaleString(
@@ -3980,7 +4095,8 @@ const BonusDetail = () => {
                           )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

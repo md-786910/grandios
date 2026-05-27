@@ -404,8 +404,7 @@ exports.getCustomerDiscount = async (req, res, next) => {
           email: customer.email,
           phone: customer.phone || customer.mobile,
           address: customer.address,
-          totalReturnAmount: customer.totalReturnAmount || 0,
-          totalReturnDeduction: customer.totalReturnDeduction || 0,
+          pendingReturnDeduction: customer.pendingReturnDeduction || 0,
         },
         stats: {
           totalOrderValue,
@@ -577,29 +576,25 @@ exports.createDiscountGroup = async (req, res, next) => {
       bundleMap[o.orderId.toString()] = o.bundleIndex;
     });
 
-    // Calculate discount for each order
-    const orderItems = orders.map((order) => {
-      const items = getOrderItems(order);
-      // Only include items eligible for bonus (excludes Sale items, vouchers, negative amounts, Bonus Kundenkarte)
-      const eligibleAmount = items
-        .filter((item) => isItemEligibleForBonus(item))
-        .reduce(
-          (sum, item) =>
-            sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
-          0,
+    // Calculate discount for each order using the shared eligible-amount
+    // source of truth, so manual and auto-created groups always agree.
+    const orderItems = await Promise.all(
+      orders.map(async (order) => {
+        const eligibleAmount = await cascadeSyncService.getOrderEligibleAmount(
+          order._id,
         );
+        const discountAmount = (eligibleAmount * effectiveDiscountRate) / 100;
 
-      const discountAmount = (eligibleAmount * effectiveDiscountRate) / 100;
-
-      return {
-        orderId: order._id,
-        orderLineId: order.orderId,
-        amount: eligibleAmount,
-        discountRate: effectiveDiscountRate,
-        discountAmount,
-        bundleIndex: bundleMap[order._id.toString()] || 0,
-      };
-    });
+        return {
+          orderId: order._id,
+          orderLineId: order.orderId,
+          amount: eligibleAmount,
+          discountRate: effectiveDiscountRate,
+          discountAmount,
+          bundleIndex: bundleMap[order._id.toString()] || 0,
+        };
+      }),
+    );
 
     // Create discount order group
     const discountOrder = await DiscountOrder.create({
@@ -747,29 +742,25 @@ exports.updateDiscountGroup = async (req, res, next) => {
       bundleMap[o.orderId.toString()] = o.bundleIndex;
     });
 
-    // Calculate discount for each order
-    const orderItems = orders.map((order) => {
-      const items = getOrderItems(order);
-      // Only include items eligible for bonus (excludes Sale items, vouchers, negative amounts, Bonus Kundenkarte)
-      const eligibleAmount = items
-        .filter((item) => isItemEligibleForBonus(item))
-        .reduce(
-          (sum, item) =>
-            sum + (item.priceSubtotalIncl || item.priceUnit * item.quantity),
-          0,
+    // Calculate discount for each order using the shared eligible-amount
+    // source of truth, so manual and auto-created groups always agree.
+    const orderItems = await Promise.all(
+      orders.map(async (order) => {
+        const eligibleAmount = await cascadeSyncService.getOrderEligibleAmount(
+          order._id,
         );
+        const discountAmount = (eligibleAmount * effectiveDiscountRate) / 100;
 
-      const discountAmount = (eligibleAmount * effectiveDiscountRate) / 100;
-
-      return {
-        orderId: order._id,
-        orderLineId: order.orderId,
-        amount: eligibleAmount,
-        discountRate: effectiveDiscountRate,
-        discountAmount,
-        bundleIndex: bundleMap[order._id.toString()] || 0,
-      };
-    });
+        return {
+          orderId: order._id,
+          orderLineId: order.orderId,
+          amount: eligibleAmount,
+          discountRate: effectiveDiscountRate,
+          discountAmount,
+          bundleIndex: bundleMap[order._id.toString()] || 0,
+        };
+      }),
+    );
 
     // Update the discount order group
     discountOrder.orders = orderItems;
@@ -839,15 +830,53 @@ exports.redeemDiscountGroup = async (req, res, next) => {
       await discount.redeemDiscount(discountOrder.totalDiscount);
     }
 
-    // Update customer's wallet and total redeemed amount
+    // Update customer's wallet and total redeemed amount, applying any pending
+    // return deduction to the bonus actually credited to the wallet.
     const customer = await Customer.findById(discountOrder.customerId);
     if (customer) {
-      // Add redeemed discount to customer wallet
-      customer.wallet = (customer.wallet || 0) + discountOrder.totalDiscount;
-      // Track total redeemed amount
+      const gross = discountOrder.totalDiscount;
+      const pending = customer.pendingReturnDeduction || 0;
+      // The admin may choose how much of the open deduction to apply now.
+      // Cap it at what is owed (pending) and at what is being paid out (gross);
+      // any remainder stays pending for the next redemption.
+      const maxDeduction = Math.min(pending, gross);
+      let consumed = maxDeduction;
+      if (req.body && req.body.deductionAmount !== undefined) {
+        const requested = Number(req.body.deductionAmount);
+        if (Number.isNaN(requested) || requested < 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid deduction amount",
+          });
+        }
+        if (requested > pending + 0.005) {
+          return res.status(400).json({
+            success: false,
+            message: "Deduction amount cannot exceed the open bonus deduction",
+          });
+        }
+        consumed = Math.min(requested, maxDeduction);
+      }
+      const credited = gross - consumed; // amount actually given to the customer
+      const walletBefore = customer.wallet || 0;
+
+      customer.wallet = walletBefore + credited;
       customer.totalDiscountRedeemed =
-        (customer.totalDiscountRedeemed || 0) + discountOrder.totalDiscount;
+        (customer.totalDiscountRedeemed || 0) + gross;
+      customer.pendingReturnDeduction = pending - consumed; // carry remainder
+      customer.totalReturnDeduction =
+        (customer.totalReturnDeduction || 0) + consumed;
       await customer.save();
+
+      // System-generated audit entry with before/after balances
+      const deductionClause =
+        consumed > 0 ? ` Offener Bonusabzug: −€${consumed.toFixed(2)}.` : "";
+      await NotesHistory.create({
+        customerId: customer._id,
+        notes: `Bonus eingelöst: €${gross.toFixed(2)}.${deductionClause} Gutgeschrieben: €${credited.toFixed(2)}. Bonusguthaben vorher: €${walletBefore.toFixed(2)}, nachher: €${customer.wallet.toFixed(2)}.`,
+        changedByName: "System",
+        source: "system",
+      });
     }
 
     res.status(200).json({
