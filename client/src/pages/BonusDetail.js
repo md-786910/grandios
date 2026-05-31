@@ -661,8 +661,29 @@ const BonusDetail = () => {
     const deductionAmount =
       pending > 0 ? Number(redeemDeductionInput) : undefined;
 
+    // Amount of the open deduction that will actually be consumed now
+    // (capped at this group's bonus), used for the optimistic UI update.
+    const redeemGroup = discountGroups.find(
+      (g) => (g._id || g.id)?.toString() === redeemGroupId?.toString(),
+    );
+    const gross = redeemGroup?.totalDiscount || 0;
+    const consumed = Math.min(deductionAmount ?? pending, pending, gross);
+
     try {
       await discountsAPI.redeemGroup(id, redeemGroupId, deductionAmount);
+      // Optimistically update the open deduction so it changes immediately,
+      // then reconcile with the server via fetchData().
+      setCustomer((prev) =>
+        prev
+          ? {
+              ...prev,
+              pendingReturnDeduction: Math.max(
+                0,
+                (prev.pendingReturnDeduction || 0) - consumed,
+              ),
+            }
+          : prev,
+      );
       setMessage({ type: "success", text: "Bonus erfolgreich eingelöst!" });
       toast.success("Bonus eingelöst.");
       setRedeemGroupId(null);
