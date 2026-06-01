@@ -724,7 +724,7 @@ async function checkAndCreateDiscountGroup(customer, orders) {
       );
     }
   }
-  console.log({ eligibleOrders });
+  // console.log({ eligibleOrders });
   // Sort by date oldest first so groups are created chronologically
   // (oldest purchases get grouped first, newest remain ungrouped until enough accumulate)
   eligibleOrders.sort((a, b) => new Date(a.orderDate) - new Date(b.orderDate));
@@ -748,7 +748,7 @@ async function checkAndCreateDiscountGroup(customer, orders) {
       };
     });
 
-    console.log({ discountOrderItems });
+    // console.log({ discountOrderItems });
     // Create discount group
     const discountGroup = await DiscountOrder.create({
       customerId: customer._id,
