@@ -18,7 +18,8 @@ exports.getSettings = async (req, res, next) => {
         discount: {
           discountRate: appSettings.discountRate,
           ordersRequiredForDiscount: appSettings.ordersRequiredForDiscount,
-          autoCreateDiscount: appSettings.autoCreateDiscount
+          autoCreateDiscount: appSettings.autoCreateDiscount,
+          stichtag: appSettings.stichtag
         }
       }
     });
@@ -52,7 +53,8 @@ exports.updateSettings = async (req, res, next) => {
         key: 'default',
         ...(discount.discountRate !== undefined && { discountRate: discount.discountRate }),
         ...(discount.ordersRequiredForDiscount !== undefined && { ordersRequiredForDiscount: discount.ordersRequiredForDiscount }),
-        ...(discount.autoCreateDiscount !== undefined && { autoCreateDiscount: discount.autoCreateDiscount })
+        ...(discount.autoCreateDiscount !== undefined && { autoCreateDiscount: discount.autoCreateDiscount }),
+        ...(discount.stichtag !== undefined && { stichtag: discount.stichtag })
       });
     }
 
@@ -65,7 +67,8 @@ exports.updateSettings = async (req, res, next) => {
         discount: {
           discountRate: appSettings.discountRate,
           ordersRequiredForDiscount: appSettings.ordersRequiredForDiscount,
-          autoCreateDiscount: appSettings.autoCreateDiscount
+          autoCreateDiscount: appSettings.autoCreateDiscount,
+          stichtag: appSettings.stichtag
         }
       }
     });
@@ -86,7 +89,8 @@ exports.getDiscountSettings = async (req, res, next) => {
       data: {
         discountRate: appSettings.discountRate,
         ordersRequiredForDiscount: appSettings.ordersRequiredForDiscount,
-        autoCreateDiscount: appSettings.autoCreateDiscount
+        autoCreateDiscount: appSettings.autoCreateDiscount,
+        stichtag: appSettings.stichtag
       }
     });
   } catch (err) {
@@ -99,13 +103,14 @@ exports.getDiscountSettings = async (req, res, next) => {
 // @access  Private
 exports.updateDiscountSettings = async (req, res, next) => {
   try {
-    const { discountRate, ordersRequiredForDiscount, autoCreateDiscount } = req.body;
+    const { discountRate, ordersRequiredForDiscount, autoCreateDiscount, stichtag } = req.body;
 
     const appSettings = await AppSettings.updateSettings({
       key: 'default',
       ...(discountRate !== undefined && { discountRate }),
       ...(ordersRequiredForDiscount !== undefined && { ordersRequiredForDiscount }),
-      ...(autoCreateDiscount !== undefined && { autoCreateDiscount })
+      ...(autoCreateDiscount !== undefined && { autoCreateDiscount }),
+      ...(stichtag !== undefined && { stichtag })
     });
 
     res.status(200).json({
@@ -113,7 +118,8 @@ exports.updateDiscountSettings = async (req, res, next) => {
       data: {
         discountRate: appSettings.discountRate,
         ordersRequiredForDiscount: appSettings.ordersRequiredForDiscount,
-        autoCreateDiscount: appSettings.autoCreateDiscount
+        autoCreateDiscount: appSettings.autoCreateDiscount,
+        stichtag: appSettings.stichtag
       }
     });
   } catch (err) {

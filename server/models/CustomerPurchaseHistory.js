@@ -53,7 +53,21 @@ const CustomerPurchaseHistorySchema = new mongoose.Schema(
     phone: String,
     size: String,
     remarks: String,
+    // Only COMPLETE groups of 3 (redeemable) are stored here.
     purchaseGroups: [PurchaseGroupSchema],
+    // In-progress streak: 1–2 purchases not yet forming a group of 3.
+    // Kept for reference; NOT redeemable until completed post-Stichtag.
+    pendingPurchases: [
+      {
+        label: String,
+        amount: Number,
+      },
+    ],
+    // 10% accrued on the pending purchases (informational, not redeemable)
+    pendingRabatt: {
+      type: Number,
+      default: 0,
+    },
     totalPurchaseAmount: {
       type: Number,
       default: 0,

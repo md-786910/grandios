@@ -296,11 +296,16 @@ exports.getCustomerDiscount = async (req, res, next) => {
 
     const settings = await AppSettings.getSettings();
 
-    // Get customer orders with orderLines populated
-    const orders = await Order.find({
-      customerId: customer._id,
-      amountTotal: { $gt: 0 },
-    })
+    // Get customer orders with orderLines populated.
+    // When a Stichtag is set, pre-cutoff Etron orders are owned by the Excel
+    // baseline and must NOT be selectable for the bonus program — exclude them
+    // here so they mirror the auto-sync's orderDate>=stichtag rule. (No Stichtag
+    // set ⇒ no filter ⇒ existing behavior unchanged.)
+    const orderQuery = { customerId: customer._id, amountTotal: { $gt: 0 } };
+    if (settings.stichtag) {
+      orderQuery.orderDate = { $gte: new Date(settings.stichtag) };
+    }
+    const orders = await Order.find(orderQuery)
       .populate({
         path: "orderLines",
         populate: {
@@ -484,8 +489,15 @@ exports.createDiscountGroup = async (req, res, next) => {
       });
     }
 
-    // Get all order IDs
-    const allOrderIds = ordersWithBundles.map((o) => o.orderId);
+    // Split selections into real WAWI orders and Excel "old single purchases"
+    // (the latter carry oldPurchaseId + no orderId, and have no WAWI Order doc).
+    const realBundles = ordersWithBundles.filter((o) => o.orderId);
+    const oldBundles = ordersWithBundles.filter(
+      (o) => !o.orderId && o.oldPurchaseId,
+    );
+
+    // Get all real order IDs (old purchases are handled separately)
+    const allOrderIds = realBundles.map((o) => o.orderId);
 
     // Check if any orders are already in a discount group
     const existingGroups = await DiscountOrder.find({
@@ -495,6 +507,8 @@ exports.createDiscountGroup = async (req, res, next) => {
     const orderToGroupMap = new Map(); // Map orderId to group for removal
     existingGroups.forEach((group) => {
       group.orders.forEach((o) => {
+        // Excel baseline / carryover items have no WAWI orderId — skip them.
+        if (!o.orderId) return;
         const orderIdStr = o.orderId.toString();
         usedOrderIds.add(orderIdStr);
         orderToGroupMap.set(orderIdStr, group);
@@ -528,7 +542,8 @@ exports.createDiscountGroup = async (req, res, next) => {
         // Update or delete existing groups
         for (const [, { group, orderIdsToRemove }] of groupsToUpdate) {
           const remainingOrders = group.orders.filter(
-            (o) => !orderIdsToRemove.includes(o.orderId.toString()),
+            // Keep Excel/carryover items (no orderId); only drop the requested ones.
+            (o) => !o.orderId || !orderIdsToRemove.includes(o.orderId.toString()),
           );
 
           if (remainingOrders.length === 0) {
@@ -554,29 +569,40 @@ exports.createDiscountGroup = async (req, res, next) => {
       }
     }
 
-    // Get orders with orderLines populated
-    const orders = await Order.find({ _id: { $in: allOrderIds } }).populate({
-      path: "orderLines",
-      populate: {
-        path: "productRef",
-        select: "name image listPrice",
-      },
-    });
+    // Get real orders with orderLines populated
+    const orders = allOrderIds.length
+      ? await Order.find({ _id: { $in: allOrderIds } }).populate({
+          path: "orderLines",
+          populate: {
+            path: "productRef",
+            select: "name image listPrice",
+          },
+        })
+      : [];
 
-    if (orders.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid orders found",
-      });
+    // Stichtag guard: a pre-cutoff Etron order is owned by the Excel baseline
+    // and must never be grouped for bonus (mirrors the auto-sync rule).
+    if (settings.stichtag) {
+      const cutoff = new Date(settings.stichtag);
+      const preCutoff = orders.find(
+        (o) => o.orderDate && new Date(o.orderDate) < cutoff,
+      );
+      if (preCutoff) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Ein Einkauf liegt vor dem Stichtag und kann nicht gruppiert werden.",
+        });
+      }
     }
 
-    // Create a map of orderId -> bundleIndex
+    // Create a map of orderId -> bundleIndex (real orders only)
     const bundleMap = {};
-    ordersWithBundles.forEach((o) => {
+    realBundles.forEach((o) => {
       bundleMap[o.orderId.toString()] = o.bundleIndex;
     });
 
-    // Calculate discount for each order using the shared eligible-amount
+    // Calculate discount for each real order using the shared eligible-amount
     // source of truth, so manual and auto-created groups always agree.
     const orderItems = await Promise.all(
       orders.map(async (order) => {
@@ -596,11 +622,59 @@ exports.createDiscountGroup = async (req, res, next) => {
       }),
     );
 
+    // Build items for any selected Excel old single purchases. These have no
+    // WAWI Order — mirror the carryover pseudo-order shape (orderId null +
+    // fromExcel + label + amount). Validate they aren't already consumed.
+    const oldOrderItems = [];
+    let consumedOldIds = [];
+    if (oldBundles.length) {
+      const oldIds = oldBundles.map((o) => o.oldPurchaseId);
+      const oldDocs = await OldPurchase.find({
+        _id: { $in: oldIds },
+        customerId: customer._id,
+      });
+      const oldById = new Map(oldDocs.map((d) => [d._id.toString(), d]));
+      for (const b of oldBundles) {
+        const doc = oldById.get(String(b.oldPurchaseId));
+        if (!doc) {
+          return res.status(400).json({
+            success: false,
+            message: "Ein ausgewählter Alt-Einkauf wurde nicht gefunden.",
+          });
+        }
+        if (doc.isInDiscountGroup) {
+          return res.status(400).json({
+            success: false,
+            message: "Ein Alt-Einkauf ist bereits in einer Bonusgruppe.",
+          });
+        }
+        const amount = doc.amount || 0;
+        oldOrderItems.push({
+          orderId: null,
+          fromExcel: true,
+          label: doc.purchaseLabel,
+          amount,
+          discountRate: effectiveDiscountRate,
+          discountAmount: (amount * effectiveDiscountRate) / 100,
+          bundleIndex: b.bundleIndex || 0,
+        });
+        consumedOldIds.push(doc._id);
+      }
+    }
+
+    const groupItems = [...orderItems, ...oldOrderItems];
+    if (groupItems.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid orders found",
+      });
+    }
+
     // Create discount order group
     const discountOrder = await DiscountOrder.create({
       customerId: customer._id,
       partnerId: customer.contactId,
-      orders: orderItems,
+      orders: groupItems,
       status: "available",
     });
 
@@ -615,6 +689,33 @@ exports.createDiscountGroup = async (req, res, next) => {
     }
 
     await discount.addDiscount(discountOrder.totalDiscount);
+
+    // Consume-once: mark the selected old purchases as used and remove their
+    // amounts from the customer's carryover so the auto-sync can't reuse them.
+    if (consumedOldIds.length) {
+      await OldPurchase.updateMany(
+        { _id: { $in: consumedOldIds } },
+        { $set: { isInDiscountGroup: true } },
+      );
+      let carry = Array.isArray(customer.carryoverPurchases)
+        ? [...customer.carryoverPurchases]
+        : [];
+      let removedBonus = 0;
+      for (const item of oldOrderItems) {
+        const idx = carry.findIndex((v) => Math.abs(v - item.amount) < 0.005);
+        if (idx >= 0) {
+          carry.splice(idx, 1);
+          removedBonus += item.discountAmount;
+        }
+      }
+      customer.carryoverPurchases = carry;
+      customer.streakCount = carry.length;
+      customer.pendingAccruedRabatt = Math.max(
+        0,
+        Math.round(((customer.pendingAccruedRabatt || 0) - removedBonus) * 100) /
+          100,
+      );
+    }
 
     // Update customer's total discount granted and clear draft items
     customer.totalDiscountGranted =
@@ -690,10 +791,10 @@ exports.updateDiscountGroup = async (req, res, next) => {
     // Get all order IDs
     const allOrderIds = ordersWithBundles.map((o) => o.orderId);
 
-    // Get current orders in this group
-    const currentOrderIds = discountOrder.orders.map((o) =>
-      o.orderId.toString(),
-    );
+    // Get current orders in this group (Excel/carryover items have no orderId)
+    const currentOrderIds = discountOrder.orders
+      .filter((o) => o.orderId)
+      .map((o) => o.orderId.toString());
 
     // Check if any of the new orders are already in OTHER discount groups
     const otherGroups = await DiscountOrder.find({
@@ -703,6 +804,8 @@ exports.updateDiscountGroup = async (req, res, next) => {
     const usedOrderIds = new Set();
     otherGroups.forEach((group) => {
       group.orders.forEach((o) => {
+        // Excel baseline / carryover items have no WAWI orderId — skip them.
+        if (!o.orderId) return;
         usedOrderIds.add(o.orderId.toString());
       });
     });

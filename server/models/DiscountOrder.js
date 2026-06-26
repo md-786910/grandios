@@ -2,10 +2,13 @@ const mongoose = require('mongoose');
 
 // Schema for tracking orders in a discount group
 const DiscountOrderItemSchema = new mongoose.Schema({
+  // Optional: null for Excel-imported baseline purchases and pre-Stichtag
+  // carryover pseudo-orders, which have no corresponding WAWI Order document.
   orderId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Order',
-    required: true
+    required: false,
+    default: null
   },
   orderLineId: Number,
   amount: {
@@ -23,7 +26,14 @@ const DiscountOrderItemSchema = new mongoose.Schema({
   bundleIndex: {
     type: Number,
     default: 0  // Orders with same bundleIndex are bundled together as 1 item
-  }
+  },
+  // True when this item originates from the Excel import (no WAWI Order).
+  fromExcel: {
+    type: Boolean,
+    default: false
+  },
+  // Original Excel purchase label (e.g. "EK1") for traceability.
+  label: String
 }, { _id: true });
 
 const DiscountOrderSchema = new mongoose.Schema({
@@ -51,6 +61,14 @@ const DiscountOrderSchema = new mongoose.Schema({
     type: String,
     enum: ['available', 'redeemed'],
     default: 'available'
+  },
+  // Origin of the group: 'wawi' (auto-created from synced orders) or
+  // 'excel' (seeded from the name-based bonus import). Excel groups are never
+  // recomputed/zeroed by the sync since they have no WAWI Order amounts.
+  source: {
+    type: String,
+    enum: ['wawi', 'excel'],
+    default: 'wawi'
   },
   notes: String,
   redeemedAt: Date

@@ -1,0 +1,57 @@
+Hi Maren …
+
+ 
+
+Vielen Dank fürs Nachfragen, das finde ich super.
+
+ 
+
+Wir (vor allem mein Freund) hat sich folgendes überlegt bzw er hat folgendes gemacht:
+
+Er hat alle Kundennamen der Excel mit allen Kundennamen die in Etron sind verglichen.
+Gab es Abweichungen (zB Tippfehler), so haben wir dies korrigiert bzw angeglichen.
+Kommt ein Kundenname mehrfach vor (Beispiel: Monika Lehner) dann haben wir bei diesen Kundinnen zum Familiennamen eine Kundennummer hinzugefügt (Beispie: Monika Lehner 226 und Monika Lehner 2438). Durch dieses System sind dann alle Namen einzigartig und müssen nicht anhand der E-Mailadresse abgeglichen werden.
+Diesen Check hat er aber nur bis Stand Ende April gemacht. In der Zwischenzeit sind ja wieder einige Neukundinnen hinzugekommen. Das heißt wir müssen das dann nochmal machen. Haben wir bis jetzt nicht, weil ja immer weitere hinzukommen und wir das nicht ständig wieder und wieder machen wollen wenn sich der Starttermin aufschiebt.
+Wichtig: Die E-Mail-Adressen die in Etron hinterlegt sind, sollen aber bestehen bleiben und auch ins Bright Digital Programm übernommen werden. Es soll lediglich der Abgleich nicht über die E-Mail Adresse erfolgen sondern über den Namen.
+ 
+
+Warum haben wir nicht einfach auch die E-Mailadressen der Excel abgeglichen?
+
+Dies wäre zu aufwendig gewesen.
+
+Ab dem Zeitpunkt wo wir mit dem Bright Digital Programm arbeiten, sind nur mehr die E-Mail Adressen die in Etron hinterlegt sind für uns relevant.
+
+ 
+
+Also zum Stichtag sollten:
+
+Von der Excel die Einkäufe inkl Bonusstand in das Bright Digital Programm übernommen werden
+Die Umsätze / Einkäufe die VOR diesem Stichtag von Etron reingespielt wurden sollten ignoriert werden
+Die Umsätze / Einkäufe / Rechnungen ect AB diesem Stichtag sollen dann immer automatisch von Etron reinkommen
+Werden Kundennamen, E-Mailadressen AB diesem Stichtag in unserem Kassenprogramm geändert, so übernimmt ab diesem Stichtag das Bright Digital Programm diese Änderungen immer automatisch über Etron.
+ 
+
+Im ANHANG sende ich euch eine TESTDATEI … das ist NICHT DIE FINALE DATEI aber vom System her zum Testen (glaube ich) gut geeignet.
+
+ 
+
+Bitte melde dich jederzeit, wenn ihr Fragen habt. Evt habe ich etwas vergessen oder nicht klar formuliert.
+Vielen Dank.
+Liebe Grüße …
+
+
+Lieber Georg, 
+
+Eine kurze Nachfrage hierzu, damit wir jetzt nicht auf den finalen Schritten durcheinanderkommen: 
+
+Bedeutet das, dass alle Kundeninformationen aus Etron übernommen werden? Und wir diese lediglich durch die Excel daten ergänzen? Also Etron ist Grundlage, Excel kommt hinzu?
+
+Wenn die neue Excel-Datei, die du uns final schicken möchtest, keine E-Mail-Adressen, sondern nur Namen enthält und zwei Namen übereinstimmen, woran lässt sich dann die Unterscheidung vornehmen, da wir in der Excel-Datei keine E-Mail-Adressen verwenden? (Wir müssen den Etron-Kunden irgendwie dem Excel-Kunden zuordnen und der Name kann nur dann als Kriterium dienen, wenn 1. der Name in Excel zu 100 % mit dem Namen in Etron übereinstimmt und 2. wir den Vor- und Nachnamen abgleichen, die bei zwei verschiedenen Personen immer unterschiedlich sein sollten.)
+
+Wenn du magst,  kannst du uns auch schon einmal eine Excel Datei in der Version zukommen lassen, wie du es dir final vorstellst, damit wir sehen können, ob das funktioniert. 
+
+Ansonsten beschreibe den Prozess auch gerne noch einmal in deinen Worten, damit ich sicherstellen kann, nichts falsch verstanden zu haben. Entschuldige, dass es jetzt noch etwas umständlich ist, aber besser sind wir vorsichtig, als nachsichtig 🙂
+
+Herzliche Grüße und eine schönen Tag dir, 
+
+Maren 

@@ -10,19 +10,19 @@ const {
 // @access  Private
 exports.importFromExcel = async (req, res, next) => {
   try {
-    const filePath = path.join(
-      __dirname,
-      "..",
-      "..",
-      "task",
-      "Kundendaten Testversion.xlsx"
-    );
+    // Optional override; defaults to excel/TEST KUNDEN DATEN.xlsx in the service.
+    const filePath = req.body && req.body.filePath ? req.body.filePath : undefined;
 
     const results = await importPurchaseHistory(filePath);
 
     res.status(200).json({
       success: true,
-      message: `Import completed. ${results.imported} created, ${results.updated} updated, ${results.skipped} skipped, ${results.customersCreated} customers created.`,
+      message:
+        `Import completed. ${results.matched} customers matched, ` +
+        `${results.historyGroupsStored} bonus groups stored (Alte Einkäufe), ` +
+        `€${results.availableOldBonus} available old bonus. ` +
+        `${results.unmatched.length} unmatched, ${results.ambiguous.length} ambiguous, ` +
+        `${results.skipped} empty rows skipped.`,
       data: results,
     });
   } catch (err) {

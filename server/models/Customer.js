@@ -50,6 +50,24 @@ const CustomerSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // --- Excel baseline (name-based import) ---
+  // Purchase amounts of the in-progress (pre-Stichtag) streak that have NOT yet
+  // completed a group of 3. They are prepended to the first post-Stichtag group.
+  carryoverPurchases: {
+    type: [Number],
+    default: []
+  },
+  // Count of purchases toward the next bonus carried over from the Excel import
+  streakCount: {
+    type: Number,
+    default: 0
+  },
+  // 10% accrued on the partial streak — kept for reference, NOT redeemable / NOT in wallet
+  pendingAccruedRabatt: {
+    type: Number,
+    default: 0
+  },
+  baselineImportedAt: Date,
   companyType: String,
   source: {
     type: String,

@@ -105,6 +105,7 @@ const BonusDetail = () => {
   const [discountItems, setDiscountItems] = useState([]); // Items for discount group: [{orders: [id1, id2], isBundle: true}]
   const [purchaseHistory, setPurchaseHistory] = useState(null); // Old purchase history from Excel
   const [oldPurchases, setOldPurchases] = useState([]); // Individual old purchases from Excel
+  const [selectedOldPurchases, setSelectedOldPurchases] = useState([]); // Selected old single purchases (by _id) for grouping
   const [expandedOldGroups, setExpandedOldGroups] = useState({}); // Track expanded old purchase groups
   const [redeemOldGroupIndex, setRedeemOldGroupIndex] = useState(null); // Old group index to redeem
   const [expandedBundles, setExpandedBundles] = useState({}); // Track which bundles are expanded: {groupId_bundleIdx: true}
@@ -339,6 +340,16 @@ const BonusDetail = () => {
     });
   };
 
+  // Toggle selection of an old single purchase (treated like a WAWI order so it
+  // can be combined into a bonus group). Already-consumed ones aren't selectable.
+  const handleOldPurchaseSelect = (purchaseId) => {
+    setSelectedOldPurchases((prev) =>
+      prev.includes(purchaseId)
+        ? prev.filter((pid) => pid !== purchaseId)
+        : [...prev, purchaseId],
+    );
+  };
+
   // Start editing a discount group
   const handleStartEditGroup = (group) => {
     if (group.status === "redeemed") return; // Can't edit redeemed groups
@@ -434,8 +445,12 @@ const BonusDetail = () => {
 
   // Create discount group from both selected discountItems and selected orders
   const handleCreateDirectDiscountGroup = async () => {
-    // Allow creation if we have either selected discountItems or selectedOrders
-    if (selectedOrders.length === 0 && selectedDiscountItems.length === 0)
+    // Allow creation if we have selected discountItems, orders, or old purchases
+    if (
+      selectedOrders.length === 0 &&
+      selectedDiscountItems.length === 0 &&
+      selectedOldPurchases.length === 0
+    )
       return;
 
     setCreatingGroup(true);
@@ -467,6 +482,16 @@ const BonusDetail = () => {
         bundleIndex++; // Each selected order gets its own bundleIndex
       });
 
+      // Add selected old single purchases (Excel) — sent as oldPurchaseId items
+      // (no orderId); the server validates them and resolves the amount/label.
+      selectedOldPurchases.forEach((oldPurchaseId) => {
+        ordersWithBundles.push({
+          oldPurchaseId,
+          bundleIndex: bundleIndex,
+        });
+        bundleIndex++;
+      });
+
       if (editingGroup) {
         await discountsAPI.updateGroup(
           id,
@@ -492,6 +517,7 @@ const BonusDetail = () => {
         toast.success("Bonusgruppe erstellt.");
       }
       setSelectedOrders([]);
+      setSelectedOldPurchases([]);
       setEditingGroup(null);
       // Only remove selected discount items, keep unselected ones
       setDiscountItems((prev) =>
@@ -936,6 +962,7 @@ const BonusDetail = () => {
   // Selection status for items (manual creation allows any number of items)
   const hasSelectedItems = selectedDiscountItems.length > 0;
   const hasSelectedOrders = selectedOrders.length > 0;
+  const hasSelectedOldPurchases = selectedOldPurchases.length > 0;
 
   // Calculate total discount from selected items only
   const itemsTotal = discountItems.reduce((acc, item, index) => {
@@ -1827,7 +1854,10 @@ const BonusDetail = () => {
         // Calculate total items: selected orders + selected discount items (groups)
         const MANUAL_MIN_ORDERS = 3; // Manual creation requires exactly 3 orders/groups
         const selectedItemsCount = selectedDiscountItems.length;
-        const totalItems = selectedOrders.length + selectedItemsCount;
+        const totalItems =
+          selectedOrders.length +
+          selectedItemsCount +
+          selectedOldPurchases.length;
         const isReadyForManual = totalItems === MANUAL_MIN_ORDERS;
         const isTooMany = totalItems > MANUAL_MIN_ORDERS;
         const isReadyForAuto = totalItems >= settings.ordersRequiredForDiscount;
@@ -1941,7 +1971,7 @@ const BonusDetail = () => {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
-                {hasSelectedOrders && (
+                {(hasSelectedOrders || hasSelectedOldPurchases) && (
                   <>
                     {selectedOrders.length > 1 && !hasSelectedItems && (
                       <button
@@ -1979,7 +2009,10 @@ const BonusDetail = () => {
                           : "Bonusgruppe erstellen"}
                     </button>
                     <button
-                      onClick={() => setSelectedOrders([])}
+                      onClick={() => {
+                        setSelectedOrders([]);
+                        setSelectedOldPurchases([]);
+                      }}
                       className={`px-2 py-1.5 text-sm ${
                         isTooMany
                           ? "text-blue-500 hover:text-blue-700"
@@ -1990,7 +2023,9 @@ const BonusDetail = () => {
                     </button>
                   </>
                 )}
-                {hasSelectedItems && !hasSelectedOrders && (
+                {hasSelectedItems &&
+                  !hasSelectedOrders &&
+                  !hasSelectedOldPurchases && (
                   <>
                     {editingGroup && (
                       <button
@@ -2045,7 +2080,9 @@ const BonusDetail = () => {
 
       {/* Orders List with Selection */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {orders.length > 0 || purchaseHistory?.purchaseGroups?.length > 0 ? (
+        {orders.length > 0 ||
+        purchaseHistory?.purchaseGroups?.length > 0 ||
+        oldPurchases.length > 0 ? (
           <>
             <div className="p-4 border-b border-gray-200 bg-gray-50">
               <p className="text-sm text-gray-600">
@@ -3752,19 +3789,24 @@ const BonusDetail = () => {
                       </span>
                     </div>
                   </div>
-                  {oldPurchases.map((purchase, idx) => (
+                  {oldPurchases.map((purchase, idx) => {
+                    const pid = (purchase._id || purchase.id)?.toString();
+                    const isSelected = selectedOldPurchases.includes(pid);
+                    return (
                     <div
-                      key={idx}
-                      className="border-b border-gray-200 bg-white"
+                      key={pid || idx}
+                      className={`border-b border-gray-200 ${
+                        isSelected ? "bg-blue-50" : "bg-white"
+                      }`}
                     >
                       <div className="grid grid-cols-[60px_1fr_1fr_100px_160px]">
-                        {/* Checkbox Column */}
+                        {/* Checkbox Column — selectable like a WAWI order */}
                         <div className="p-4 flex items-center justify-center border-r border-gray-100">
                           <input
                             type="checkbox"
-                            checked={false}
-                            disabled
-                            className="w-5 h-5 rounded border-gray-300 cursor-not-allowed"
+                            checked={isSelected}
+                            onChange={() => handleOldPurchaseSelect(pid)}
+                            className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                           />
                         </div>
 
@@ -3808,16 +3850,29 @@ const BonusDetail = () => {
 
                         {/* Status Column */}
                         <div className="p-4 flex flex-col items-center justify-center bg-gray-50">
-                          <span className="text-xs text-gray-500">
-                            Einzelkauf
-                          </span>
-                          <span className="text-xs text-gray-400 mt-1">
-                            (Alt)
-                          </span>
+                          {isSelected ? (
+                            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                              Ausgewählt
+                            </span>
+                          ) : (
+                            <div className="flex flex-col items-center gap-1">
+                              <span className="text-xs text-gray-500">
+                                Einzelkauf (Alt)
+                              </span>
+                              <span className="text-xs font-semibold text-orange-500">
+                                €{" "}
+                                {formatCurrency(
+                                  (purchase.amount * settings.discountRate) /
+                                    100,
+                                )}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </>
               )}
             </div>

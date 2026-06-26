@@ -1,4 +1,4 @@
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 // Helper function to get auth token
 const getToken = () => localStorage.getItem("token");
@@ -142,7 +142,12 @@ export const discountsAPI = {
 
   getCustomerDiscount: (customerId) => apiCall(`/discounts/${customerId}`),
 
-  createGroup: (customerId, orderIds, discountRate = 10, manualOverride = true) =>
+  createGroup: (
+    customerId,
+    orderIds,
+    discountRate = 10,
+    manualOverride = true,
+  ) =>
     apiCall(`/discounts/${customerId}/groups`, {
       method: "POST",
       body: JSON.stringify({ orderIds, discountRate, manualOverride }),
@@ -236,8 +241,7 @@ export const queueAPI = {
 
 // Test Data API (for development/testing)
 export const testAPI = {
-  generateCustomer: () =>
-    apiCall("/test/customer", { method: "POST" }),
+  generateCustomer: () => apiCall("/test/customer", { method: "POST" }),
 
   generateOrders: (customerId, count = 3) =>
     apiCall(`/test/orders/${customerId}`, {
@@ -251,8 +255,7 @@ export const testAPI = {
       body: JSON.stringify({ customerCount, ordersPerCustomer }),
     }),
 
-  clearTestData: () =>
-    apiCall("/test/clear", { method: "DELETE" }),
+  clearTestData: () => apiCall("/test/clear", { method: "DELETE" }),
 };
 
 // Sync API (WAWI Integration)
@@ -267,7 +270,13 @@ export const syncAPI = {
   syncAll: () => apiCall("/sync/full", { method: "POST" }),
 
   // Get synced data with pagination
-  getCustomers: (page = 1, limit = 20, search = "", sortBy = "name", sortOrder = "asc") => {
+  getCustomers: (
+    page = 1,
+    limit = 20,
+    search = "",
+    sortBy = "name",
+    sortOrder = "asc",
+  ) => {
     let url = `/sync/data/customers?page=${page}&limit=${limit}&sortBy=${sortBy}&sortOrder=${sortOrder}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     return apiCall(url);

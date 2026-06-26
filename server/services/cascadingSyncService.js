@@ -14,7 +14,27 @@ const ProductAttributeValue = require("../models/ProductAttributeValue");
 const Discount = require("../models/Discount");
 const DiscountOrder = require("../models/DiscountOrder");
 const NotesHistory = require("../models/NotesHistory");
+const AppSettings = require("../models/AppSettings");
+const OldPurchase = require("../models/OldPurchase");
 const wawiApiClient = require("./wawiApiClient");
+
+// Stichtag (cutoff date) cache. undefined = not yet loaded, null = no cutoff.
+// Refreshed at the start of every sync run so settings changes are picked up.
+let cachedStichtag = undefined;
+async function ensureStichtag() {
+  if (cachedStichtag === undefined) {
+    try {
+      const settings = await AppSettings.getSettings();
+      cachedStichtag = settings.stichtag ? new Date(settings.stichtag) : null;
+    } catch (err) {
+      cachedStichtag = null;
+    }
+  }
+  return cachedStichtag;
+}
+function refreshStichtag() {
+  cachedStichtag = undefined;
+}
 
 // Field definitions for WAWI API
 const CUSTOMER_FIELDS = [
@@ -627,7 +647,10 @@ async function checkAndCreateDiscountGroup(customer, orders) {
   const existingGroups = await DiscountOrder.find({ customerId: customer._id });
   const ordersInGroups = new Set();
   existingGroups.forEach((group) => {
-    group.orders.forEach((o) => ordersInGroups.add(o.orderId.toString()));
+    group.orders.forEach((o) => {
+      // Excel/carryover items have no WAWI orderId — skip them here.
+      if (o.orderId) ordersInGroups.add(o.orderId.toString());
+    });
   });
 
   // Recompute stored amounts for existing non-redeemed groups so the eligible
@@ -636,9 +659,14 @@ async function checkAndCreateDiscountGroup(customer, orders) {
   // untouched to preserve historical payouts.
   for (const group of existingGroups) {
     if (group.status === "redeemed") continue;
+    // Excel-seeded groups carry pre-Stichtag amounts with no WAWI orders;
+    // never recompute (would zero them out).
+    if (group.source === "excel") continue;
 
     const oldTotal = group.totalDiscount || 0;
     for (const line of group.orders) {
+      // Carryover pseudo-orders (no orderId) keep their stored Excel amount.
+      if (!line.orderId) continue;
       const amount = await getOrderEligibleAmount(line.orderId);
       line.amount = amount;
       line.discountAmount = amount * (line.discountRate || DISCOUNT_RATE);
@@ -676,12 +704,20 @@ async function checkAndCreateDiscountGroup(customer, orders) {
   //   if (!order || !order.amountTotal || order.amountTotal <= 0) continue;
   //   const eligibleAmount = await getOrderEligibleAmount(order._id);
   //   if (eligibleAmount <= 0) continue;
+  const stichtag = await ensureStichtag();
+
   const eligibleOrders = [];
   const orderEligibleAmounts = new Map();
   for (const order of orders) {
     if (!order) continue;
     // Skip if already in a discount group
     if (ordersInGroups.has(order._id.toString())) continue;
+
+    // Stichtag cutoff: orders dated before it are owned by the Excel baseline
+    // and never count toward the bonus program (no bundling, no return accrual).
+    if (stichtag && order.orderDate && new Date(order.orderDate) < stichtag) {
+      continue;
+    }
 
     // Calculate eligible amount from individual items (signed; excludes Sale items, vouchers, etc.)
     const eligibleAmount = await getOrderEligibleAmount(order._id);
@@ -729,24 +765,50 @@ async function checkAndCreateDiscountGroup(customer, orders) {
   // (oldest purchases get grouped first, newest remain ungrouped until enough accumulate)
   eligibleOrders.sort((a, b) => new Date(a.orderDate) - new Date(b.orderDate));
 
-  // Create discount groups for every 3 orders
-  let groupsCreated = 0;
-  while (eligibleOrders.length >= ORDERS_FOR_DISCOUNT) {
-    const groupOrders = eligibleOrders.splice(0, ORDERS_FOR_DISCOUNT);
-    // Sort within group: newest first for display (bundleIndex 0 = newest)
-    groupOrders.sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
+  // Prepend the customer's pre-Stichtag carryover purchases (from the Excel
+  // import) as leading pseudo-slots, so the first post-Stichtag group completes
+  // their in-progress streak (e.g. 2 Excel purchases + 1 new order = 1 bonus).
+  const carryover = Array.isArray(customer.carryoverPurchases)
+    ? customer.carryoverPurchases
+    : [];
+  const slots = [
+    ...carryover.map((amount, i) => ({
+      pseudo: true,
+      amount,
+      label: `Excel-${i + 1}`,
+    })),
+    ...eligibleOrders.map((order) => ({
+      pseudo: false,
+      order,
+      amount: orderEligibleAmounts.get(order._id.toString()) ?? 0,
+    })),
+  ];
 
-    const discountOrderItems = groupOrders.map((order, index) => {
-      const eligibleAmount =
-        orderEligibleAmounts.get(order._id.toString()) ?? 0;
-      return {
-        orderId: order._id,
-        amount: eligibleAmount,
-        discountRate: DISCOUNT_RATE,
-        discountAmount: eligibleAmount * DISCOUNT_RATE,
-        bundleIndex: index,
-      };
+  // Create discount groups for every 3 slots
+  let groupsCreated = 0;
+  let carryoverConsumed = false;
+  while (slots.length >= ORDERS_FOR_DISCOUNT) {
+    const groupSlots = slots.splice(0, ORDERS_FOR_DISCOUNT);
+    const usedCarryover = groupSlots.some((s) => s.pseudo);
+    if (usedCarryover) carryoverConsumed = true;
+
+    // Sort within group: real orders newest-first, pseudo (oldest) pushed last
+    groupSlots.sort((a, b) => {
+      if (a.pseudo && b.pseudo) return 0;
+      if (a.pseudo) return 1;
+      if (b.pseudo) return -1;
+      return new Date(b.order.orderDate) - new Date(a.order.orderDate);
     });
+
+    const discountOrderItems = groupSlots.map((s, index) => ({
+      orderId: s.pseudo ? null : s.order._id,
+      fromExcel: s.pseudo || undefined,
+      label: s.pseudo ? s.label : undefined,
+      amount: s.amount,
+      discountRate: DISCOUNT_RATE,
+      discountAmount: s.amount * DISCOUNT_RATE,
+      bundleIndex: index,
+    }));
 
     // console.log({ discountOrderItems });
     // Create discount group
@@ -755,7 +817,9 @@ async function checkAndCreateDiscountGroup(customer, orders) {
       partnerId: customer.contactId,
       orders: discountOrderItems,
       status: "available",
-      notes: `Auto-created from ${ORDERS_FOR_DISCOUNT} orders sync`,
+      notes: usedCarryover
+        ? `Auto-created (incl. ${groupSlots.filter((s) => s.pseudo).length} pre-Stichtag carryover)`
+        : `Auto-created from ${ORDERS_FOR_DISCOUNT} orders sync`,
     });
 
     groupsCreated++;
@@ -788,6 +852,21 @@ async function checkAndCreateDiscountGroup(customer, orders) {
     );
   }
 
+  // Once the Excel carryover has been folded into a completed group, clear it so
+  // later syncs don't reuse those pre-Stichtag purchases. Also mark the
+  // customer's pending old single purchases as consumed so they stop appearing
+  // as selectable "Alte Einzelkäufe" in BonusDetail (consume-once parity with
+  // the manual create path).
+  if (carryoverConsumed) {
+    await Customer.findByIdAndUpdate(customer._id, {
+      $set: { carryoverPurchases: [], streakCount: 0, pendingAccruedRabatt: 0 },
+    });
+    await OldPurchase.updateMany(
+      { customerId: customer._id, isInDiscountGroup: false },
+      { $set: { isInDiscountGroup: true } },
+    );
+  }
+
   return groupsCreated;
 }
 
@@ -801,6 +880,8 @@ async function runFullCascadeSync(options = {}) {
   if (cascadeStatus.isRunning) {
     throw new Error("Cascade sync already in progress");
   }
+
+  refreshStichtag(); // reload the cutoff date for this run
 
   cascadeStatus = {
     isRunning: true,
@@ -1223,6 +1304,8 @@ async function runIncrementalSync(options = {}) {
     console.log("[CascadeSync] Sync already in progress, skipping...");
     return null;
   }
+
+  refreshStichtag(); // reload the cutoff date for this run
 
   cascadeStatus = {
     isRunning: true,
