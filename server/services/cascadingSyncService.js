@@ -771,11 +771,24 @@ async function checkAndCreateDiscountGroup(customer, orders) {
   const carryover = Array.isArray(customer.carryoverPurchases)
     ? customer.carryoverPurchases
     : [];
+  // Pair the carryover amounts with the real Excel labels (EK4, EK5, …) from the
+  // customer's pending OldPurchase rows so auto-created groups read "EK…" rather
+  // than a generic "Excel-1". Falls back to a generic label if none are found.
+  let carryoverLabels = [];
+  if (carryover.length) {
+    const pendingOld = await OldPurchase.find({
+      customerId: customer._id,
+      isInDiscountGroup: false,
+    })
+      .sort({ ekIndex: 1 })
+      .lean();
+    carryoverLabels = pendingOld.map((p) => p.purchaseLabel);
+  }
   const slots = [
     ...carryover.map((amount, i) => ({
       pseudo: true,
       amount,
-      label: `Excel-${i + 1}`,
+      label: carryoverLabels[i] || `Aus Tabelle ${i + 1}`,
     })),
     ...eligibleOrders.map((order) => ({
       pseudo: false,

@@ -2130,6 +2130,24 @@ const BonusDetail = () => {
                     groupOrderIds.includes((order._id || order.id)?.toString()),
                   );
 
+                  // Sheet (Excel) purchases in the group have no WAWI orderId and
+                  // aren't in `orders`. Build synthetic rows so they show up in the
+                  // group (labeled as EK / from the sheet) and count in the total.
+                  const excelItems = (group.orders || [])
+                    .filter((o) => !o.orderId)
+                    .map((o) => ({
+                      _id: o._id,
+                      id: o._id,
+                      fromExcel: true,
+                      label: o.label,
+                      amount: o.amount || 0,
+                      discountAmount: o.discountAmount || 0,
+                      orderDate: null,
+                      items: [],
+                      bundleIndex: o.bundleIndex,
+                    }));
+                  const displayOrders = [...groupOrders, ...excelItems];
+
                   // If editing this group, don't show it here
                   if (isBeingEdited) return null;
 
@@ -2145,11 +2163,14 @@ const BonusDetail = () => {
                         (storedAmountByOrderId[oid] || 0) + (o.amount || 0);
                   });
                   const getStoredEligible = (order) =>
-                    storedAmountByOrderId[(order._id || order.id)?.toString()] ??
-                    getEligibleAmount(order);
+                    order.fromExcel
+                      ? order.amount || 0
+                      : storedAmountByOrderId[
+                          (order._id || order.id)?.toString()
+                        ] ?? getEligibleAmount(order);
 
                   // Calculate total eligible amount for entire group
-                  const groupTotalEligible = groupOrders.reduce(
+                  const groupTotalEligible = displayOrders.reduce(
                     (total, order) => total + getStoredEligible(order),
                     0,
                   );
@@ -2331,6 +2352,19 @@ const BonusDetail = () => {
                                     ...orderData,
                                     discountAmount: o.discountAmount,
                                   });
+                                } else if (!o.orderId) {
+                                  // Sheet (Excel) purchase — no WAWI order; show
+                                  // it as a synthetic "from sheet" row.
+                                  bundleMap[bundleIdx].push({
+                                    _id: o._id,
+                                    id: o._id,
+                                    fromExcel: true,
+                                    label: o.label,
+                                    amount: o.amount || 0,
+                                    orderDate: null,
+                                    items: [],
+                                    discountAmount: o.discountAmount,
+                                  });
                                 }
                               });
 
@@ -2452,30 +2486,53 @@ const BonusDetail = () => {
 
                                               {/* Order details */}
                                               <div className="p-3 border-r border-green-100">
-                                                <p className="text-sm text-gray-900">
-                                                  <span className="font-semibold">
-                                                    Einkaufsnummer
-                                                  </span>{" "}
-                                                  -{" "}
-                                                  <button
-                                                    onClick={() =>
-                                                      navigate(
-                                                        `/bestellungen/${(order._id || order.id)?.toString()}`,
-                                                      )
-                                                    }
-                                                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
-                                                  >
-                                                    {order.posReference ||
-                                                      order.orderId}
-                                                  </button>
-                                                </p>
-                                                <p className="text-sm text-gray-900">
-                                                  <span className="font-semibold">
-                                                    Einkaufsdatum
-                                                  </span>{" "}
-                                                  -{" "}
-                                                  {formatDate(order.orderDate)}
-                                                </p>
+                                                {order.fromExcel ? (
+                                                  <>
+                                                    <p className="text-sm text-gray-900">
+                                                      <span className="font-semibold">
+                                                        Einkaufsnummer
+                                                      </span>{" "}
+                                                      -{" "}
+                                                      <span className="text-gray-700">
+                                                        {order.label}
+                                                      </span>
+                                                    </p>
+                                                    <p>
+                                                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+                                                        Aus Tabelle (Alt)
+                                                      </span>
+                                                    </p>
+                                                  </>
+                                                ) : (
+                                                  <>
+                                                    <p className="text-sm text-gray-900">
+                                                      <span className="font-semibold">
+                                                        Einkaufsnummer
+                                                      </span>{" "}
+                                                      -{" "}
+                                                      <button
+                                                        onClick={() =>
+                                                          navigate(
+                                                            `/bestellungen/${(order._id || order.id)?.toString()}`,
+                                                          )
+                                                        }
+                                                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                                      >
+                                                        {order.posReference ||
+                                                          order.orderId}
+                                                      </button>
+                                                    </p>
+                                                    <p className="text-sm text-gray-900">
+                                                      <span className="font-semibold">
+                                                        Einkaufsdatum
+                                                      </span>{" "}
+                                                      -{" "}
+                                                      {formatDate(
+                                                        order.orderDate,
+                                                      )}
+                                                    </p>
+                                                  </>
+                                                )}
                                                 <p className="text-sm mt-1 text-gray-600">
                                                   <span className="font-semibold">
                                                     Bonusfähig:
@@ -3138,6 +3195,24 @@ const BonusDetail = () => {
                     groupOrderIds.includes((order._id || order.id)?.toString()),
                   );
 
+                  // Sheet (Excel) purchases in the group have no WAWI orderId and
+                  // aren't in `orders`. Build synthetic rows so they show up in the
+                  // group (labeled as EK / from the sheet) and count in the total.
+                  const excelItems = (group.orders || [])
+                    .filter((o) => !o.orderId)
+                    .map((o) => ({
+                      _id: o._id,
+                      id: o._id,
+                      fromExcel: true,
+                      label: o.label,
+                      amount: o.amount || 0,
+                      discountAmount: o.discountAmount || 0,
+                      orderDate: null,
+                      items: [],
+                      bundleIndex: o.bundleIndex,
+                    }));
+                  const displayOrders = [...groupOrders, ...excelItems];
+
                   // If editing this group, don't show it here
                   if (isBeingEdited) return null;
 
@@ -3153,11 +3228,14 @@ const BonusDetail = () => {
                         (storedAmountByOrderId[oid] || 0) + (o.amount || 0);
                   });
                   const getStoredEligible = (order) =>
-                    storedAmountByOrderId[(order._id || order.id)?.toString()] ??
-                    getEligibleAmount(order);
+                    order.fromExcel
+                      ? order.amount || 0
+                      : storedAmountByOrderId[
+                          (order._id || order.id)?.toString()
+                        ] ?? getEligibleAmount(order);
 
                   // Calculate total eligible amount for entire group
-                  const groupTotalEligible = groupOrders.reduce(
+                  const groupTotalEligible = displayOrders.reduce(
                     (total, order) => total + getStoredEligible(order),
                     0,
                   );
@@ -3312,6 +3390,19 @@ const BonusDetail = () => {
                                     ...orderData,
                                     discountAmount: o.discountAmount,
                                   });
+                                } else if (!o.orderId) {
+                                  // Sheet (Excel) purchase — no WAWI order; show
+                                  // it as a synthetic "from sheet" row.
+                                  bundleMap[bundleIdx].push({
+                                    _id: o._id,
+                                    id: o._id,
+                                    fromExcel: true,
+                                    label: o.label,
+                                    amount: o.amount || 0,
+                                    orderDate: null,
+                                    items: [],
+                                    discountAmount: o.discountAmount,
+                                  });
                                 }
                               });
 
@@ -3426,30 +3517,53 @@ const BonusDetail = () => {
                                               )}
 
                                               <div className="p-3 border-r border-green-100">
-                                                <p className="text-sm text-gray-900">
-                                                  <span className="font-semibold">
-                                                    Einkaufsnummer
-                                                  </span>{" "}
-                                                  -{" "}
-                                                  <button
-                                                    onClick={() =>
-                                                      navigate(
-                                                        `/bestellungen/${(order._id || order.id)?.toString()}`,
-                                                      )
-                                                    }
-                                                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
-                                                  >
-                                                    {order.posReference ||
-                                                      order.orderId}
-                                                  </button>
-                                                </p>
-                                                <p className="text-sm text-gray-900">
-                                                  <span className="font-semibold">
-                                                    Einkaufsdatum
-                                                  </span>{" "}
-                                                  -{" "}
-                                                  {formatDate(order.orderDate)}
-                                                </p>
+                                                {order.fromExcel ? (
+                                                  <>
+                                                    <p className="text-sm text-gray-900">
+                                                      <span className="font-semibold">
+                                                        Einkaufsnummer
+                                                      </span>{" "}
+                                                      -{" "}
+                                                      <span className="text-gray-700">
+                                                        {order.label}
+                                                      </span>
+                                                    </p>
+                                                    <p>
+                                                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+                                                        Aus Tabelle (Alt)
+                                                      </span>
+                                                    </p>
+                                                  </>
+                                                ) : (
+                                                  <>
+                                                    <p className="text-sm text-gray-900">
+                                                      <span className="font-semibold">
+                                                        Einkaufsnummer
+                                                      </span>{" "}
+                                                      -{" "}
+                                                      <button
+                                                        onClick={() =>
+                                                          navigate(
+                                                            `/bestellungen/${(order._id || order.id)?.toString()}`,
+                                                          )
+                                                        }
+                                                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                                      >
+                                                        {order.posReference ||
+                                                          order.orderId}
+                                                      </button>
+                                                    </p>
+                                                    <p className="text-sm text-gray-900">
+                                                      <span className="font-semibold">
+                                                        Einkaufsdatum
+                                                      </span>{" "}
+                                                      -{" "}
+                                                      {formatDate(
+                                                        order.orderDate,
+                                                      )}
+                                                    </p>
+                                                  </>
+                                                )}
                                                 <p className="text-sm mt-1 text-gray-600">
                                                   <span className="font-semibold">
                                                     Bonusfähig:
