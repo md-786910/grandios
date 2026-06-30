@@ -21,13 +21,6 @@ const AppSettingsSchema = new mongoose.Schema({
   autoCreateDiscount: {
     type: Boolean,
     default: true
-  },
-  // Stichtag (cutoff date): bonus history before this date is owned by the Excel
-  // import; only WAWI orders dated on/after it count toward the bonus program.
-  // null = no cutoff (all orders count, legacy behaviour).
-  stichtag: {
-    type: Date,
-    default: null
   }
 }, {
   timestamps: true,

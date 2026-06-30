@@ -14,27 +14,9 @@ const ProductAttributeValue = require("../models/ProductAttributeValue");
 const Discount = require("../models/Discount");
 const DiscountOrder = require("../models/DiscountOrder");
 const NotesHistory = require("../models/NotesHistory");
-const AppSettings = require("../models/AppSettings");
 const OldPurchase = require("../models/OldPurchase");
 const wawiApiClient = require("./wawiApiClient");
-
-// Stichtag (cutoff date) cache. undefined = not yet loaded, null = no cutoff.
-// Refreshed at the start of every sync run so settings changes are picked up.
-let cachedStichtag = undefined;
-async function ensureStichtag() {
-  if (cachedStichtag === undefined) {
-    try {
-      const settings = await AppSettings.getSettings();
-      cachedStichtag = settings.stichtag ? new Date(settings.stichtag) : null;
-    } catch (err) {
-      cachedStichtag = null;
-    }
-  }
-  return cachedStichtag;
-}
-function refreshStichtag() {
-  cachedStichtag = undefined;
-}
+const { getStichtag, getStichtagWawiString } = require("../utils/stichtag");
 
 // Field definitions for WAWI API
 const CUSTOMER_FIELDS = [
@@ -285,7 +267,16 @@ async function syncCustomerOrders(customer, partnerId, options = {}) {
       10,
     );
   } else {
-    // Step 1: Fetch all order IDs from WAWI for this customer (lightweight)
+    // Step 1: Fetch order IDs from WAWI for this customer (lightweight).
+    // When a Stichtag is set, only pull orders dated on/after it — pre-cutoff
+    // history is owned by the Excel import (not pulled, not counted).
+    const stStr = getStichtagWawiString();
+    const orderDomain = stStr
+      ? [
+          ["partner_id", "=", partnerId],
+          ["date_order", ">=", stStr],
+        ]
+      : [["partner_id", "=", partnerId]];
     let allWawiOrderIds = [];
     let offset = 0;
     let hasMore = true;
@@ -293,7 +284,7 @@ async function syncCustomerOrders(customer, partnerId, options = {}) {
     while (hasMore) {
       const idsResult = await wawiApiClient.searchRead("pos.order", {
         fields: ["id"],
-        domain: [["partner_id", "=", partnerId]],
+        domain: orderDomain,
         order: "id asc",
         limit: 500,
         offset,
@@ -704,7 +695,7 @@ async function checkAndCreateDiscountGroup(customer, orders) {
   //   if (!order || !order.amountTotal || order.amountTotal <= 0) continue;
   //   const eligibleAmount = await getOrderEligibleAmount(order._id);
   //   if (eligibleAmount <= 0) continue;
-  const stichtag = await ensureStichtag();
+  const stichtag = getStichtag();
 
   const eligibleOrders = [];
   const orderEligibleAmounts = new Map();
@@ -893,8 +884,6 @@ async function runFullCascadeSync(options = {}) {
   if (cascadeStatus.isRunning) {
     throw new Error("Cascade sync already in progress");
   }
-
-  refreshStichtag(); // reload the cutoff date for this run
 
   cascadeStatus = {
     isRunning: true,
@@ -1318,8 +1307,6 @@ async function runIncrementalSync(options = {}) {
     return null;
   }
 
-  refreshStichtag(); // reload the cutoff date for this run
-
   cascadeStatus = {
     isRunning: true,
     currentStep: "incremental",
@@ -1353,6 +1340,17 @@ async function runIncrementalSync(options = {}) {
       .replace("T", " ")
       .substring(0, 19);
 
+    // When a Stichtag is set, only consider orders dated on/after it (pre-cutoff
+    // purchases are owned by the Excel import). write_date drives the recent
+    // delta; date_order is the actual purchase date the Stichtag applies to.
+    const stStr = getStichtagWawiString();
+    const recentOrdersDomain = stStr
+      ? [
+          ["write_date", ">=", cutoffStr],
+          ["date_order", ">=", stStr],
+        ]
+      : [["write_date", ">=", cutoffStr]];
+
     // Fetch recent orders from WAWI (paginated)
     cascadeStatus.currentStep = "fetching_orders";
     let allRecentOrders = [];
@@ -1364,7 +1362,7 @@ async function runIncrementalSync(options = {}) {
       try {
         ordersResult = await wawiApiClient.searchRead("pos.order", {
           fields: ORDER_FIELDS,
-          domain: [["write_date", ">=", cutoffStr]],
+          domain: recentOrdersDomain,
           order: "write_date desc",
           limit: 500,
           offset,

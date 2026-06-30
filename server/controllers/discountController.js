@@ -10,6 +10,29 @@ const NotesHistory = require("../models/NotesHistory");
 const CustomerPurchaseHistory = require("../models/CustomerPurchaseHistory");
 const OldPurchase = require("../models/OldPurchase");
 const cascadeSyncService = require("../services/cascadingSyncService");
+const { getStichtag } = require("../utils/stichtag");
+
+// Recompute a customer's carryover (pending sheet purchases) from the
+// authoritative OldPurchase rows that are NOT in a discount group. Used after
+// releasing sheet items so they become available again.
+async function restoreCarryoverFromOldPurchases(customerId) {
+  const pending = await OldPurchase.find({
+    customerId,
+    isInDiscountGroup: false,
+  }).lean();
+  const amounts = pending.map((p) => p.amount || 0);
+  const settings = await AppSettings.getSettings();
+  const rate = settings.discountRate || 10;
+  const pendingRabatt =
+    Math.round(amounts.reduce((s, a) => s + (a * rate) / 100, 0) * 100) / 100;
+  await Customer.findByIdAndUpdate(customerId, {
+    $set: {
+      carryoverPurchases: amounts,
+      streakCount: amounts.length,
+      pendingAccruedRabatt: pendingRabatt,
+    },
+  });
+}
 
 // Helper to get order items from either orderLines (WAWI) or items (legacy)
 function getOrderItems(order) {
@@ -302,8 +325,9 @@ exports.getCustomerDiscount = async (req, res, next) => {
     // here so they mirror the auto-sync's orderDate>=stichtag rule. (No Stichtag
     // set ⇒ no filter ⇒ existing behavior unchanged.)
     const orderQuery = { customerId: customer._id, amountTotal: { $gt: 0 } };
-    if (settings.stichtag) {
-      orderQuery.orderDate = { $gte: new Date(settings.stichtag) };
+    const stichtag = getStichtag();
+    if (stichtag) {
+      orderQuery.orderDate = { $gte: stichtag };
     }
     const orders = await Order.find(orderQuery)
       .populate({
@@ -582,8 +606,8 @@ exports.createDiscountGroup = async (req, res, next) => {
 
     // Stichtag guard: a pre-cutoff Etron order is owned by the Excel baseline
     // and must never be grouped for bonus (mirrors the auto-sync rule).
-    if (settings.stichtag) {
-      const cutoff = new Date(settings.stichtag);
+    const cutoff = getStichtag();
+    if (cutoff) {
       const preCutoff = orders.find(
         (o) => o.orderDate && new Date(o.orderDate) < cutoff,
       );
@@ -788,8 +812,15 @@ exports.updateDiscountGroup = async (req, res, next) => {
       });
     }
 
-    // Get all order IDs
-    const allOrderIds = ordersWithBundles.map((o) => o.orderId);
+    // Split into real WAWI orders and retained sheet (Excel) items. Sheet items
+    // have no orderId and carry label+amount — they stay in the group as-is.
+    const realBundles = ordersWithBundles.filter((o) => o.orderId);
+    const sheetBundles = ordersWithBundles.filter(
+      (o) => !o.orderId && (o.fromExcel || o.label),
+    );
+
+    // Get all real order IDs (sheet items are handled separately)
+    const allOrderIds = realBundles.map((o) => o.orderId);
 
     // Get current orders in this group (Excel/carryover items have no orderId)
     const currentOrderIds = discountOrder.orders
@@ -823,29 +854,24 @@ exports.updateDiscountGroup = async (req, res, next) => {
     // Store old discount amount for wallet adjustment
     const oldTotalDiscount = discountOrder.totalDiscount;
 
-    // Get new orders with orderLines populated
-    const orders = await Order.find({ _id: { $in: allOrderIds } }).populate({
-      path: "orderLines",
-      populate: {
-        path: "productRef",
-        select: "name image listPrice",
-      },
-    });
+    // Get new orders with orderLines populated (real WAWI orders only)
+    const orders = allOrderIds.length
+      ? await Order.find({ _id: { $in: allOrderIds } }).populate({
+          path: "orderLines",
+          populate: {
+            path: "productRef",
+            select: "name image listPrice",
+          },
+        })
+      : [];
 
-    if (orders.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid orders found",
-      });
-    }
-
-    // Create a map of orderId -> bundleIndex
+    // Create a map of orderId -> bundleIndex (real orders only)
     const bundleMap = {};
-    ordersWithBundles.forEach((o) => {
+    realBundles.forEach((o) => {
       bundleMap[o.orderId.toString()] = o.bundleIndex;
     });
 
-    // Calculate discount for each order using the shared eligible-amount
+    // Calculate discount for each real order using the shared eligible-amount
     // source of truth, so manual and auto-created groups always agree.
     const orderItems = await Promise.all(
       orders.map(async (order) => {
@@ -865,8 +891,31 @@ exports.updateDiscountGroup = async (req, res, next) => {
       }),
     );
 
+    // Re-attach the retained sheet (Excel) items unchanged so they stay in the
+    // group (same shape as the carryover/old-purchase pseudo-orders).
+    const sheetItems = sheetBundles.map((s) => {
+      const amount = s.amount || 0;
+      return {
+        orderId: null,
+        fromExcel: true,
+        label: s.label,
+        amount,
+        discountRate: effectiveDiscountRate,
+        discountAmount: (amount * effectiveDiscountRate) / 100,
+        bundleIndex: s.bundleIndex || 0,
+      };
+    });
+
+    const groupItems = [...orderItems, ...sheetItems];
+    if (groupItems.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid orders found",
+      });
+    }
+
     // Update the discount order group
-    discountOrder.orders = orderItems;
+    discountOrder.orders = groupItems;
     await discountOrder.save();
 
     // Calculate new total discount
@@ -1087,6 +1136,28 @@ exports.deleteDiscountGroup = async (req, res, next) => {
         discount.totalGranted -= discountOrder.totalDiscount;
         await discount.save();
       }
+    }
+
+    // Release any sheet (Excel) purchases this group held back to "available"
+    // (otherwise their OldPurchase rows stay isInDiscountGroup:true with no
+    // group → orphaned/invisible). Restore the customer's carryover from the
+    // pending OldPurchase rows so the auto-sync / UI can use them again.
+    const sheetItems = (discountOrder.orders || []).filter(
+      (o) => o.fromExcel || !o.orderId,
+    );
+    if (sheetItems.length) {
+      for (const item of sheetItems) {
+        if (!item.label) continue;
+        await OldPurchase.updateOne(
+          {
+            customerId: discountOrder.customerId,
+            purchaseLabel: item.label,
+            isInDiscountGroup: true,
+          },
+          { $set: { isInDiscountGroup: false } },
+        );
+      }
+      await restoreCarryoverFromOldPurchases(discountOrder.customerId);
     }
 
     await discountOrder.deleteOne();

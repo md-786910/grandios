@@ -106,6 +106,7 @@ const BonusDetail = () => {
   const [purchaseHistory, setPurchaseHistory] = useState(null); // Old purchase history from Excel
   const [oldPurchases, setOldPurchases] = useState([]); // Individual old purchases from Excel
   const [selectedOldPurchases, setSelectedOldPurchases] = useState([]); // Selected old single purchases (by _id) for grouping
+  const [editingGroupSheetItems, setEditingGroupSheetItems] = useState([]); // Sheet (fromExcel) items retained while editing a group
   const [expandedOldGroups, setExpandedOldGroups] = useState({}); // Track expanded old purchase groups
   const [redeemOldGroupIndex, setRedeemOldGroupIndex] = useState(null); // Old group index to redeem
   const [expandedBundles, setExpandedBundles] = useState({}); // Track which bundles are expanded: {groupId_bundleIdx: true}
@@ -356,17 +357,32 @@ const BonusDetail = () => {
 
     setEditingGroup(group);
 
-    // Group orders by bundleIndex to preserve the bundle structure
+    // Sheet (Excel) purchases in the group have no WAWI orderId — they can't be
+    // re-selected like orders. Retain them as-is so they stay in the group, and
+    // edit only the real WAWI orders around them.
+    const sheetItems = (group.orders || [])
+      .filter((o) => o.fromExcel || !o.orderId)
+      .map((o) => ({
+        label: o.label,
+        amount: o.amount || 0,
+        discountAmount: o.discountAmount || 0,
+        bundleIndex: o.bundleIndex,
+      }));
+    setEditingGroupSheetItems(sheetItems);
+
+    // Group the REAL orders by bundleIndex to preserve the bundle structure
     const bundleMap = {};
-    group.orders?.forEach((o) => {
-      const orderId = o.orderId?._id || o.orderId;
-      // Ensure bundleIndex is a number for consistent grouping
-      const bundleIdx = Number(o.bundleIndex ?? 0);
-      if (!bundleMap[bundleIdx]) {
-        bundleMap[bundleIdx] = [];
-      }
-      bundleMap[bundleIdx].push(orderId);
-    });
+    group.orders
+      ?.filter((o) => o.orderId)
+      .forEach((o) => {
+        const orderId = o.orderId?._id || o.orderId;
+        // Ensure bundleIndex is a number for consistent grouping
+        const bundleIdx = Number(o.bundleIndex ?? 0);
+        if (!bundleMap[bundleIdx]) {
+          bundleMap[bundleIdx] = [];
+        }
+        bundleMap[bundleIdx].push(orderId);
+      });
 
     // Sort by bundleIndex to maintain order
     const sortedBundles = Object.entries(bundleMap)
@@ -413,6 +429,7 @@ const BonusDetail = () => {
     setEditingGroup(null);
     setSelectedOrders([]);
     setSelectedDiscountItems([]);
+    setEditingGroupSheetItems([]);
   };
 
   // Memoized toggle handler for discount item selection - prevents laggy checkbox behavior
@@ -445,11 +462,13 @@ const BonusDetail = () => {
 
   // Create discount group from both selected discountItems and selected orders
   const handleCreateDirectDiscountGroup = async () => {
-    // Allow creation if we have selected discountItems, orders, or old purchases
+    // Allow creation if we have selected discountItems, orders, old purchases,
+    // or retained sheet items from the group being edited.
     if (
       selectedOrders.length === 0 &&
       selectedDiscountItems.length === 0 &&
-      selectedOldPurchases.length === 0
+      selectedOldPurchases.length === 0 &&
+      editingGroupSheetItems.length === 0
     )
       return;
 
@@ -492,6 +511,18 @@ const BonusDetail = () => {
         bundleIndex++;
       });
 
+      // When editing, re-attach the group's sheet (Excel) items so they stay in
+      // the group (they have no orderId and aren't re-selectable).
+      editingGroupSheetItems.forEach((s) => {
+        ordersWithBundles.push({
+          fromExcel: true,
+          label: s.label,
+          amount: s.amount,
+          bundleIndex: bundleIndex,
+        });
+        bundleIndex++;
+      });
+
       if (editingGroup) {
         await discountsAPI.updateGroup(
           id,
@@ -518,6 +549,7 @@ const BonusDetail = () => {
       }
       setSelectedOrders([]);
       setSelectedOldPurchases([]);
+      setEditingGroupSheetItems([]);
       setEditingGroup(null);
       // Only remove selected discount items, keep unselected ones
       setDiscountItems((prev) =>
@@ -892,11 +924,25 @@ const BonusDetail = () => {
   );
 
   // Old purchase history stats
+  // Sheet purchases folded into a bonus group (post-Stichtag carryover, or a
+  // manual group) leave `oldPurchases` and become fromExcel items inside a
+  // DiscountOrder. They're still real purchases — keep counting them so the
+  // total doesn't drop once an Etron order completes the group.
+  const groupedSheetPurchaseCount = (discountGroups || []).reduce(
+    (acc, g) =>
+      acc + (g.orders?.filter((o) => o.fromExcel || !o.orderId).length || 0),
+    0,
+  );
   const oldPurchaseCount =
-    purchaseHistory?.purchaseGroups?.reduce(
+    (purchaseHistory?.purchaseGroups?.reduce(
       (acc, g) => acc + g.purchases.filter((p) => p.amount).length,
       0,
-    ) || 0;
+    ) || 0) +
+    // Pending single purchases (Alte Einzelkäufe, not yet in a group) live in
+    // `oldPurchases`, disjoint from the complete groups above — include them so
+    // a sheet-only customer's counts aren't 0.
+    (oldPurchases?.length || 0) +
+    groupedSheetPurchaseCount;
   const oldTotalValue = purchaseHistory?.totalPurchaseAmount || 0;
   const oldTotalBonus = purchaseHistory?.totalRabatt || 0;
   const oldRedeemedBonus = purchaseHistory?.totalRedeemed || 0;
@@ -1857,7 +1903,8 @@ const BonusDetail = () => {
         const totalItems =
           selectedOrders.length +
           selectedItemsCount +
-          selectedOldPurchases.length;
+          selectedOldPurchases.length +
+          editingGroupSheetItems.length;
         const isReadyForManual = totalItems === MANUAL_MIN_ORDERS;
         const isTooMany = totalItems > MANUAL_MIN_ORDERS;
         const isReadyForAuto = totalItems >= settings.ordersRequiredForDiscount;
@@ -1953,6 +2000,19 @@ const BonusDetail = () => {
                           {selectedItemsCount > 1 ? "n" : ""})
                         </span>
                       )}
+                      {editingGroupSheetItems.length > 0 && (
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+                          + {editingGroupSheetItems.length} Alt-Einkäufe aus
+                          Tabelle (€
+                          {formatCurrency(
+                            editingGroupSheetItems.reduce(
+                              (s, x) => s + (x.amount || 0),
+                              0,
+                            ),
+                          )}
+                          ) bleiben in der Gruppe
+                        </span>
+                      )}
                       {isReadyForManual && (
                         <span className="text-sm text-green-600 font-medium">
                           • Bonus: €{" "}
@@ -1971,7 +2031,9 @@ const BonusDetail = () => {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
-                {(hasSelectedOrders || hasSelectedOldPurchases) && (
+                {(hasSelectedOrders ||
+                  hasSelectedOldPurchases ||
+                  editingGroupSheetItems.length > 0) && (
                   <>
                     {selectedOrders.length > 1 && !hasSelectedItems && (
                       <button
@@ -3631,6 +3693,79 @@ const BonusDetail = () => {
                   );
                 })}
 
+              {/* Old single purchases (from the sheet) — rendered in the SAME
+                  selectable list as Etron singles (no separate section), so a
+                  single purchase looks the same whether it came from Etron or
+                  the sheet. Only a small "Aus Tabelle" tag marks the origin. */}
+              {oldPurchases &&
+                oldPurchases.length > 0 &&
+                oldPurchases.map((purchase, idx) => {
+                  const pid = (purchase._id || purchase.id)?.toString();
+                  const isSelected = selectedOldPurchases.includes(pid);
+                  return (
+                    <div
+                      key={pid || `old-${idx}`}
+                      className={`grid grid-cols-[60px_1fr_1fr_100px_160px] border-b border-gray-100 ${
+                        isSelected ? "bg-blue-50" : "bg-white"
+                      }`}
+                    >
+                      {/* Checkbox */}
+                      <div className="p-4 flex items-center justify-center border-r border-gray-100">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleOldPurchaseSelect(pid)}
+                          className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Purchase info */}
+                      <div className="p-4 border-r border-gray-100">
+                        <p className="text-sm text-gray-900 flex items-center flex-wrap gap-2">
+                          <span>
+                            <span className="font-semibold">Einkaufsnummer</span>{" "}
+                            - {purchase.purchaseLabel}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+                            Aus Tabelle
+                          </span>
+                        </p>
+                        <p className="text-sm mt-1 text-gray-600">
+                          <span className="font-semibold">Bonusfähig:</span> €{" "}
+                          {formatCurrency(purchase.amount)}
+                        </p>
+                      </div>
+
+                      {/* Articles (none for sheet purchases) */}
+                      <div className="p-4 border-r border-gray-100"></div>
+
+                      {/* Group column (none) */}
+                      <div className="p-4 border-r border-gray-100 flex items-center justify-center"></div>
+
+                      {/* Status — same as a WAWI single */}
+                      <div className="p-4 flex flex-col items-center justify-center bg-gray-50">
+                        {isSelected ? (
+                          <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                            Ausgewählt
+                          </span>
+                        ) : (
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="text-xs text-gray-500">
+                              Verfügbar
+                            </span>
+                            <span className="text-xs font-semibold text-orange-500">
+                              €{" "}
+                              {formatCurrency(
+                                (purchase.amount * settings.discountRate) / 100,
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
               {/* Old Purchase History (appended in same section) */}
               {purchaseHistory &&
                 purchaseHistory.purchaseGroups &&
@@ -3890,105 +4025,6 @@ const BonusDetail = () => {
                   </>
                 )}
 
-              {/* Individual Old Purchases (from Excel) - Single Purchases NOT in Discount Groups */}
-              {oldPurchases && oldPurchases.length > 0 && (
-                <>
-                  <div className="px-4 py-2 border-b border-gray-200 bg-amber-50/70 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
-                        Alte Einzelkäufe
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {oldPurchases.length} Einkäufe (nicht in Bonusgruppen)
-                      </span>
-                    </div>
-                  </div>
-                  {oldPurchases.map((purchase, idx) => {
-                    const pid = (purchase._id || purchase.id)?.toString();
-                    const isSelected = selectedOldPurchases.includes(pid);
-                    return (
-                    <div
-                      key={pid || idx}
-                      className={`border-b border-gray-200 ${
-                        isSelected ? "bg-blue-50" : "bg-white"
-                      }`}
-                    >
-                      <div className="grid grid-cols-[60px_1fr_1fr_100px_160px]">
-                        {/* Checkbox Column — selectable like a WAWI order */}
-                        <div className="p-4 flex items-center justify-center border-r border-gray-100">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleOldPurchaseSelect(pid)}
-                            className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                          />
-                        </div>
-
-                        {/* Order Info */}
-                        <div className="p-4 border-r border-gray-100">
-                          <p className="text-sm text-gray-900">
-                            <span className="font-semibold">
-                              Einkaufsnummer
-                            </span>{" "}
-                            -{" "}
-                            <span className="text-gray-700">
-                              {purchase.purchaseLabel}
-                            </span>
-                          </p>
-                          <p className="text-sm text-gray-900">
-                            <span className="font-semibold">Einkaufsdatum</span>{" "}
-                            -{" "}
-                            {new Date(purchase.importedAt).toLocaleDateString(
-                              "de-DE",
-                            )}
-                          </p>
-                          <p className="text-sm mt-1 text-gray-600">
-                            <span className="font-semibold">Bonusfähig:</span> €{" "}
-                            {formatCurrency(purchase.amount)}
-                          </p>
-                        </div>
-
-                        {/* Product Images (empty for old purchases) */}
-                        <div className="p-4 border-r border-gray-100">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs text-gray-400">
-                              Gruppe {purchase.groupIndex + 1}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Empty Group Column */}
-                        <div className="p-4 border-r border-gray-100 flex items-center justify-center">
-                          {/* Old purchases have no group icon */}
-                        </div>
-
-                        {/* Status Column */}
-                        <div className="p-4 flex flex-col items-center justify-center bg-gray-50">
-                          {isSelected ? (
-                            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                              Ausgewählt
-                            </span>
-                          ) : (
-                            <div className="flex flex-col items-center gap-1">
-                              <span className="text-xs text-gray-500">
-                                Einzelkauf (Alt)
-                              </span>
-                              <span className="text-xs font-semibold text-orange-500">
-                                €{" "}
-                                {formatCurrency(
-                                  (purchase.amount * settings.discountRate) /
-                                    100,
-                                )}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    );
-                  })}
-                </>
-              )}
             </div>
           </>
         ) : (

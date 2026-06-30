@@ -61,6 +61,8 @@ exports.getOrders = async (req, res, next) => {
     const discountStatusMap = {};
     discountOrders.forEach(dg => {
       dg.orders.forEach(o => {
+        // Excel baseline / carryover items have no WAWI orderId — skip them.
+        if (!o.orderId) return;
         discountStatusMap[o.orderId.toString()] = dg.status;
       });
     });
