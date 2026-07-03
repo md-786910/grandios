@@ -11,11 +11,13 @@ const Kunden = () => {
 
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchTerm, setSearchTerm] = useState(
+    () => searchParams.get("search") || "",
+  );
 
   // URL-based state
   const currentPage = parseInt(searchParams.get("page") || "1", 10);
+  const urlSearch = searchParams.get("search") || "";
   const rawSortBy = searchParams.get("sort") || "";
   const rawSortOrder = searchParams.get("order") || "";
   const activeSortFields = rawSortBy
@@ -69,24 +71,32 @@ const Kunden = () => {
     });
   };
 
-  // Debounce search term
+  // Debounce search term — sync to URL (like Bestellungen.js)
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-      if (searchTerm && currentPage !== 1) {
-        updateParams({ page: 1 });
+      const normalizedSearch = searchTerm.trim();
+      if (normalizedSearch !== urlSearch.trim()) {
+        updateParams({ search: normalizedSearch || null, page: 1 });
       }
     }, 300);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm]);
+
+  // Keep input in sync with URL (back/forward navigation)
+  useEffect(() => {
+    setSearchTerm((prev) => (prev === urlSearch ? prev : urlSearch));
+  }, [urlSearch]);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
+      // Fetch off the URL search param (source of truth) so returning from
+      // the detail page doesn't trigger a stale unfiltered fetch.
       const response = await syncAPI.getCustomers(
         currentPage,
         itemsPerPage,
-        debouncedSearch,
+        urlSearch.trim(),
         sortBy,
         sortOrder,
       );
@@ -99,7 +109,7 @@ const Kunden = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, itemsPerPage, debouncedSearch, sortBy, sortOrder]);
+  }, [currentPage, itemsPerPage, urlSearch, sortBy, sortOrder]);
 
   // Handle sort change
   const handleSort = (field) => {

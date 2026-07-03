@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Layout from "../components/Layout";
 import { dashboardAPI } from "../services/api";
@@ -24,13 +24,13 @@ const Dashboard = () => {
     },
     {
       label: "Anzahl der verkauften Artikel",
-      value: "€ 0,00",
+      value: "0,00",
       bgColor: "bg-green-100",
       labelColor: "text-green-500",
     },
     {
       label: "Gesamtzahl der Kunden",
-      value: "€ 0,00",
+      value: "0,00",
       bgColor: "bg-purple-100",
       labelColor: "text-purple-500",
     },
@@ -60,10 +60,16 @@ const Dashboard = () => {
     });
   };
 
+  // Guards against a stale/superseded stats response overwriting a newer one
+  // (mount + StrictMode double-invoke, or rapid navigation back and forth).
+  const latestStatsReq = useRef(0);
+
   useEffect(() => {
     const fetchStats = async () => {
+      const reqId = ++latestStatsReq.current;
       try {
         const statsRes = await dashboardAPI.getStats();
+        if (reqId !== latestStatsReq.current) return; // stale → ignore
         if (statsRes.data.success) {
           const data = statsRes.data.data;
           setStats([
@@ -73,9 +79,15 @@ const Dashboard = () => {
               bgColor: "bg-blue-100",
               labelColor: "text-blue-500",
             },
+            // {
+            //   label: "Einkäufe gesamt",
+            //   value: `€ ${formatCurrency(data.totalOrderValue)}`,
+            //   bgColor: "bg-amber-100",
+            //   labelColor: "text-amber-600",
+            // },
             {
               label: "Anzahl der verkauften Artikel",
-              value: `€ ${formatCurrency(data.totalItemsSold)}`,
+              value: `${formatCurrency(data.totalItemsSold)}`,
               bgColor: "bg-green-100",
               labelColor: "text-green-500",
             },
@@ -185,7 +197,8 @@ const Dashboard = () => {
           </div>
         ) : (
           orders.map((order, index) => {
-            const statusInfo = getStatusInfo(order);
+            const isSheet = order.source === "sheet";
+            const customerLink = order.customerId?._id || order.customerId?.id;
             return (
               <div
                 key={order._id}
@@ -202,6 +215,11 @@ const Dashboard = () => {
                     <span className="text-sm text-gray-600">
                       {order.posReference}
                     </span>
+                    {isSheet && (
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">
+                        Aus Tabelle
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-sm font-semibold text-gray-900">
@@ -224,26 +242,34 @@ const Dashboard = () => {
                     </span>
                     <span className="text-sm text-gray-600">
                       {order.customerId?.contactId ||
-                        `CustNo_${order.partnerId}`}
+                        (isSheet ? "-" : `CustNo_${order.partnerId}`)}
                     </span>
                   </div>
                 </div>
 
                 {/* Status & Action */}
                 <div className="flex items-center gap-6">
-                  {/* <button
-                    className={`px-5 py-2 text-sm font-medium border rounded-lg cursor-default ${getStatusStyles(
-                      statusInfo.statusType
-                    )}`}
-                  >
-                    {statusInfo.status}
-                  </button> */}
-                  <button
-                    onClick={() => navigate(`/bestellungen/${order._id}`)}
-                    className="px-4 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm"
-                  >
-                    Mehr anzeigen
-                  </button>
+                  {isSheet ? (
+                    <button
+                      disabled={!customerLink}
+                      onClick={() =>
+                        customerLink &&
+                        navigate(`/bonus/${customerLink}`, {
+                          state: { customerName: order.customerId?.name },
+                        })
+                      }
+                      className="px-4 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                    >
+                      Bonus anzeigen
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate(`/bestellungen/${order._id}`)}
+                      className="px-4 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] text-sm"
+                    >
+                      Mehr anzeigen
+                    </button>
+                  )}
                 </div>
               </div>
             );

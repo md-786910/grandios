@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import Layout from "../components/Layout";
@@ -76,7 +76,13 @@ const Bonus = () => {
     );
   }, [urlSearch]);
 
+  // Tracks the latest in-flight request so a slower/superseded response
+  // (rapid page switches, debounce, StrictMode double-invoke) can never
+  // overwrite the state set by a newer one.
+  const latestRequestId = useRef(0);
+
   const fetchDiscounts = useCallback(async () => {
+    const requestId = ++latestRequestId.current;
     try {
       setLoading(true);
       const response = await discountsAPI.getAll(
@@ -84,25 +90,20 @@ const Bonus = () => {
         itemsPerPage,
         debouncedSearch,
       );
+      if (requestId !== latestRequestId.current) return; // stale → ignore
       if (response.data.success) {
         setCustomersData(response.data.data);
         setTotalItems(response.data.total || 0);
-        setStats(
-          response.data.stats || {
-            totalCustomers: response.data.total || 0,
-            totalOrderValue: 0,
-            totalDiscountGranted: 0,
-            totalInQueue: 0,
-            customersReadyForDiscount: 0,
-            discountRate: 10,
-            ordersRequiredForDiscount: 3,
-          },
-        );
+        // Only replace stats when the server actually returned them; never
+        // clobber good values with zeros on a partial/late response.
+        if (response.data.stats) {
+          setStats(response.data.stats);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch discounts:", error);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestId.current) setLoading(false);
     }
   }, [currentPage, itemsPerPage, debouncedSearch]);
 

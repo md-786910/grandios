@@ -582,15 +582,25 @@ const Bestellungen = () => {
                   </thead>
                   <tbody>
                     {paginatedOrders?.map((order) => {
+                      const isSheet = order.source === "sheet";
+                      const customerLink =
+                        order.customerId?._id || order.customerId?.id;
                       return (
                         <tr
                           key={order._id}
                           className="border-b border-gray-50 hover:bg-gray-50"
                         >
                           <td className="px-6 py-4">
-                            <span className="font-medium text-gray-900">
-                              {order.posReference}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-900">
+                                {order.posReference}
+                              </span>
+                              {isSheet && (
+                                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">
+                                  Aus Tabelle
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4">
                             <div>
@@ -603,32 +613,42 @@ const Bestellungen = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600">
-                            {formatDate(order.orderDate)}
+                            {isSheet ? "Aus Tabelle" : formatDate(order.orderDate)}
                           </td>
                           <td className="px-6 py-4 text-sm font-medium text-gray-900">
                             € {formatCurrency(order.amountTotal)}
                           </td>
-                          {/* <td className="px-6 py-4">
-                            <span
-                              className={`px-3 py-1 text-xs font-medium rounded-full border ${statusInfo.color}`}
-                            >
-                              {statusInfo.status}
-                            </span>
-                          </td> */}
                           <td className="px-6 py-4">
-                            <button
-                              onClick={() =>
-                                navigate(`/bestellungen/${order._id}`, {
-                                  state: {
-                                    orderNumber: order.posReference,
-                                    customerName: order.customerId?.name,
-                                  },
-                                })
-                              }
-                              className="text-sm px-4 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px]"
-                            >
-                              Details
-                            </button>
+                            {isSheet ? (
+                              <button
+                                disabled={!customerLink}
+                                onClick={() =>
+                                  customerLink &&
+                                  navigate(`/bonus/${customerLink}`, {
+                                    state: {
+                                      customerName: order.customerId?.name,
+                                    },
+                                  })
+                                }
+                                className="text-sm px-4 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                              >
+                                Bonus
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  navigate(`/bestellungen/${order._id}`, {
+                                    state: {
+                                      orderNumber: order.posReference,
+                                      customerName: order.customerId?.name,
+                                    },
+                                  })
+                                }
+                                className="text-sm px-4 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px]"
+                              >
+                                Details
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );

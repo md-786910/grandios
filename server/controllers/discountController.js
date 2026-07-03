@@ -109,6 +109,9 @@ exports.getDiscounts = async (req, res, next) => {
     const search = req.query.search || "";
     const startIndex = (page - 1) * limit;
     const settings = await AppSettings.getSettings();
+    const stichtag = getStichtag();
+    // Only post-cutoff WAWI orders count (pre-cutoff is owned by the sheet).
+    const orderMatch = stichtag ? { orderDate: { $gte: stichtag } } : {};
 
     // Build query filter - show all customers
     const query = {};
@@ -141,7 +144,10 @@ exports.getDiscounts = async (req, res, next) => {
     // Get stats for each customer
     const customersWithStats = await Promise.all(
       customers.map(async (customer) => {
-        const orders = await Order.find({ customerId: customer._id }).populate({
+        const orders = await Order.find({
+          customerId: customer._id,
+          ...orderMatch,
+        }).populate({
           path: "orderLines",
           select: "priceSubtotalIncl priceUnit quantity discountEligible",
         });
@@ -160,22 +166,35 @@ exports.getDiscounts = async (req, res, next) => {
         if (customer.ref)
           purchaseHistoryQuery.push({ customerNo: customer.ref });
         let oldRedeemableBonus = 0;
+        let oldPurchaseValue = 0; // sheet purchases (all EK amounts)
+        let oldGranted = 0; // sheet complete-group Rabatt
+        let oldRedeemed = 0; // sheet redeemed
         if (purchaseHistoryQuery.length > 0) {
           const ph = await CustomerPurchaseHistory.findOne(
             { $or: purchaseHistoryQuery },
-            { purchaseGroups: 1 },
+            {
+              purchaseGroups: 1,
+              totalPurchaseAmount: 1,
+              totalRabatt: 1,
+              totalRedeemed: 1,
+            },
           ).lean();
-          if (ph && ph.purchaseGroups) {
-            oldRedeemableBonus = ph.purchaseGroups
-              .filter((g) => g.rabatt > 0 && g.rabatteinloesung == null)
-              .reduce((sum, g) => sum + g.rabatt, 0);
+          if (ph) {
+            oldPurchaseValue = ph.totalPurchaseAmount || 0;
+            oldGranted = ph.totalRabatt || 0;
+            oldRedeemed = ph.totalRedeemed || 0;
+            if (ph.purchaseGroups) {
+              oldRedeemableBonus = ph.purchaseGroups
+                .filter((g) => g.rabatt > 0 && g.rabatteinloesung == null)
+                .reduce((sum, g) => sum + g.rabatt, 0);
+            }
           }
         }
 
-        const totalOrderValue = orders.reduce(
-          (sum, order) => sum + order.amountTotal,
-          0,
-        );
+        // Sheet baseline (pre-cutoff, from CPH) + WAWI (post-cutoff) combined.
+        const totalOrderValue =
+          orders.reduce((sum, order) => sum + order.amountTotal, 0) +
+          oldPurchaseValue;
         const availableGroups = discountOrders.filter(
           (d) => d.status === "available",
         );
@@ -232,8 +251,8 @@ exports.getDiscounts = async (req, res, next) => {
           customerName: customer.name,
           email: customer.email,
           totalOrderValue,
-          totalDiscountGranted: discount ? discount.totalGranted : 0,
-          totalBonusRedeemed: discount ? discount.totalRedeemed : 0,
+          totalDiscountGranted: (discount ? discount.totalGranted : 0) + oldGranted,
+          totalBonusRedeemed: (discount ? discount.totalRedeemed : 0) + oldRedeemed,
           discountBalance: discount ? discount.balance : 0,
           redeemable: availableGroups.length > 0,
           discountGroupCount: discountOrders.length,
@@ -258,6 +277,7 @@ exports.getDiscounts = async (req, res, next) => {
     });
     const allOrders = await Order.find({
       customerId: { $in: customerIds },
+      ...orderMatch,
     });
     const allQueues = await OrderCustomerQueue.find({
       customerId: { $in: customerIds },
@@ -265,17 +285,27 @@ exports.getDiscounts = async (req, res, next) => {
     const allDiscountOrders = await DiscountOrder.find({
       customerId: { $in: customerIds },
     });
+    // Sheet baseline totals (CPH) to combine with the WAWI figures above.
+    const cphAgg = await CustomerPurchaseHistory.aggregate([
+      { $match: { customerId: { $in: customerIds } } },
+      {
+        $group: {
+          _id: null,
+          purchases: { $sum: "$totalPurchaseAmount" },
+          granted: { $sum: "$totalRabatt" },
+        },
+      },
+    ]);
+    const cphPurchases = cphAgg[0]?.purchases || 0;
+    const cphGranted = cphAgg[0]?.granted || 0;
 
     const stats = {
       totalCustomers: total,
-      totalOrderValue: allOrders.reduce(
-        (sum, order) => sum + order.amountTotal,
-        0,
-      ),
-      totalDiscountGranted: allDiscounts.reduce(
-        (sum, d) => sum + d.totalGranted,
-        0,
-      ),
+      totalOrderValue:
+        allOrders.reduce((sum, order) => sum + order.amountTotal, 0) +
+        cphPurchases,
+      totalDiscountGranted:
+        allDiscounts.reduce((sum, d) => sum + d.totalGranted, 0) + cphGranted,
       totalDiscountGroups: allDiscountOrders.length,
       // Queue stats
       totalInQueue: allQueues.reduce((sum, q) => sum + q.orderCount, 0),

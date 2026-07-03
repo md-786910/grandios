@@ -4,6 +4,7 @@ const OrderLine = require('../models/OrderLine');
 const Product = require('../models/Product');
 const DiscountOrder = require('../models/DiscountOrder');
 const { addOrderToQueue } = require('./queueController');
+const { buildPurchaseFeed } = require('../utils/purchaseFeed');
 
 // @desc    Get all orders
 // @route   GET /api/orders
@@ -12,19 +13,27 @@ exports.getOrders = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 100;
-    const startIndex = (page - 1) * limit;
     const search = req.query.search || '';
-    const status = req.query.status || '';
 
-    // Build filter
+    // The list is a single continuous stream: WAWI/Etron orders on TOP (newest
+    // first), then ALL sheet purchases (one row per EK, from OldPurchase) below.
+    // Paginated at the DB level across the two ordered blocks.
+    // NOTE: the derived discountStatus filter (req.query.status) is intentionally
+    // no longer applied — the UI's status select is disabled, and supporting it
+    // required loading every order into memory (won't scale past the sheet rows).
+
+    // ---- WAWI (Etron) block ----
     const filter = {};
     if (req.query.customerId) {
       filter.customerId = req.query.customerId;
     }
+    // ---- Sheet block (OldPurchase = one row per EK) ----
+    const sheetFilter = {};
+    if (req.query.customerId) {
+      sheetFilter.customerId = req.query.customerId;
+    }
 
-    // Search filter: match posReference OR customer name/contactId/ref
     if (search) {
-      // Find matching customer IDs first
       // contactId is Number, so only match it when search is a valid integer
       const customerOrConditions = [
         { name: { $regex: search, $options: 'i' } },
@@ -37,63 +46,37 @@ exports.getOrders = async (req, res, next) => {
       const matchingCustomers = await Customer.find({
         $or: customerOrConditions
       }).select('_id');
-
       const matchingCustomerIds = matchingCustomers.map(c => c._id);
 
       filter.$or = [
         { posReference: { $regex: search, $options: 'i' } },
         ...(matchingCustomerIds.length > 0 ? [{ customerId: { $in: matchingCustomerIds } }] : []),
       ];
+
+      sheetFilter.$or = [
+        { firstName: { $regex: search, $options: 'i' } },
+        { lastName: { $regex: search, $options: 'i' } },
+        { customerNo: { $regex: search, $options: 'i' } },
+        { purchaseLabel: { $regex: search, $options: 'i' } },
+      ];
     }
 
-    // Fetch orders with filter
-    let orders = await Order.find(filter)
-      .populate('customerId', 'name email ref contactId')
-      .sort({ orderDate: -1 });
-
-    // Get discount status for all orders
-    const orderIds = orders.map(o => o._id);
-    const discountOrders = await DiscountOrder.find({
-      'orders.orderId': { $in: orderIds }
+    // Merge WAWI (top, all orders) + sheet purchases (below) via the shared
+    // feed builder so this list and the Dashboard feed stay consistent.
+    const { data, total, pagination } = await buildPurchaseFeed({
+      orderFilter: filter,
+      sheetFilter,
+      page,
+      limit,
+      withDiscountStatus: true,
     });
-
-    // Create a map of orderId -> discount status
-    const discountStatusMap = {};
-    discountOrders.forEach(dg => {
-      dg.orders.forEach(o => {
-        // Excel baseline / carryover items have no WAWI orderId — skip them.
-        if (!o.orderId) return;
-        discountStatusMap[o.orderId.toString()] = dg.status;
-      });
-    });
-
-    // Add discountStatus to each order
-    let ordersWithStatus = orders.map(order => ({
-      ...order.toObject(),
-      discountStatus: discountStatusMap[order._id.toString()] || null
-    }));
-
-    // Filter by discount status if provided
-    if (status) {
-      ordersWithStatus = ordersWithStatus.filter(order => order.discountStatus === status);
-    }
-
-    // Calculate total after all filters
-    const total = ordersWithStatus.length;
-
-    // Apply pagination
-    const paginatedOrders = ordersWithStatus.slice(startIndex, startIndex + limit);
 
     res.status(200).json({
       success: true,
-      count: paginatedOrders.length,
+      count: data.length,
       total,
-      pagination: {
-        page,
-        limit,
-        pages: Math.ceil(total / limit)
-      },
-      data: paginatedOrders
+      pagination,
+      data
     });
   } catch (err) {
     next(err);
