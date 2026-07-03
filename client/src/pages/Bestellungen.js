@@ -583,8 +583,6 @@ const Bestellungen = () => {
                   <tbody>
                     {paginatedOrders?.map((order) => {
                       const isSheet = order.source === "sheet";
-                      const customerLink =
-                        order.customerId?._id || order.customerId?.id;
                       return (
                         <tr
                           key={order._id}
@@ -620,20 +618,7 @@ const Bestellungen = () => {
                           </td>
                           <td className="px-6 py-4">
                             {isSheet ? (
-                              <button
-                                disabled={!customerLink}
-                                onClick={() =>
-                                  customerLink &&
-                                  navigate(`/bonus/${customerLink}`, {
-                                    state: {
-                                      customerName: order.customerId?.name,
-                                    },
-                                  })
-                                }
-                                className="text-sm px-4 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-900 font-medium tracking-wide transition-all duration-500 ease-in-out hover:-translate-y-[1px] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-                              >
-                                Bonus
-                              </button>
+                              <span className="text-sm text-gray-300">–</span>
                             ) : (
                               <button
                                 onClick={() =>
