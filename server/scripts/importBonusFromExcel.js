@@ -76,6 +76,7 @@ async function run() {
     console.log("\n═══════════════════════════════════════");
     console.log(DRY_RUN ? "📋 DRY-RUN RESULT" : "📈 IMPORT RESULT");
     console.log("═══════════════════════════════════════");
+    console.log(`Detected EK1 column:   ${r.detectedStartColumn}${r.detectedStartColumn !== 3 ? "  (⚠️ non-default — export format differs from the usual layout)" : ""}`);
     console.log(`Rows in file:          ${r.totalRows}`);
     console.log(`Parsed (named):        ${r.parsed}`);
     console.log(`Empty rows skipped:    ${r.skipped}`);

@@ -25,6 +25,7 @@ const allowedOrigins = [
   "https://grandios-bgx4.vercel.app",
   "http://87.106.111.51",
   "https://bonus.grandiosonline.com",
+  "http://192.168.1.8:3001",
 ];
 
 app.use(

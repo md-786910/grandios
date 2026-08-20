@@ -54,13 +54,28 @@ function parseName(lastRaw, firstRaw) {
 }
 
 /**
+ * Find the column index of the first EK (purchase) field by reading the
+ * header row. Layout is normally col0=Nachname, col1=Vorname, col2=empty
+ * spacer, then stride-5 buckets from col3: [EK, EK, EK, Rabatt,
+ * Rabatteinlösung] — but some exports omit the spacer column, shifting
+ * everything one column left. Detecting from the actual header avoids
+ * silently misreading every value when the export format shifts.
+ */
+function detectStartColumn(headerRow) {
+  if (!headerRow) return 3;
+  const idx = headerRow.findIndex(
+    (h) => String(h || "").trim().toLowerCase() === "ek1",
+  );
+  return idx >= 0 ? idx : 3;
+}
+
+/**
  * Parse a single Excel data row into the customer-wise structure.
- * Layout: col0=Nachname, col1=Vorname, col2=empty, then stride-5 buckets from
- * col3: [EK, EK, EK, Rabatt, Rabatteinlösung].
+ * Stride-5 buckets from `startCol`: [EK, EK, EK, Rabatt, Rabatteinlösung].
  *  - complete bucket (3 purchases)  → redeemable discount group
  *  - partial bucket (1–2 purchases) → pending streak (kept, NOT redeemable)
  */
-function parseRow(row, rowNum) {
+function parseRow(row, rowNum, startCol = 3) {
   const { firstName, lastName, etronCustomerNo } = parseName(row[0], row[1]);
   if (!firstName && !lastName) return null;
 
@@ -70,7 +85,7 @@ function parseRow(row, rowNum) {
   let pendingRabatt = 0;
 
   let seq = 0; // running EK number
-  let col = 3;
+  let col = startCol;
   let outGroupIndex = 0;
 
   while (col < row.length) {
@@ -108,7 +123,13 @@ function parseRow(row, rowNum) {
           pendingPurchases.push(p);
           purchases.push({ ...p, status: "pending" });
         });
-        pendingRabatt += rabatt || 0;
+        // Compute the projected accrual directly (DISCOUNT_RATE% of the
+        // pending amount) rather than trusting the sheet's own Rabatt cell —
+        // that cell is usually pre-filled by the same formula but isn't
+        // guaranteed to exist (e.g. a dangling trailing EK column with no
+        // Rabatt column after it).
+        const presentTotal = present.reduce((s, p) => s + p.amount, 0);
+        pendingRabatt += presentTotal * (DISCOUNT_RATE / 100);
       }
     }
 
@@ -339,6 +360,12 @@ async function importPurchaseHistory(filePath, options = {}) {
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
   const dataRows = rows.slice(1); // skip header
   const importedAt = new Date();
+  const startCol = detectStartColumn(rows[0]);
+  if (startCol !== 3) {
+    console.warn(
+      `⚠️  Detected EK1 at column ${startCol} (expected 3 — export is missing the usual blank spacer column). Parsing with the detected offset.`,
+    );
+  }
 
   // --- Reset prior import state so re-running is fully idempotent ---
   // Skipped entirely in dry-run (no writes).
@@ -366,6 +393,7 @@ async function importPurchaseHistory(filePath, options = {}) {
 
   const results = {
     dryRun,
+    detectedStartColumn: startCol,
     totalRows: dataRows.length,
     parsed: 0,
     skipped: 0,
@@ -382,7 +410,7 @@ async function importPurchaseHistory(filePath, options = {}) {
   for (let i = 0; i < dataRows.length; i++) {
     const rowNum = i + 2; // 1-indexed + header
     try {
-      const parsed = parseRow(dataRows[i], rowNum);
+      const parsed = parseRow(dataRows[i], rowNum, startCol);
       if (!parsed) {
         results.skipped++;
         continue;
@@ -492,4 +520,5 @@ module.exports = {
   parseRow,
   parseName,
   normalizeName,
+  detectStartColumn,
 };

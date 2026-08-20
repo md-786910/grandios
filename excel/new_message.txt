@@ -1,0 +1,5 @@
+I have a few questions about this:
+In some columns, the “Discount Redemption” column contains one or more words such as “Bonus pending” or “Remaining bonus” or something similar (e.g., for customer Marianne Weinberger). This doesn’t interfere with the Excel import, does it? To put it another way: You only consider the “Discount Redemption” column to be “redeemed” if it shows a negative amount, right? In the vast majority of cases, the “Discount Redemption” column is empty anyway if the discount hasn’t been redeemed yet. I’ve just occasionally made a note in that column in the past. If this is a problem, I’d be happy to delete those notes.
+New customer data is added daily. This means the Excel file won’t be final until we’ve reached the actual transition date. Alternatively: Couldn’t we “simply” tell the Bright Digital system on any given migration date: “Use the data from the Excel file up to and including August 17, 2026, and starting August 18, 2026, use only data from Etron…” Would that be a good approach?
+
+Translated with DeepL.com (free version)
