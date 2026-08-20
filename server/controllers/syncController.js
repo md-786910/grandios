@@ -258,7 +258,7 @@ exports.getCustomers = async (req, res, next) => {
                     : []),
                 ],
               },
-              { email: 1, customerNo: 1, purchaseGroups: 1 },
+              { email: 1, customerNo: 1, purchaseGroups: 1, totalRedeemed: 1 },
             ).lean()
           : Promise.resolve([]);
 
@@ -317,6 +317,7 @@ exports.getCustomers = async (req, res, next) => {
           ph?.purchaseGroups
             ?.filter((g) => g.rabatt > 0 && g.rabatteinloesung == null)
             .reduce((sum, g) => sum + g.rabatt, 0) || 0;
+        const oldRedeemed = ph?.totalRedeemed || 0;
 
         // Calculate redeemable bonus (groups with 3+ unique bundles, not redeemed)
         const redeemableBonus =
@@ -361,6 +362,7 @@ exports.getCustomers = async (req, res, next) => {
 
         return {
           ...customer,
+          totalDiscountRedeemed: (customer.totalDiscountRedeemed || 0) + oldRedeemed,
           redeemableBonus,
           pendingBonus,
           queueCount: queue ? queue.orderCount : 0,
