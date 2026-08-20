@@ -349,7 +349,7 @@ async function importPurchaseHistory(filePath, options = {}) {
       "..",
       "..",
       "excel",
-      "TEST KUNDEN DATEN.xlsx",
+      "Kundendaten TEST Stand 170826.xlsx",
     );
   }
 

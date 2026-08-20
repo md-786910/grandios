@@ -60,7 +60,7 @@ async function run() {
   console.log(DRY_RUN ? "🔎 BONUS IMPORT — DRY RUN (no writes)" : "🚀 BONUS IMPORT — LIVE (writes data)");
   console.log("═══════════════════════════════════════");
   console.log("DB:  ", (process.env.MONGODB_URI || "").replace(/\/\/[^@]*@/, "//***@"));
-  console.log("File:", filePath || "(default) excel/TEST KUNDEN DATEN.xlsx");
+  console.log("File:", filePath || "(default) excel/Kundendaten TEST Stand 170826.xlsx");
 
   try {
     console.log("\n🔌 Connecting to MongoDB...");
