@@ -103,17 +103,30 @@ function parseRow(row, rowNum, startCol = 3) {
 
     if (present.length || rabatt || redemption) {
       const complete = present.length === PURCHASES_PER_GROUP;
-      const redeemed = redemption !== null && redemption < 0;
+      // A redemption is normally recorded as a negative amount, but a handful of
+      // rows have it typed as positive (missing minus sign) — those are still
+      // redemptions, so treat any non-zero amount as redeemed and normalise the
+      // sign below. Zero / empty / text cells remain "not redeemed".
+      const redeemed = redemption !== null && redemption !== 0;
 
       if (complete) {
         const totalAmount = round2(present.reduce((s, p) => s + p.amount, 0));
+        // The sheet has a fixed column count, so a customer who fills the last
+        // column completes a group with no Rabatt column left to hold its
+        // bonus. Compute it in that case; otherwise keep the sheet's own
+        // recorded amount, which legitimately differs from a clean 10% for
+        // some historical manual adjustments.
+        const rabattColumnMissing = col + 3 >= row.length;
+        const discountAmount = rabattColumnMissing
+          ? round2(totalAmount * (DISCOUNT_RATE / 100))
+          : round2(rabatt || 0);
         discountGroups.push({
           groupIndex: outGroupIndex++,
           purchases: present,
           totalAmount,
           discountRate: DISCOUNT_RATE,
-          discountAmount: round2(rabatt || 0),
-          rabatteinloesung: redeemed ? round2(redemption) : null,
+          discountAmount,
+          rabatteinloesung: redeemed ? -Math.abs(round2(redemption)) : null,
           status: redeemed ? "redeemed" : "available",
           redeemedAmount: redeemed ? round2(Math.abs(redemption)) : 0,
         });
@@ -349,7 +362,7 @@ async function importPurchaseHistory(filePath, options = {}) {
       "..",
       "..",
       "excel",
-      "Kundendaten TEST Stand 170826.xlsx",
+      "Kundendaten GRANDIOS Stand 260826.xlsx",
     );
   }
 

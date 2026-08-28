@@ -36,3 +36,5 @@ yarn-error.log*
 logs/
 
 # excel/
+# database backups (contain customer PII)
+backups/
