@@ -1,0 +1,35 @@
+======================DOCKER==========================
+docker compose ps                          # status
+docker compose up -d                       # start mongo + backup
+docker compose --profile admin up -d       # also start mongo-express
+docker compose stop                        # stop, keep data
+docker compose restart mongo               # restart one service
+docker compose down                        # remove containers, keep data
+docker compose down -v                     # DELETES ALL DATA
+
+
+==========================DOCKER LOGS===================
+docker compose logs -f mongo
+docker compose logs -f mongo-backup        # shows next scheduled run
+docker compose logs --tail=50 mongo-express
+
+
+======================BACKUP================================
+docker compose run --rm mongo-backup now   # backup immediately
+ls -lh backups/                            # list archives
+
+
+docker compose run --rm mongo-backup now       # backup on demand
+docker compose logs -f mongo-backup            # watch schedule
+docker compose exec mongo sh -c 'ls -lh /backups'
+
+
+==========================+RETORE==========================
+docker compose exec -T mongo sh -c \
+  'mongorestore --uri="mongodb://root:$MONGO_ROOT_PASSWORD@localhost:27017/?authSource=admin" --archive --gzip --drop' \
+  < backups/<file>
+
+
+===============================DATABASE SHELL
+docker compose exec mongo mongosh -u root -p --authenticationDatabase admin
+docker compose exec mongo mongosh "mongodb://grandios_app:<pw>@localhost:27017/grandios_live_latest?authSource=grandios_live_latest"
