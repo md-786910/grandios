@@ -11,7 +11,8 @@
     "pm2:restart": "pm2 restart grandios-server",
     "pm2:logs": "pm2 logs grandios-server",
     "seed": "node seed.js",
-    "parse-excel": "node scripts/parseExcelToJson.js"
+    "parse-excel": "node scripts/parseExcelToJson.js",
+    "sync:full": "node scripts/fullSync.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

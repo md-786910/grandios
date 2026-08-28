@@ -33,3 +33,13 @@ docker compose exec -T mongo sh -c \
 ===============================DATABASE SHELL
 docker compose exec mongo mongosh -u root -p --authenticationDatabase admin
 docker compose exec mongo mongosh "mongodb://grandios_app:<pw>@localhost:27017/grandios_live_latest?authSource=grandios_live_latest"
+
+
+===================ETRON=========================
+node scripts/syncAllCustomers.js
+
+node scripts/importBonusFromExcel.js --dry-run    
+
+node scripts/importBonusFromExcel.js            
+
+
