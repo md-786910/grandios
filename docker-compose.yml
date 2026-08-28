@@ -15,7 +15,14 @@ services:
       - mongo_data:/data/db
       - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet --host 127.0.0.1 --port 27017
+          --username "$${MONGO_APP_USER}"
+          --password "$${MONGO_APP_PASSWORD}"
+          --authenticationDatabase "$${MONGO_DB_NAME}"
+          --eval "quit(db.adminCommand('ping').ok ? 0 : 1)"
       interval: 10s
       timeout: 5s
       retries: 5
