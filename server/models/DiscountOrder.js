@@ -85,6 +85,8 @@ DiscountOrderSchema.pre('save', function(next) {
   next();
 });
 
+DiscountOrderSchema.index({ customerId: 1, createdAt: -1 });
+
 DiscountOrderSchema.set('toJSON', {
   virtuals: true,
   transform: function(doc, ret) {

@@ -75,10 +75,8 @@ function isItemEligibleForBonus(item) {
   // signed sum used by getOrderEligibleAmount and the Einkäufe detail view.
   // if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0)
   //   return false;
-  // Exclude items with existing discounts (Sale items) — only when positive,
-  // so a refunded sale item (negative qty + negative amount) can still net.
-  if (item.discount && item.discount > 0 && (item.priceSubtotalIncl || 0) > 0)
-    return false;
+  // Sale items remain ineligible when returned.
+  if (item.discount && item.discount > 0) return false;
   // Exclude vouchers and Bonus Kundenkarte (check product name)
   const lowerName = (item.productName || "").toLowerCase();
   if (
@@ -1157,14 +1155,31 @@ exports.deleteDiscountGroup = async (req, res, next) => {
 
     // If not yet redeemed, remove from wallet
     if (discountOrder.status === "available") {
+      const reversalAmount = discountOrder.totalDiscount || 0;
       const discount = await Discount.findOne({
         customerId: discountOrder.customerId,
       });
 
       if (discount) {
-        discount.balance -= discountOrder.totalDiscount;
-        discount.totalGranted -= discountOrder.totalDiscount;
+        discount.balance -= reversalAmount;
+        discount.totalGranted -= reversalAmount;
         await discount.save();
+      }
+
+      // Cascade-created groups credit both Discount and the legacy Customer
+      // wallet fields. Reverse those fields for the auto-created duplicates this
+      // endpoint is used to clean up. Manual/queue groups historically do not
+      // credit Customer.wallet consistently, so leave their existing behavior
+      // unchanged rather than risking an unrelated negative adjustment.
+      const customerReversal =
+        cascadeSyncService.getCascadeAutoGroupCustomerReversal(discountOrder);
+      if (customerReversal !== 0) {
+        await Customer.findByIdAndUpdate(discountOrder.customerId, {
+          $inc: {
+            wallet: customerReversal,
+            totalDiscountGranted: customerReversal,
+          },
+        });
       }
     }
 
@@ -1294,20 +1309,32 @@ exports.syncCustomerOrders = async (req, res, next) => {
       });
     }
 
-    // Count orders before sync to detect new ones
-    const ordersBefore = await Order.countDocuments({
-      customerId: customer._id,
-    });
+    const optimized =
+      cascadeSyncService.isManualSyncOptimizationEnabled(process.env);
+    let result;
+    let ordersAfter;
+    let newOrdersCount;
 
-    const result = await cascadeSyncService.syncCustomerWithRelatedData(
-      customer.contactId,
-    );
-
-    // Count orders after sync
-    const ordersAfter = await Order.countDocuments({
-      customerId: customer._id,
-    });
-    const newOrdersCount = ordersAfter - ordersBefore;
+    if (optimized) {
+      result = await cascadeSyncService.syncManualCustomerWithRelatedData(
+        customer.contactId,
+      );
+      ordersAfter = result.totalOrders;
+      newOrdersCount = result.newOrdersCount;
+    } else {
+      // Preserve the production implementation exactly while the optimized
+      // path is disabled, including its before/after count semantics.
+      const ordersBefore = await Order.countDocuments({
+        customerId: customer._id,
+      });
+      result = await cascadeSyncService.syncCustomerWithRelatedData(
+        customer.contactId,
+      );
+      ordersAfter = await Order.countDocuments({
+        customerId: customer._id,
+      });
+      newOrdersCount = ordersAfter - ordersBefore;
+    }
 
     res.status(200).json({
       success: true,

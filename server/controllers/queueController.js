@@ -6,18 +6,17 @@ const Order = require("../models/Order");
 const AppSettings = require("../models/AppSettings");
 
 // Helper to check if an item is eligible for bonus calculation
-// Excludes: items marked as not eligible, positive Sale items (with existing discount),
-// vouchers, and "Bonus Kundenkarte" products. Negative-amount lines (returns) remain
-// eligible so they net against purchases in the signed sum.
+// Excludes: items marked as not eligible, Sale items (including their returns),
+// vouchers, and "Bonus Kundenkarte" products. Eligible negative-amount lines
+// remain included so full-price returns net against purchases.
 function isItemEligibleForBonus(item) {
   // Must be discount eligible
   if (!item.discountEligible) return false;
   // Previously dropped any negative-amount line, hiding returns from the
   // bonus calculation. Now they pass through and net in the signed sum.
   // if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0) return false;
-  // Exclude positive Sale items (existing discount on purchase)
-  if (item.discount && item.discount > 0 && (item.priceSubtotalIncl || 0) > 0)
-    return false;
+  // Sale items remain ineligible when returned.
+  if (item.discount && item.discount > 0) return false;
   // Exclude vouchers and Bonus Kundenkarte (check product name)
   const name = (item.productName || "").toLowerCase();
   if (

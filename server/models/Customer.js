@@ -81,6 +81,9 @@ const CustomerSchema = new mongoose.Schema({
   },
   draftDiscountItems: [{
     orders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order' }],
+    // Optional Excel baseline purchases bundled with WAWI orders. Keeping this
+    // separate preserves the existing `orders` draft shape for older clients.
+    oldPurchaseIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'OldPurchase' }],
     isBundle: { type: Boolean, default: false }
   }]
 }, {

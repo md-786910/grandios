@@ -142,6 +142,93 @@ async function processBatch(items, fn, concurrency = 5) {
   return results;
 }
 
+function isManualSyncOptimizationEnabled(env = process.env) {
+  return String(env.MANUAL_SYNC_OPTIMIZED || "").toLowerCase() === "true";
+}
+
+// DiscountOrder items currently contain two historical rate formats:
+// automatic groups store 10% as 0.1, while manual/queue groups store it as 10.
+// Convert either representation to the multiplier used during sync.
+function toDiscountMultiplier(storedRate, fallback = 0.1) {
+  const rate = Number(storedRate);
+  if (!Number.isFinite(rate) || rate <= 0) return fallback;
+  return rate >= 1 ? rate / 100 : rate;
+}
+
+function createConcurrencyLimiter(limit) {
+  let active = 0;
+  const queue = [];
+
+  const runNext = () => {
+    if (active >= limit || queue.length === 0) return;
+    const { task, resolve, reject } = queue.shift();
+    active++;
+    Promise.resolve()
+      .then(task)
+      .then(resolve, reject)
+      .finally(() => {
+        active--;
+        runNext();
+      });
+  };
+
+  return (task) =>
+    new Promise((resolve, reject) => {
+      queue.push({ task, resolve, reject });
+      runNext();
+    });
+}
+
+async function measureStage(syncContext, stage, task) {
+  if (!syncContext) return task();
+  const startedAt = Date.now();
+  try {
+    return await task();
+  } finally {
+    syncContext.timings[stage] =
+      (syncContext.timings[stage] || 0) + (Date.now() - startedAt);
+  }
+}
+
+function createManualSyncContext() {
+  const configuredLimit = Number.parseInt(
+    process.env.MANUAL_SYNC_PRODUCT_CONCURRENCY || "5",
+    10,
+  );
+  const productConcurrency =
+    Number.isFinite(configuredLimit) && configuredLimit > 0
+      ? configuredLimit
+      : 5;
+
+  return {
+    optimized: true,
+    timings: {},
+    productPromises: new Map(),
+    limitProductSync: createConcurrencyLimiter(productConcurrency),
+    localOrderIdsBefore: null,
+    newOrdersCount: 0,
+    totalOrders: 0,
+  };
+}
+
+async function runSingleFlight(inFlight, key, task) {
+  if (inFlight.has(key)) return inFlight.get(key);
+  const promise = Promise.resolve().then(task);
+  inFlight.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    if (inFlight.get(key) === promise) inFlight.delete(key);
+  }
+}
+
+function getOrCreatePromise(cache, key, factory) {
+  if (!cache.has(key)) cache.set(key, Promise.resolve().then(factory));
+  return cache.get(key);
+}
+
+const manualSyncsInFlight = new Map();
+
 /**
  * Retry an async function up to N times with delay between attempts
  */
@@ -181,15 +268,24 @@ function getCascadeStatus() {
  */
 async function syncCustomerWithRelatedData(contactId, options = {}) {
   const { prefetchedOrders = null } = options;
+  const syncContext = options.manualOptimization
+    ? createManualSyncContext()
+    : options.syncContext || null;
+  const syncStartedAt = Date.now();
   cascadeStatus.currentStep = "customer";
 
   try {
     // 1. Fetch customer from WAWI
-    const customerResult = await wawiApiClient.searchRead("res.partner", {
-      fields: CUSTOMER_FIELDS,
-      domain: [["id", "=", contactId]],
-      limit: 1,
-    });
+    const customerResult = await measureStage(
+      syncContext,
+      "customerWawiMs",
+      () =>
+        wawiApiClient.searchRead("res.partner", {
+          fields: CUSTOMER_FIELDS,
+          domain: [["id", "=", contactId]],
+          limit: 1,
+        }),
+    );
 
     if (!customerResult.data || customerResult.data.length === 0) {
       throw new Error(`Customer ${contactId} not found in WAWI`);
@@ -204,6 +300,7 @@ async function syncCustomerWithRelatedData(contactId, options = {}) {
     const orders = await syncCustomerOrders(customer, contactId, {
       prefetchedOrders,
       forceRefresh: true,
+      syncContext,
     });
 
     // 4. Check and create discount group if needed
@@ -211,18 +308,51 @@ async function syncCustomerWithRelatedData(contactId, options = {}) {
     const newDiscountGroups = await checkAndCreateDiscountGroup(
       customer,
       orders,
+      { syncContext },
     );
+
+    if (syncContext) {
+      syncContext.timings.totalMs = Date.now() - syncStartedAt;
+      console.log("[ManualSync] Optimized sync completed", {
+        contactId,
+        orders: orders.length,
+        newOrders: syncContext.newOrdersCount,
+        newDiscountGroups: newDiscountGroups || 0,
+        uniqueProducts: syncContext.productPromises.size,
+        timings: syncContext.timings,
+      });
+    }
 
     return {
       customer,
       ordersCount: orders.length,
       newDiscountGroups: newDiscountGroups || 0,
+      ...(syncContext
+        ? {
+            newOrdersCount: syncContext.newOrdersCount,
+            totalOrders: syncContext.totalOrders,
+          }
+        : {}),
       success: true,
     };
   } catch (error) {
+    if (syncContext) {
+      syncContext.timings.totalMs = Date.now() - syncStartedAt;
+      console.error("[ManualSync] Optimized sync failed", {
+        contactId,
+        error: error.message,
+        timings: syncContext.timings,
+      });
+    }
     cascadeStatus.errors.push({ contactId, error: error.message });
     throw error;
   }
+}
+
+async function syncManualCustomerWithRelatedData(contactId) {
+  return runSingleFlight(manualSyncsInFlight, String(contactId), () =>
+    syncCustomerWithRelatedData(contactId, { manualOptimization: true }),
+  );
 }
 
 /**
@@ -234,7 +364,11 @@ async function syncCustomerWithRelatedData(contactId, options = {}) {
  * @param {Array|null} options.prefetchedOrders - Pre-fetched orders to process directly (skips WAWI API call)
  */
 async function syncCustomerOrders(customer, partnerId, options = {}) {
-  const { prefetchedOrders = null, forceRefresh = false } = options;
+  const {
+    prefetchedOrders = null,
+    forceRefresh = false,
+    syncContext = null,
+  } = options;
   const batchSize = 50;
 
   if (prefetchedOrders) {
@@ -250,6 +384,7 @@ async function syncCustomerOrders(customer, partnerId, options = {}) {
             if (wawiOrder.lines && wawiOrder.lines.length > 0) {
               await syncOrderLinesWithProducts(wawiOrder.lines, order, {
                 forceRefresh,
+                syncContext,
               });
             }
           });
@@ -282,13 +417,18 @@ async function syncCustomerOrders(customer, partnerId, options = {}) {
     let hasMore = true;
 
     while (hasMore) {
-      const idsResult = await wawiApiClient.searchRead("pos.order", {
-        fields: ["id"],
-        domain: orderDomain,
-        order: "id asc",
-        limit: 500,
-        offset,
-      });
+      const idsResult = await measureStage(
+        syncContext,
+        "orderDiscoveryWawiMs",
+        () =>
+          wawiApiClient.searchRead("pos.order", {
+            fields: ["id"],
+            domain: orderDomain,
+            order: "id asc",
+            limit: 500,
+            offset,
+          }),
+      );
 
       const batch = idsResult.data || [];
       if (batch.length === 0) break;
@@ -299,6 +439,7 @@ async function syncCustomerOrders(customer, partnerId, options = {}) {
 
     // Step 2: Compare with local DB to find missing orders
     const localOrderIds = await getLocalOrderIds(customer._id);
+    if (syncContext) syncContext.localOrderIdsBefore = localOrderIds;
     const missingOrderIds = allWawiOrderIds.filter(
       (id) => !localOrderIds.has(id),
     );
@@ -316,11 +457,16 @@ async function syncCustomerOrders(customer, partnerId, options = {}) {
       // Step 3: Fetch full details only for missing orders (in batches)
       for (let i = 0; i < missingOrderIds.length; i += batchSize) {
         const batchIds = missingOrderIds.slice(i, i + batchSize);
-        const ordersResult = await wawiApiClient.searchRead("pos.order", {
-          fields: ORDER_FIELDS,
-          domain: [["id", "in", batchIds]],
-          order: "date_order desc",
-        });
+        const ordersResult = await measureStage(
+          syncContext,
+          "ordersWawiMs",
+          () =>
+            wawiApiClient.searchRead("pos.order", {
+              fields: ORDER_FIELDS,
+              domain: [["id", "in", batchIds]],
+              order: "date_order desc",
+            }),
+        );
 
         const orders = ordersResult.data || [];
         await processBatch(
@@ -334,6 +480,7 @@ async function syncCustomerOrders(customer, partnerId, options = {}) {
                 if (wawiOrder.lines && wawiOrder.lines.length > 0) {
                   await syncOrderLinesWithProducts(wawiOrder.lines, order, {
                     forceRefresh,
+                    syncContext,
                   });
                 }
               });
@@ -357,6 +504,15 @@ async function syncCustomerOrders(customer, partnerId, options = {}) {
   // Return ALL local orders for this customer (not just newly synced)
   // because checkAndCreateDiscountGroup() needs the complete list
   const allLocalOrders = await Order.find({ customerId: customer._id });
+  if (syncContext) {
+    syncContext.totalOrders = allLocalOrders.length;
+    const idsBefore = syncContext.localOrderIdsBefore || new Set();
+    syncContext.newOrdersCount = allLocalOrders.reduce(
+      (count, order) =>
+        order.orderId && !idsBefore.has(order.orderId) ? count + 1 : count,
+      0,
+    );
+  }
   return allLocalOrders;
 }
 
@@ -365,13 +521,15 @@ async function syncCustomerOrders(customer, partnerId, options = {}) {
  */
 async function syncOrderLinesWithProducts(lineIds, order, options = {}) {
   cascadeStatus.currentStep = "orderLines";
-  const { forceRefresh = false } = options;
+  const { forceRefresh = false, syncContext = null } = options;
 
   // Always fetch order lines from WAWI to ensure data is up-to-date
-  const linesResult = await wawiApiClient.searchRead("pos.order.line", {
-    fields: ORDER_LINE_FIELDS,
-    domain: [["id", "in", lineIds]],
-  });
+  const linesResult = await measureStage(syncContext, "orderLinesWawiMs", () =>
+    wawiApiClient.searchRead("pos.order.line", {
+      fields: ORDER_LINE_FIELDS,
+      domain: [["id", "in", lineIds]],
+    }),
+  );
 
   const lines = linesResult.data || [];
   const orderLineIds = [];
@@ -392,7 +550,18 @@ async function syncOrderLinesWithProducts(lineIds, order, options = {}) {
   await processBatch(
     Array.from(productIdsToSync),
     async (productId) => {
-      await syncProductWithAttributes(productId, forceRefresh);
+      if (!syncContext) {
+        await syncProductWithAttributes(productId, forceRefresh);
+        return;
+      }
+
+      await getOrCreatePromise(syncContext.productPromises, productId, () =>
+        syncContext.limitProductSync(() =>
+          measureStage(syncContext, "productsMs", () =>
+            syncProductWithAttributes(productId, forceRefresh),
+          ),
+        ),
+      );
     },
     10,
   );
@@ -577,8 +746,8 @@ async function ensureAttributeValue(valueId, attributeId, name) {
 /**
  * Check if an order line should be excluded from the bonus-eligible amount.
  * Excludes: items marked ineligible, true payment vouchers / gift cards
- * (Gutschein / Voucher / Gift), and Sale items (positive items with a
- * per-line discount).
+ * (Gutschein / Voucher / Gift), and Sale items (lines with a per-line
+ * discount, including returns of those items).
  *
  * Does NOT exclude negative adjustment lines (Sonderrabatt, Bonus Kundenkarte,
  * credit notes) — those are summed as deductions so the eligible amount
@@ -597,8 +766,9 @@ function isItemExcludedFromEligibleAmount(item) {
     return true;
   }
 
-  // Sale items: positive lines that already carry a per-line discount
-  if ((item.discount || 0) > 0 && (item.priceSubtotalIncl || 0) > 0) {
+  // Sale items stay ineligible when returned; the sign only indicates the
+  // transaction direction and must not change the item's bonus eligibility.
+  if ((item.discount || 0) > 0) {
     return true;
   }
 
@@ -611,8 +781,7 @@ function isItemExcludedFromEligibleAmount(item) {
  * Sonderrabatt, returned items and similar negative adjustments reduce
  * the eligible amount. May return a negative value for pure-return receipts.
  */
-async function getOrderEligibleAmount(orderId) {
-  const orderLines = await OrderLine.find({ orderId });
+function calculateEligibleAmount(orderLines) {
   let eligibleAmount = 0;
   for (const line of orderLines) {
     if (isItemExcludedFromEligibleAmount(line)) {
@@ -627,22 +796,114 @@ async function getOrderEligibleAmount(orderId) {
   return eligibleAmount;
 }
 
+async function getOrderEligibleAmount(orderId) {
+  const orderLines = await OrderLine.find({ orderId });
+  return calculateEligibleAmount(orderLines);
+}
+
+function calculateEligibleAmountsByOrder(orderIds, orderLines) {
+  const uniqueOrderIds = Array.from(
+    new Map(
+      orderIds.filter(Boolean).map((orderId) => [orderId.toString(), orderId]),
+    ).values(),
+  );
+  const linesByOrder = new Map();
+  for (const line of orderLines) {
+    const key = line.orderId.toString();
+    if (!linesByOrder.has(key)) linesByOrder.set(key, []);
+    linesByOrder.get(key).push(line);
+  }
+
+  const amounts = new Map();
+  for (const orderId of uniqueOrderIds) {
+    const key = orderId.toString();
+    amounts.set(key, calculateEligibleAmount(linesByOrder.get(key) || []));
+  }
+  return amounts;
+}
+
+async function loadEligibleAmounts(orderIds) {
+  const uniqueOrderIds = Array.from(
+    new Map(
+      orderIds.filter(Boolean).map((orderId) => [orderId.toString(), orderId]),
+    ).values(),
+  );
+  if (uniqueOrderIds.length === 0) return new Map();
+
+  const orderLines = await OrderLine.find({
+    orderId: { $in: uniqueOrderIds },
+  }).lean();
+  return calculateEligibleAmountsByOrder(uniqueOrderIds, orderLines);
+}
+
+function collectUnavailableOrderIds(existingGroups = [], draftItems = []) {
+  const unavailableOrderIds = new Set();
+
+  for (const group of existingGroups) {
+    for (const item of group.orders || []) {
+      if (item.orderId) unavailableOrderIds.add(item.orderId.toString());
+    }
+  }
+
+  // A saved Gruppenbestellung is still a draft, but its receipts are reserved
+  // for that manual workflow. Cron must not reuse them as individual purchases
+  // in an automatically created bonus group.
+  for (const draftItem of draftItems || []) {
+    for (const orderId of draftItem.orders || []) {
+      if (orderId) unavailableOrderIds.add(orderId.toString());
+    }
+  }
+
+  return unavailableOrderIds;
+}
+
+function isCascadeAutoCreatedGroup(group) {
+  return /^Auto-created(?:\s|$)/.test(group?.notes || "");
+}
+
+function getCascadeAutoGroupCustomerReversal(group) {
+  if (group?.status !== "available" || !isCascadeAutoCreatedGroup(group)) {
+    return 0;
+  }
+
+  const amount = Number(group.totalDiscount || 0);
+  return Number.isFinite(amount) ? -amount : 0;
+}
+
 /**
  * Check and create discount group when customer has 3+ eligible orders
  */
-async function checkAndCreateDiscountGroup(customer, orders) {
+async function checkAndCreateDiscountGroup(customer, orders, options = {}) {
+  const { syncContext = null } = options;
   const ORDERS_FOR_DISCOUNT = 3;
   const DISCOUNT_RATE = 0.1; // 10% discount
 
   // Get orders not yet in a discount group
   const existingGroups = await DiscountOrder.find({ customerId: customer._id });
-  const ordersInGroups = new Set();
-  existingGroups.forEach((group) => {
-    group.orders.forEach((o) => {
-      // Excel/carryover items have no WAWI orderId — skip them here.
-      if (o.orderId) ordersInGroups.add(o.orderId.toString());
-    });
-  });
+  const unavailableOrderIds = collectUnavailableOrderIds(
+    existingGroups,
+    customer.draftDiscountItems,
+  );
+
+  let eligibleAmounts = null;
+  if (syncContext) {
+    const relevantOrderIds = orders.map((order) => order?._id).filter(Boolean);
+    for (const group of existingGroups) {
+      for (const line of group.orders) {
+        if (line.orderId) relevantOrderIds.push(line.orderId);
+      }
+    }
+    eligibleAmounts = await measureStage(
+      syncContext,
+      "eligibleAmountsDbMs",
+      () => loadEligibleAmounts(relevantOrderIds),
+    );
+  }
+
+  const getEligibleAmount = (orderId) =>
+    eligibleAmounts
+      ? eligibleAmounts.get(orderId.toString()) || 0
+      : getOrderEligibleAmount(orderId);
 
   // Recompute stored amounts for existing non-redeemed groups so the eligible
   // base / discount stay consistent with the current calculation (e.g. after
@@ -655,14 +916,36 @@ async function checkAndCreateDiscountGroup(customer, orders) {
     if (group.source === "excel") continue;
 
     const oldTotal = group.totalDiscount || 0;
+    let groupChanged = false;
     for (const line of group.orders) {
       // Carryover pseudo-orders (no orderId) keep their stored Excel amount.
       if (!line.orderId) continue;
-      const amount = await getOrderEligibleAmount(line.orderId);
+      const amount = await getEligibleAmount(line.orderId);
+      const discountAmount =
+        amount * toDiscountMultiplier(line.discountRate, DISCOUNT_RATE);
+      if (line.amount !== amount || line.discountAmount !== discountAmount) {
+        groupChanged = true;
+      }
       line.amount = amount;
-      line.discountAmount = amount * (line.discountRate || DISCOUNT_RATE);
+      line.discountAmount = discountAmount;
     }
-    await group.save(); // pre-save hook recomputes totalDiscount / totalAmount
+    if (syncContext) {
+      const expectedTotalAmount = group.orders.reduce(
+        (sum, line) => sum + line.amount,
+        0,
+      );
+      const expectedTotalDiscount = group.orders.reduce(
+        (sum, line) => sum + line.discountAmount,
+        0,
+      );
+      groupChanged =
+        groupChanged ||
+        group.totalAmount !== expectedTotalAmount ||
+        group.totalDiscount !== expectedTotalDiscount;
+    }
+    if (!syncContext || groupChanged) {
+      await group.save(); // pre-save hook recomputes totalDiscount / totalAmount
+    }
     const newTotal = group.totalDiscount || 0;
 
     const delta = newTotal - oldTotal;
@@ -701,8 +984,8 @@ async function checkAndCreateDiscountGroup(customer, orders) {
   const orderEligibleAmounts = new Map();
   for (const order of orders) {
     if (!order) continue;
-    // Skip if already in a discount group
-    if (ordersInGroups.has(order._id.toString())) continue;
+    // Skip if already in a completed group or reserved by a saved draft bundle.
+    if (unavailableOrderIds.has(order._id.toString())) continue;
 
     // Stichtag cutoff: orders dated before it are owned by the Excel baseline
     // and never count toward the bonus program (no bundling, no return accrual).
@@ -711,7 +994,7 @@ async function checkAndCreateDiscountGroup(customer, orders) {
     }
 
     // Calculate eligible amount from individual items (signed; excludes Sale items, vouchers, etc.)
-    const eligibleAmount = await getOrderEligibleAmount(order._id);
+    const eligibleAmount = await getEligibleAmount(order._id);
 
     if (eligibleAmount > 0) {
       eligibleOrders.push(order);
@@ -1503,6 +1786,8 @@ async function syncOrCreateCustomer(identifier) {
 
 module.exports = {
   getCascadeStatus,
+  isManualSyncOptimizationEnabled,
+  syncManualCustomerWithRelatedData,
   syncCustomerWithRelatedData,
   syncCustomerOrders,
   syncProductWithAttributes,
@@ -1510,5 +1795,18 @@ module.exports = {
   runIncrementalSync,
   syncOrCreateCustomer,
   checkAndCreateDiscountGroup,
+  getCascadeAutoGroupCustomerReversal,
   getOrderEligibleAmount,
+  _test: {
+    calculateEligibleAmount,
+    calculateEligibleAmountsByOrder,
+    createConcurrencyLimiter,
+    getOrCreatePromise,
+    loadEligibleAmounts,
+    collectUnavailableOrderIds,
+    getCascadeAutoGroupCustomerReversal,
+    isCascadeAutoCreatedGroup,
+    runSingleFlight,
+    toDiscountMultiplier,
+  },
 };

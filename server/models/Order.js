@@ -115,6 +115,10 @@ OrderSchema.virtual("totalNonDiscounted").get(function () {
     );
 });
 
+// Customer detail and sync reconciliation both filter by customer; the date
+// suffix also supports the detail page's newest-first ordering.
+OrderSchema.index({ customerId: 1, orderDate: -1 });
+
 OrderSchema.set("toJSON", {
   virtuals: true,
   transform: function (doc, ret) {

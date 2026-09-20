@@ -39,6 +39,26 @@ const ProductImage = ({ src, size = "md", className = "" }) => {
   );
 };
 
+// Excel purchases have no product-level image data. Represent the purchase in
+// group summaries without pretending it is an ETRON product.
+const SheetPurchasePlaceholder = ({ label, size = "sm" }) => {
+  const sizeClasses = {
+    sm: "w-10 h-10",
+    md: "w-12 h-12",
+  };
+  const title = `${label || "EK"} – Aus Tabelle`;
+
+  return (
+    <div
+      title={title}
+      aria-label={title}
+      className={`${sizeClasses[size]} shrink-0 rounded border border-amber-300 bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold`}
+    >
+      EK
+    </div>
+  );
+};
+
 function isItemEligibleForBonus(item) {
   if (!item.discountEligible) return false;
   if ((item.priceSubtotalIncl || 0) < 0 || (item.priceUnit || 0) < 0)
@@ -443,13 +463,16 @@ const BonusDetail = () => {
     });
   }, []);
 
-  // Add selected orders as one item (single order or bundle)
+  // Add selected WAWI and/or Excel purchases as one purchase slot.
   const handleAddAsItem = () => {
-    if (selectedOrders.length === 0) return;
+    const purchaseCount =
+      selectedOrders.length + selectedOldPurchases.length;
+    if (purchaseCount < 2) return;
 
     const newItem = {
       orders: [...selectedOrders],
-      isBundle: selectedOrders.length > 1,
+      oldPurchaseIds: [...selectedOldPurchases],
+      isBundle: purchaseCount > 1,
     };
 
     setDiscountItems((prev) => {
@@ -457,6 +480,7 @@ const BonusDetail = () => {
       return newItems;
     });
     setSelectedOrders([]);
+    setSelectedOldPurchases([]);
     toast.success("Als Gruppe hinzugefügt.");
   };
 
@@ -482,11 +506,14 @@ const BonusDetail = () => {
       // First, add orders from selected discountItems (pre-added groups)
       discountItems.forEach((item, index) => {
         if (selectedDiscountItems.includes(index)) {
-          item.orders.forEach((orderId) => {
+          (item.orders || []).forEach((orderId) => {
             ordersWithBundles.push({
               orderId,
               bundleIndex: bundleIndex,
             });
+          });
+          (item.oldPurchaseIds || []).forEach((oldPurchaseId) => {
+            ordersWithBundles.push({ oldPurchaseId, bundleIndex });
           });
           bundleIndex++; // Each item gets its own bundleIndex
         }
@@ -588,9 +615,11 @@ const BonusDetail = () => {
     setDiscountItems((prev) => {
       const newItems = [...prev];
       const item = newItems[itemIndex];
-      const newOrders = item.orders.filter((id) => id !== orderId);
+      const newOrders = (item.orders || []).filter((id) => id !== orderId);
+      const remainingCount =
+        newOrders.length + (item.oldPurchaseIds || []).length;
 
-      if (newOrders.length === 0) {
+      if (remainingCount === 0) {
         // Remove entire item if no orders left
         return prev.filter((_, i) => i !== itemIndex);
       } else {
@@ -598,7 +627,7 @@ const BonusDetail = () => {
         newItems[itemIndex] = {
           ...item,
           orders: newOrders,
-          isBundle: newOrders.length > 1,
+          isBundle: remainingCount > 1,
         };
         return newItems;
       }
@@ -608,7 +637,12 @@ const BonusDetail = () => {
 
   // Get all order IDs that are already in discount items
   const getOrdersInItems = () => {
-    return discountItems.flatMap((item) => item.orders);
+    return discountItems.flatMap((item) => item.orders || []);
+  };
+
+  // Get all Excel purchase IDs that are already staged in pending bundles.
+  const getOldPurchasesInItems = () => {
+    return discountItems.flatMap((item) => item.oldPurchaseIds || []);
   };
 
   // Create or update discount group
@@ -631,8 +665,11 @@ const BonusDetail = () => {
       const ordersWithBundles = [];
       discountItems.forEach((item, index) => {
         if (selectedDiscountItems.includes(index)) {
-          item.orders.forEach((orderId) => {
+          (item.orders || []).forEach((orderId) => {
             ordersWithBundles.push({ orderId, bundleIndex });
+          });
+          (item.oldPurchaseIds || []).forEach((oldPurchaseId) => {
+            ordersWithBundles.push({ oldPurchaseId, bundleIndex });
           });
           bundleIndex++;
         }
@@ -985,6 +1022,14 @@ const BonusDetail = () => {
     return acc + orderBonus;
   }, 0);
 
+  // Available sheet purchases are pending carryovers too. They are not WAWI
+  // orders, so include their projected bonus separately in the orange total.
+  const availableOldPurchasesBonus = oldPurchases.reduce(
+    (acc, purchase) =>
+      acc + ((purchase.amount || 0) * settings.discountRate) / 100,
+    0,
+  );
+
   const pendingBonus =
     discountGroups.reduce((acc, g) => {
       if (g.status === "redeemed") return acc;
@@ -992,17 +1037,26 @@ const BonusDetail = () => {
         g.orders?.map((o) => Number(o.bundleIndex ?? 0)),
       ).size;
       return uniqueBundles < 3 ? acc + (g.totalDiscount || 0) : acc;
-    }, 0) + availableOrdersBonus; // Add available orders bonus to pending
+    }, 0) +
+    availableOrdersBonus +
+    availableOldPurchasesBonus;
 
   const redeemedBonus = discountGroups.reduce((acc, g) => {
     return g.status === "redeemed" ? acc + (g.totalDiscount || 0) : acc;
   }, 0);
 
   // Calculate selected orders discount
-  const selectedOrdersTotal = selectedOrders.reduce((acc, orderId) => {
-    const order = orders.find((o) => (o._id || o.id) === orderId);
-    return order ? acc + getEligibleAmount(order) : acc;
-  }, 0);
+  const selectedOrdersTotal =
+    selectedOrders.reduce((acc, orderId) => {
+      const order = orders.find((o) => (o._id || o.id) === orderId);
+      return order ? acc + getEligibleAmount(order) : acc;
+    }, 0) +
+    selectedOldPurchases.reduce((acc, purchaseId) => {
+      const purchase = oldPurchases.find(
+        (p) => String(p._id || p.id) === String(purchaseId),
+      );
+      return acc + (purchase?.amount || 0);
+    }, 0);
   const selectedDiscount = (selectedOrdersTotal * settings.discountRate) / 100;
 
   // Selection status for items (manual creation allows any number of items)
@@ -1016,9 +1070,15 @@ const BonusDetail = () => {
     if (!selectedDiscountItems.includes(index)) return acc;
     return (
       acc +
-      item.orders.reduce((sum, orderId) => {
+      (item.orders || []).reduce((sum, orderId) => {
         const order = orders.find((o) => (o._id || o.id) === orderId);
         return order ? sum + getEligibleAmount(order) : sum;
+      }, 0) +
+      (item.oldPurchaseIds || []).reduce((sum, purchaseId) => {
+        const purchase = oldPurchases.find(
+          (p) => String(p._id || p.id) === String(purchaseId),
+        );
+        return sum + (purchase?.amount || 0);
       }, 0)
     );
   }, 0);
@@ -1230,7 +1290,10 @@ const BonusDetail = () => {
               </span>
               <span className="px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full text-xs font-medium">
                 {discountItems.reduce(
-                  (sum, item) => sum + item.orders.length,
+                  (sum, item) =>
+                    sum +
+                    (item.orders || []).length +
+                    (item.oldPurchaseIds || []).length,
                   0,
                 )}{" "}
                 Einkäufe
@@ -1275,17 +1338,31 @@ const BonusDetail = () => {
               {discountItems.map((item, index) => {
                 const itemKey = `pending_${index}`;
                 const isExpanded = expandedItems[itemKey];
-                const itemOrders = item.orders
+                const itemOrders = (item.orders || [])
                   .map((orderId) =>
                     orders.find((o) => (o._id || o.id) === orderId),
                   )
                   .filter(Boolean);
+                const itemOldPurchases = (item.oldPurchaseIds || [])
+                  .map((purchaseId) =>
+                    oldPurchases.find(
+                      (p) => String(p._id || p.id) === String(purchaseId),
+                    ),
+                  )
+                  .filter(Boolean);
+                const itemPurchaseCount =
+                  itemOrders.length + itemOldPurchases.length;
 
                 // Calculate totals
-                const itemEligible = itemOrders.reduce(
-                  (sum, order) => sum + getEligibleAmount(order),
-                  0,
-                );
+                const itemEligible =
+                  itemOrders.reduce(
+                    (sum, order) => sum + getEligibleAmount(order),
+                    0,
+                  ) +
+                  itemOldPurchases.reduce(
+                    (sum, purchase) => sum + (purchase.amount || 0),
+                    0,
+                  );
                 const itemDiscount =
                   (itemEligible * settings.discountRate) / 100;
 
@@ -1305,7 +1382,7 @@ const BonusDetail = () => {
 
                   return (
                     <div
-                      key={item.orders.join("-") || `item-${index}`}
+                      key={(item.orders || []).join("-") || `item-${index}`}
                       className="grid grid-cols-[60px_1fr_1fr_100px_80px] bg-white hover:bg-gray-50"
                     >
                       <div className="p-3 flex items-center justify-center border-r border-gray-100">
@@ -1384,7 +1461,7 @@ const BonusDetail = () => {
                 // For bundles (multiple orders grouped with "Als Gruppe")
                 return (
                   <div
-                    key={item.orders.join("-") || `item-${index}`}
+                    key={(item.orders || []).join("-") || `item-${index}`}
                     className="bg-white"
                   >
                     {/* Collapsed bundle header */}
@@ -1402,8 +1479,13 @@ const BonusDetail = () => {
                       <div className="p-3 border-r border-gray-100">
                         <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                            Gruppenbestellung - {item.orders.length} Einkäufe
+                            Gruppenbestellung - {itemPurchaseCount} Einkäufe
                           </span>
+                          {itemOldPurchases.length > 0 && (
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium">
+                              {itemOldPurchases.length} aus Tabelle
+                            </span>
+                          )}
                           <svg
                             className={`h-4 w-4 text-gray-500 transition-transform ${
                               isExpanded ? "rotate-180" : ""
@@ -1448,6 +1530,12 @@ const BonusDetail = () => {
                                 6}
                             </span>
                           )}
+                          {itemOldPurchases.map((purchase) => (
+                            <SheetPurchasePlaceholder
+                              key={`pending-bundle-sheet-${purchase._id || purchase.id}`}
+                              label={purchase.purchaseLabel}
+                            />
+                          ))}
                         </div>
                       </div>
                       <div className="p-3 border-r border-gray-100 flex items-center justify-center">
@@ -1490,7 +1578,8 @@ const BonusDetail = () => {
                           const orderDiscount =
                             (orderEligible * settings.discountRate) / 100;
                           const isLastOrder =
-                            orderIdx === itemOrders.length - 1;
+                            orderIdx === itemOrders.length - 1 &&
+                            itemOldPurchases.length === 0;
 
                           return (
                             <div
@@ -1581,6 +1670,57 @@ const BonusDetail = () => {
                                   </svg>
                                 </button>
                               </div>
+                            </div>
+                          );
+                        })}
+                        {itemOldPurchases.map((purchase, purchaseIdx) => {
+                          const purchaseId = String(purchase._id || purchase.id);
+                          const purchaseDiscount =
+                            ((purchase.amount || 0) * settings.discountRate) /
+                            100;
+                          const isLastPurchase =
+                            purchaseIdx === itemOldPurchases.length - 1;
+
+                          return (
+                            <div
+                              key={`sheet-${purchaseId}`}
+                              className={`grid grid-cols-[60px_1fr_1fr_100px_80px] ml-4 ${
+                                !isLastPurchase
+                                  ? "border-b border-blue-100"
+                                  : ""
+                              }`}
+                            >
+                              <div className="p-2 flex items-center justify-center border-r border-blue-100">
+                                <span className="text-xs text-gray-400">
+                                  {itemOrders.length + purchaseIdx + 1}
+                                </span>
+                              </div>
+                              <div className="p-2 border-r border-blue-100">
+                                <p className="text-sm text-gray-900 flex items-center gap-2">
+                                  <span>
+                                    <span className="font-semibold">
+                                      Einkaufsnummer
+                                    </span>{" "}
+                                    - {purchase.purchaseLabel}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+                                    Aus Tabelle
+                                  </span>
+                                </p>
+                                <p className="text-sm mt-1 text-gray-600">
+                                  <span className="font-semibold">
+                                    Bonusfähig:
+                                  </span>{" "}
+                                  € {formatCurrency(purchase.amount || 0)}
+                                </p>
+                              </div>
+                              <div className="p-2 border-r border-blue-100"></div>
+                              <div className="p-2 border-r border-blue-100 flex items-center justify-center">
+                                <span className="text-xs text-green-600">
+                                  € {formatCurrency(purchaseDiscount)}
+                                </span>
+                              </div>
+                              <div className="p-2"></div>
                             </div>
                           );
                         })}
@@ -2035,7 +2175,8 @@ const BonusDetail = () => {
                   hasSelectedOldPurchases ||
                   editingGroupSheetItems.length > 0) && (
                   <>
-                    {selectedOrders.length > 1 && !hasSelectedItems && (
+                    {selectedOrders.length + selectedOldPurchases.length > 1 &&
+                      !hasSelectedItems && (
                       <button
                         onClick={() => setShowGroupConfirm(true)}
                         className={`px-3 py-1.5 text-white rounded-lg text-sm font-medium transition-colors ${
@@ -2340,6 +2481,12 @@ const BonusDetail = () => {
                                     .length - 6}
                                 </span>
                               )}
+                              {excelItems.map((item) => (
+                                <SheetPurchasePlaceholder
+                                  key={`group-${groupKey}-sheet-${item._id || item.label}`}
+                                  label={item.label}
+                                />
+                              ))}
                             </div>
                           </div>
                           <div className="p-4 flex items-center justify-center">
@@ -2737,19 +2884,33 @@ const BonusDetail = () => {
               {discountItems.map((item, itemIndex) => {
                 const itemKey = `table_pending_${itemIndex}`;
                 const isExpanded = expandedBundles[itemKey];
-                const itemOrders = item.orders
+                const itemOrders = (item.orders || [])
                   .map((orderId) =>
                     orders.find((o) => (o._id || o.id) === orderId),
                   )
                   .filter(Boolean);
+                const itemOldPurchases = (item.oldPurchaseIds || [])
+                  .map((purchaseId) =>
+                    oldPurchases.find(
+                      (p) => String(p._id || p.id) === String(purchaseId),
+                    ),
+                  )
+                  .filter(Boolean);
+                const itemPurchaseCount =
+                  itemOrders.length + itemOldPurchases.length;
 
-                if (itemOrders.length === 0) return null;
+                if (itemPurchaseCount === 0) return null;
 
                 // Calculate totals
-                const itemEligible = itemOrders.reduce(
-                  (sum, order) => sum + getEligibleAmount(order),
-                  0,
-                );
+                const itemEligible =
+                  itemOrders.reduce(
+                    (sum, order) => sum + getEligibleAmount(order),
+                    0,
+                  ) +
+                  itemOldPurchases.reduce(
+                    (sum, purchase) => sum + (purchase.amount || 0),
+                    0,
+                  );
 
                 // Toggle expansion
                 const togglePendingItem = () => {
@@ -2901,8 +3062,13 @@ const BonusDetail = () => {
                         <div className="p-4 border-r border-gray-100">
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-0.5 bg-amber-200 text-amber-800 rounded text-xs font-medium">
-                              Gruppenbestellung - {item.orders.length} Einkäufe
+                              Gruppenbestellung - {itemPurchaseCount} Einkäufe
                             </span>
+                            {itemOldPurchases.length > 0 && (
+                              <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium">
+                                {itemOldPurchases.length} aus Tabelle
+                              </span>
+                            )}
                             <svg
                               className={`h-4 w-4 text-gray-500 transition-transform ${
                                 isExpanded ? "rotate-180" : ""
@@ -2947,6 +3113,12 @@ const BonusDetail = () => {
                                   .length - 6}
                               </span>
                             )}
+                            {itemOldPurchases.map((purchase) => (
+                              <SheetPurchasePlaceholder
+                                key={`pending-table-sheet-${purchase._id || purchase.id}`}
+                                label={purchase.purchaseLabel}
+                              />
+                            ))}
                           </div>
                         </div>
                         <div className="p-4 flex items-center justify-center">
@@ -3026,7 +3198,8 @@ const BonusDetail = () => {
                           const orderId = order._id || order.id;
                           const orderEligible = getEligibleAmount(order);
                           const isLastOrder =
-                            orderIdx === itemOrders.length - 1;
+                            orderIdx === itemOrders.length - 1 &&
+                            itemOldPurchases.length === 0;
 
                           return (
                             <div
@@ -3086,6 +3259,50 @@ const BonusDetail = () => {
                                   )}
                                 </div>
                               </div>
+                              <div className="p-3 border-r border-amber-100"></div>
+                              <div className="p-3"></div>
+                            </div>
+                          );
+                        })}
+                        {itemOldPurchases.map((purchase, purchaseIdx) => {
+                          const purchaseId = String(purchase._id || purchase.id);
+                          const isLastPurchase =
+                            purchaseIdx === itemOldPurchases.length - 1;
+
+                          return (
+                            <div
+                              key={`table-sheet-${purchaseId}`}
+                              className={`grid grid-cols-[60px_1fr_1fr_100px_160px] ml-4 ${
+                                !isLastPurchase
+                                  ? "border-b border-amber-100"
+                                  : ""
+                              }`}
+                            >
+                              <div className="p-3 flex items-center justify-center border-r border-amber-100">
+                                <span className="text-xs text-gray-400">
+                                  {itemOrders.length + purchaseIdx + 1}
+                                </span>
+                              </div>
+                              <div className="p-3 border-r border-amber-100">
+                                <p className="text-sm text-gray-900 flex items-center gap-2">
+                                  <span>
+                                    <span className="font-semibold">
+                                      Einkaufsnummer
+                                    </span>{" "}
+                                    - {purchase.purchaseLabel}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+                                    Aus Tabelle
+                                  </span>
+                                </p>
+                                <p className="text-sm mt-1 text-gray-600">
+                                  <span className="font-semibold">
+                                    Bonusfähig:
+                                  </span>{" "}
+                                  € {formatCurrency(purchase.amount || 0)}
+                                </p>
+                              </div>
+                              <div className="p-3 border-r border-amber-100"></div>
                               <div className="p-3 border-r border-amber-100"></div>
                               <div className="p-3"></div>
                             </div>
@@ -3393,6 +3610,12 @@ const BonusDetail = () => {
                                     .length - 6}
                                 </span>
                               )}
+                              {excelItems.map((item) => (
+                                <SheetPurchasePlaceholder
+                                  key={`redeemed-group-${groupKey}-sheet-${item._id || item.label}`}
+                                  label={item.label}
+                                />
+                              ))}
                             </div>
                           </div>
                           <div className="p-4 flex items-center justify-center">
@@ -3701,6 +3924,7 @@ const BonusDetail = () => {
                 oldPurchases.length > 0 &&
                 oldPurchases.map((purchase, idx) => {
                   const pid = (purchase._id || purchase.id)?.toString();
+                  if (getOldPurchasesInItems().includes(pid)) return null;
                   const isSelected = selectedOldPurchases.includes(pid);
                   return (
                     <div
@@ -4128,7 +4352,7 @@ const BonusDetail = () => {
           setShowGroupConfirm(false);
         }}
         title="ALS GRUPPE ZUSAMMENFASSEN"
-        message={`Möchten Sie die ${selectedOrders.length} ausgewählten Einkäufe als eine Gruppe zusammenfassen?`}
+        message={`Möchten Sie die ${selectedOrders.length + selectedOldPurchases.length} ausgewählten Einkäufe als eine Gruppe zusammenfassen?`}
         confirmText="Ja, zusammenfassen"
         cancelText="Abbrechen"
       />
